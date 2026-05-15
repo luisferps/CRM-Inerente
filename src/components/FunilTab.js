@@ -19,17 +19,17 @@ export default function FunilTab({ data, onToggleFunil }) {
                 <div key={c.id} className="kanban-card">
                   <div className="kanban-card-name">{c.nome}</div>
                   <div className="kanban-card-sub">{c.tipo || '—'} · {c.imovel || '—'}</div>
+                  {c.modalidade && (
+                    <div style={{ fontSize: 11, color: '#2563eb', fontWeight: 600, marginTop: 2 }}>{c.modalidade}</div>
+                  )}
                   {c.valor && (
-                    <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 3 }}>
+                    <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 2 }}>
                       R$ {Number(c.valor).toLocaleString('pt-BR')}
                     </div>
                   )}
                   <div className="kanban-card-etapas">
-                    {ETAPAS_FUNIL.map((e, i) => (
-                      <div
-                        key={e}
-                        className="kanban-etapa-dot"
-                        title={ETAPAS_LABEL[e]}
+                    {ETAPAS_FUNIL.map(e => (
+                      <div key={e} className="kanban-etapa-dot" title={ETAPAS_LABEL[e]}
                         onClick={() => onToggleFunil(c.id, e, !c[e])}
                         style={{
                           background: c[e] ? '#2563eb' : '#e5e7eb',
