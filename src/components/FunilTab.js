@@ -19,6 +19,7 @@ const ETAPA_COLORS = {
   financiamento:{ bg: '#a0c4ec', border: '#3575b8', dot: '#0a4880', text: '#052e55' },
   recebimento:  { bg: '#92bbe8', border: '#2060b0', dot: '#063570', text: '#042650' },
   recebido:     { bg: '#dcfce7', border: '#4ade80', dot: '#16a34a', text: '#14532d' },
+};
 
 const ETAPA_ICONS = {
   tratativa: '💬', pesquisa: '🔍', agendamento: '📅', visita: '🏠',
