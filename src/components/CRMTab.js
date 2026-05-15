@@ -132,7 +132,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
 {c.telefone && (
   <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
     style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:30, height:30, borderRadius:6, background:'#25d366', textDecoration:'none' }}>
-    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="18" height="18" alt="WhatsApp" />
+    <span style={{fontSize:16, lineHeight:1}}>💬</span>
   </a>
 )}
                         </div>
