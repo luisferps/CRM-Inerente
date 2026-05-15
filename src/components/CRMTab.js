@@ -131,8 +131,8 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
 <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>
 {c.telefone && (
   <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
-    style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:30, height:30, borderRadius:6, background:'#25d366', textDecoration:'none' }}>
-    <span style={{fontSize:16, lineHeight:1}}>💬</span>
+    style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:30, height:30, borderRadius:6, background:'#25d366', textDecoration:'none', color:'#fff', fontSize:13, fontWeight:700 }}>
+    WA
   </a>
 )}
                         </div>
