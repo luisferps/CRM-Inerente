@@ -8,14 +8,14 @@ function getEtapaAtual(c) {
 }
 
 const ETAPA_COLORS = {
-  tratativa:    { bg: '#eff6ff', border: '#bfdbfe', dot: '#3b82f6', text: '#1d4ed8' },
-  agendamento:  { bg: '#f0fdf4', border: '#bbf7d0', dot: '#22c55e', text: '#15803d' },
-  visita:       { bg: '#fefce8', border: '#fde68a', dot: '#eab308', text: '#a16207' },
-  proposta:     { bg: '#fff7ed', border: '#fed7aa', dot: '#f97316', text: '#c2410c' },
-  contrato:     { bg: '#fdf4ff', border: '#e9d5ff', dot: '#a855f7', text: '#7e22ce' },
+  tratativa:    { bg: '#f0f7ff', border: '#c8dff7', dot: '#93c5e8', text: '#4a90b8' },
+  pesquisa:     { bg: '#e6f1fc', border: '#b3d0f0', dot: '#6aaedd', text: '#2e7ab5' },
+  agendamento:  { bg: '#daeaf9', border: '#9dc0e8', dot: '#4d96d1', text: '#1a6499' },
+  visita:       { bg: '#cde3f7', border: '#85aedd', dot: '#2e7fbe', text: '#155085' },
+  proposta:     { bg: '#bfd9f4', border: '#6098d0', dot: '#1a6aad', text: '#0d4578' },
+  contrato:     { bg: '#b0cff0', border: '#4a87c4', dot: '#0f5799', text: '#073d6e' },
+  financiamento:{ bg: '#a0c4ec', border: '#3575b8', dot: '#0a4880', text: '#052e55' },
   recebimento:  { bg: '#f0fdf4', border: '#6ee7b7', dot: '#059669', text: '#065f46' },
-  pesquisa:     { bg: '#f8fafc', border: '#cbd5e1', dot: '#64748b', text: '#334155' },
-  financiamento:{ bg: '#fff1f2', border: '#fecdd3', dot: '#f43f5e', text: '#be123c' },
 };
 
 const ETAPA_ICONS = {
