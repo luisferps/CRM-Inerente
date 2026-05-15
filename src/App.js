@@ -5,14 +5,29 @@ import CRMTab from './components/CRMTab';
 import FunilTab from './components/FunilTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
+import LoginScreen from './components/LoginScreen';
 
 export default function App() {
   const [tab, setTab] = useState('crm');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [session, setSession] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setCheckingAuth(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
     async function load() {
       setLoading(true);
       const { data: rows, error: err } = await supabase
@@ -24,7 +39,7 @@ export default function App() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [session]);
 
   async function handleSave(form, id) {
     const payload = { ...form };
@@ -56,11 +71,20 @@ export default function App() {
     setData(d => d.map(c => c.id === id ? updated : c));
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setData([]);
+  }
+
   const stats = useMemo(() => ({
     total: data.length,
     ativos: data.filter(c => c.ativo === 'S').length,
     contratos: data.filter(c => c.contrato).length,
   }), [data]);
+
+  if (checkingAuth) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: '#9ca3af' }}>Carregando...</div>;
+
+  if (!session) return <LoginScreen />;
 
   return (
     <div className="app-shell">
@@ -71,6 +95,10 @@ export default function App() {
             <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
           ))}
         </nav>
+        <button onClick={handleLogout}
+          style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 14px', fontSize: 12, color: '#6b7280', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+          Sair
+        </button>
       </header>
       <div className="stats-bar">
         <div className="stat-item">
