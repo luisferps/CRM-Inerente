@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ORIGENS, TIPOS, ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { DEFAULT_ORIGENS, DEFAULT_TIPOS_LEAD, STORAGE_ORIGENS, STORAGE_TIPOS_LEAD, ETAPAS_FUNIL, ETAPAS_LABEL, getList } from '../constants';
 import DetailPanel from './DetailPanel';
 import ClienteModal from './ClienteModal';
 
@@ -25,18 +25,23 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
+  const [filterAtivo, setFilterAtivo] = useState('');
   const [selectedId, setSelectedId] = useState(null);
-  const [modal, setModal] = useState(null); // null | 'new' | cliente object
+  const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const origens = getList(STORAGE_ORIGENS, DEFAULT_ORIGENS);
+  const tiposLead = getList(STORAGE_TIPOS_LEAD, DEFAULT_TIPOS_LEAD);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return data.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
-      (!filterTipo || c.tipo === filterTipo)
+      (!filterTipo || c.tipo === filterTipo) &&
+      (!filterAtivo || c.ativo === filterAtivo)
     );
-  }, [data, search, filterOrigem, filterTipo]);
+  }, [data, search, filterOrigem, filterTipo, filterAtivo]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -57,11 +62,16 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
         <input className="input-search" placeholder="🔍  Buscar por nome, telefone ou email..." value={search} onChange={e => setSearch(e.target.value)} />
         <select className="input-sm" value={filterOrigem} onChange={e => setFilterOrigem(e.target.value)}>
           <option value="">Todas origens</option>
-          {ORIGENS.map(o => <option key={o}>{o}</option>)}
+          {origens.map(o => <option key={o}>{o}</option>)}
         </select>
         <select className="input-sm" value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
           <option value="">Todos tipos</option>
-          {TIPOS.map(t => <option key={t}>{t}</option>)}
+          {tiposLead.map(t => <option key={t}>{t}</option>)}
+        </select>
+        <select style={{ width: 120 }} value={filterAtivo} onChange={e => setFilterAtivo(e.target.value)}>
+          <option value="">Todos</option>
+          <option value="S">Ativos</option>
+          <option value="N">Inativos</option>
         </select>
         <button className="btn btn-primary" onClick={() => setModal('new')}>+ Novo Cliente</button>
       </div>
@@ -75,7 +85,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                   <th>Nome</th>
                   <th>Telefone</th>
                   <th>Tipo</th>
-                  <th>Imóvel</th>
+                  <th>Modalidade</th>
                   <th>Valor</th>
                   <th>Origem</th>
                   <th>Funil</th>
@@ -92,14 +102,15 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                   return (
                     <tr key={c.id}
                       className={selectedId === c.id ? 'selected' : ''}
-                      onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}>
+                      onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}
+                      style={{ opacity: c.ativo === 'N' ? 0.6 : 1 }}>
                       <td>
                         <div className="td-name">{c.nome}</div>
                         <div className="td-sub">{c.ativo === 'S' ? '● Ativo' : '○ Inativo'}</div>
                       </td>
                       <td className="td-muted">{c.telefone || '—'}</td>
                       <td>{c.tipo ? <span className={`badge ${tipoBadge(c.tipo)}`}>{c.tipo}</span> : '—'}</td>
-                      <td className="td-muted">{c.imovel || '—'}</td>
+                      <td>{c.modalidade ? <span className="badge badge-blue">{c.modalidade}</span> : '—'}</td>
                       <td style={{ fontWeight: 600, color: '#059669' }}>
                         {c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}
                       </td>
@@ -150,7 +161,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
           <div className="confirm-dialog">
             <div className="confirm-icon">⚠️</div>
             <div className="confirm-title">Confirmar exclusão</div>
-            <div className="confirm-text">Esta ação não pode ser desfeita. O cliente será removido permanentemente.</div>
+            <div className="confirm-text">Esta ação não pode ser desfeita.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
               <button className="btn btn-danger" onClick={() => handleDelete(confirmDelete)}>Excluir</button>
