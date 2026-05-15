@@ -65,9 +65,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="header">
-        <div className="header-logo" style={{display:'flex', alignItems:'center', justifyContent:'center'}}>
-  <img src="https://res.cloudinary.com/demsusjwf/image/upload/v1778785144/logo_png_fuv27j.png" alt="Inerente" style={{height:38, filter:'invert(1)'}} />
-</div>
+        <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
           {[['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['config','⚙️ Config']].map(([t, l]) => (
             <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
