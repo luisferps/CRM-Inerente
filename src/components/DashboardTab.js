@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
-import { ETAPAS_FUNIL, ETAPAS_LABEL, ORIGENS } from '../constants';
+import { ETAPAS_FUNIL, ETAPAS_LABEL, DEFAULT_ORIGENS, STORAGE_ORIGENS, getList } from '../constants';
 
 export default function DashboardTab({ data }) {
+  const origens = getList(STORAGE_ORIGENS, DEFAULT_ORIGENS);
+
   const stats = useMemo(() => ({
     total: data.length,
     ativos: data.filter(c => c.ativo === 'S').length,
@@ -64,7 +66,7 @@ export default function DashboardTab({ data }) {
       <div className="dash-section">
         <div className="dash-section-title">Clientes por Origem</div>
         <div className="origem-grid">
-          {ORIGENS.filter(o => origemCounts[o]).map(o => (
+          {origens.filter(o => origemCounts[o]).map(o => (
             <div key={o} className="origem-item">
               <span className="origem-name">{o}</span>
               <span className="origem-count">{origemCounts[o]}</span>
