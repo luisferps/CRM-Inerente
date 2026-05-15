@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import './index.css';
 import { supabase } from './supabaseClient';
-import { ETAPAS_FUNIL } from './constants';
 import CRMTab from './components/CRMTab';
 import FunilTab from './components/FunilTab';
 import DashboardTab from './components/DashboardTab';
+import ConfigTab from './components/ConfigTab';
 
 export default function App() {
   const [tab, setTab] = useState('crm');
@@ -12,7 +12,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load data
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -27,12 +26,10 @@ export default function App() {
     load();
   }, []);
 
-  // Save (insert or update)
   async function handleSave(form, id) {
     const payload = { ...form };
     delete payload.id;
     delete payload.created_at;
-
     if (id) {
       const { data: updated, error: err } = await supabase
         .from('clientes').update(payload).eq('id', id).select().single();
@@ -46,14 +43,12 @@ export default function App() {
     }
   }
 
-  // Delete
   async function handleDelete(id) {
     const { error: err } = await supabase.from('clientes').delete().eq('id', id);
     if (err) return alert('Erro ao excluir: ' + err.message);
     setData(d => d.filter(c => c.id !== id));
   }
 
-  // Toggle funil step
   async function handleToggleFunil(id, etapa, val) {
     const { data: updated, error: err } = await supabase
       .from('clientes').update({ [etapa]: val }).eq('id', id).select().single();
@@ -69,17 +64,14 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {/* Header */}
       <header className="header">
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
-          {[['crm', 'Clientes'], ['funil', 'Funil'], ['dash', 'Dashboard']].map(([t, l]) => (
+          {[['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['config','⚙️ Config']].map(([t, l]) => (
             <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
           ))}
         </nav>
       </header>
-
-      {/* Stats bar */}
       <div className="stats-bar">
         <div className="stat-item">
           <span className="stat-label">Total</span>
@@ -94,9 +86,7 @@ export default function App() {
           <span className="stat-value stat-purple">{stats.contratos}</span>
         </div>
       </div>
-
       {error && <div className="error-banner">⚠️ Erro de conexão: {error}</div>}
-
       <main className="main">
         {loading ? (
           <div className="loading">Carregando dados...</div>
@@ -105,6 +95,7 @@ export default function App() {
             {tab === 'crm' && <CRMTab data={data} onSave={handleSave} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
             {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
+            {tab === 'config' && <ConfigTab />}
           </>
         )}
       </main>
