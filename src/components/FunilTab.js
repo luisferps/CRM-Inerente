@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import ClienteModal from './ClienteModal';
 
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL.length - 1; i >= 0; i--) {
@@ -23,7 +25,8 @@ const ETAPA_ICONS = {
   proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '✅',
 };
 
-export default function FunilTab({ data, onEdit }) {
+export default function FunilTab({ data, onSave, onToggleFunil }) {
+  const [editando, setEditando] = useState(null);
   const ativos = data.filter(c => c.ativo === 'S');
 
   const clientesPorEtapa = {};
@@ -75,11 +78,10 @@ export default function FunilTab({ data, onEdit }) {
                     )}
                     {clientes.map(c => (
                       <div key={c.id}
-                        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'default' }}
-                        onClick={() => onEdit(c)}
-        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
-        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}
-        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                        onClick={() => setEditando(c)}
+                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
+                        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}
+                        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: colors.dot, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                             {c.nome.charAt(0).toUpperCase()}
@@ -114,7 +116,9 @@ export default function FunilTab({ data, onEdit }) {
           <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Sem etapa definida</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {semEtapa.map(c => (
-              <div key={c.id} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 12px', fontSize: 12, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div key={c.id}
+                onClick={() => setEditando(c)}
+                style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 12px', fontSize: 12, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                 <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#9ca3af' }}>
                   {c.nome.charAt(0).toUpperCase()}
                 </div>
@@ -123,6 +127,14 @@ export default function FunilTab({ data, onEdit }) {
             ))}
           </div>
         </div>
+      )}
+
+      {editando && (
+        <ClienteModal
+          cliente={editando}
+          onSave={async (form) => { await onSave(form, editando.id); setEditando(null); }}
+          onClose={() => setEditando(null)}
+        />
       )}
     </div>
   );
