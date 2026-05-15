@@ -10,8 +10,7 @@ export const DEFAULT_IMOVEIS = ["Apartamento","Casa","Apt./Casa","Lote","Terreno
 
 export const MODALIDADES = ["Venda","Locação"];
 
-export const ETAPAS_FUNIL = ["tratativa","pesquisa","agendamento","visita","proposta","contrato","financiamento","recebimento"];
-
+export const ETAPAS_FUNIL = ["tratativa","pesquisa","agendamento","visita","proposta","contrato","financiamento","recebimento","recebido"];
 export const ETAPAS_LABEL = {
   tratativa: "Tratativa",
   pesquisa: "Pesquisa",
@@ -20,7 +19,8 @@ export const ETAPAS_LABEL = {
   proposta: "Proposta",
   contrato: "Contrato",
   financiamento: "Financiamento",
-  recebimento: "Recebimento",
+  recebimento: "À Receber",
+  recebido: "Recebido",
 };
 
 export const STORAGE_ORIGENS = "crm_origens";
