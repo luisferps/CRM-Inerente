@@ -83,8 +83,8 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
               <thead>
                 <tr>
 <th>Nome</th>
-<th>Telefone</th>
-<th>Tipo</th>
+<th>Imóvel</th>
+            <th>Tipo</th>
 <th>Modalidade</th>
 <th>Valor</th>
 <th>Localização</th>
@@ -109,7 +109,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                         <div className="td-name">{c.nome}</div>
                         <div className="td-sub">{c.ativo === 'S' ? '● Ativo' : '○ Inativo'}</div>
                       </td>
-                      <td className="td-muted">{c.telefone || '—'}</td>
+                      <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.tipo ? <span className={`badge ${tipoBadge(c.tipo)}`}>{c.tipo}</span> : '—'}</td>
                       <td>{c.modalidade ? <span className="badge badge-blue">{c.modalidade}</span> : '—'}</td>
                       <td style={{ fontWeight: 600, color: '#059669' }}>
