@@ -17,12 +17,12 @@ const ETAPA_COLORS = {
   proposta:     { bg: '#bfd9f4', border: '#6098d0', dot: '#1a6aad', text: '#0d4578' },
   contrato:     { bg: '#b0cff0', border: '#4a87c4', dot: '#0f5799', text: '#073d6e' },
   financiamento:{ bg: '#a0c4ec', border: '#3575b8', dot: '#0a4880', text: '#052e55' },
-  recebimento:  { bg: '#8fb8e8', border: '#2a64a8', dot: '#083d7a', text: '#052e55' },
-  recebido:     { bg: '#f0fdf4', border: '#6ee7b7', dot: '#059669', text: '#065f46' },
+  recebimento:  { bg: '#92bbe8', border: '#2060b0', dot: '#063570', text: '#042650' },
+  recebido:     { bg: '#dcfce7', border: '#4ade80', dot: '#16a34a', text: '#14532d' },
 
 const ETAPA_ICONS = {
   tratativa: '💬', pesquisa: '🔍', agendamento: '📅', visita: '🏠',
-  proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '💰',
+  proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '🕐',
   recebido: '✅',
 };
 
