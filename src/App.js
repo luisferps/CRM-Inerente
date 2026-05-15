@@ -93,7 +93,7 @@ export default function App() {
         ) : (
           <>
             {tab === 'crm' && <CRMTab data={data} onSave={handleSave} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
-            {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} />}
+            {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onEdit={(c) => { setEditingCliente(c); setTab('crm'); }} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'config' && <ConfigTab />}
           </>
