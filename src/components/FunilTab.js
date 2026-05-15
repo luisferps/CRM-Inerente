@@ -23,7 +23,7 @@ const ETAPA_ICONS = {
   proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '✅',
 };
 
-export default function FunilTab({ data }) {
+export default function FunilTab({ data, onEdit }) {
   const ativos = data.filter(c => c.ativo === 'S');
 
   const clientesPorEtapa = {};
@@ -76,8 +76,10 @@ export default function FunilTab({ data }) {
                     {clientes.map(c => (
                       <div key={c.id}
                         style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'default' }}
-                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
-                        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}>
+                        onClick={() => onEdit(c)}
+        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
+        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}
+        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: colors.dot, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                             {c.nome.charAt(0).toUpperCase()}
