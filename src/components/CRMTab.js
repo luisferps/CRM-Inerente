@@ -115,8 +115,8 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                       <td style={{ fontWeight: 600, color: '#059669' }}>
                         {c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}
                       </td>
-                      <td className="td-muted">{c.localizacao || '—'}</td>
-<td className="td-muted" style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.detalhes || '—'}</td>
+                      <td className="td-muted" title={c.localizacao || ''}>{c.localizacao || '—'}</td>
+<td className="td-muted" title={c.detalhes || ''} style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.detalhes || '—'}</td>
                       <td>
                         {etapa ? (
                           <div className="progress-wrap">
