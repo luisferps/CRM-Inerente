@@ -82,14 +82,15 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
             <table>
               <thead>
                 <tr>
-                  <th>Nome</th>
-                  <th>Telefone</th>
-                  <th>Tipo</th>
-                  <th>Modalidade</th>
-                  <th>Valor</th>
-                  <th>Origem</th>
-                  <th>Funil</th>
-                  <th></th>
+<th>Nome</th>
+<th>Telefone</th>
+<th>Tipo</th>
+<th>Modalidade</th>
+<th>Valor</th>
+<th>Localização</th>
+<th>Detalhes</th>
+<th>Funil</th>
+<th></th>
                 </tr>
               </thead>
               <tbody>
@@ -114,7 +115,8 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                       <td style={{ fontWeight: 600, color: '#059669' }}>
                         {c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}
                       </td>
-                      <td>{c.origem ? <span className="badge badge-orange">{c.origem}</span> : '—'}</td>
+                      <td className="td-muted">{c.localizacao || '—'}</td>
+<td className="td-muted" style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.detalhes || '—'}</td>
                       <td>
                         {etapa ? (
                           <div className="progress-wrap">
