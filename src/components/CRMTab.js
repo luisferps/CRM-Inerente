@@ -131,7 +131,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
             <div key={e} style={{
               width: 8, borderRadius: 2,
               height: `${altura}px`,
-              background: ativa ? `rgb(${intensidade}, ${intensidade + 20}, 255)` : '#e5e7eb',
+              background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
               transition: 'all 0.2s',
             }} />
           );
