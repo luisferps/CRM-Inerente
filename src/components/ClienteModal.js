@@ -66,7 +66,7 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
   const isInativo = form.ativo === 'N';
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{cliente ? 'Editar Cliente' : 'Novo Cliente'}</span>
