@@ -118,13 +118,28 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                       <td className="td-muted" title={c.localizacao || ''}>{c.localizacao || '—'}</td>
 <td className="td-muted" title={c.detalhes || ''} style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.detalhes || '—'}</td>
                       <td>
-                        {etapa ? (
-                          <div className="progress-wrap">
-                            <div className="progress-label">{ETAPAS_LABEL[etapa]}</div>
-                            <div className="progress-bar"><div className="progress-fill" style={{ width: `${prog}%` }} /></div>
-                          </div>
-                        ) : <span className="td-muted">—</span>}
-                      </td>
+  {etapa ? (
+    <div style={{ minWidth: 120 }}>
+      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{ETAPAS_LABEL[etapa]}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 20 }}>
+        {ETAPAS_FUNIL.map((e, i) => {
+          const etapaIdx = ETAPAS_FUNIL.indexOf(etapa);
+          const ativa = i <= etapaIdx;
+          const altura = 4 + (i * (16 / (ETAPAS_FUNIL.length - 1)));
+          const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
+          return (
+            <div key={e} style={{
+              width: 8, borderRadius: 2,
+              height: `${altura}px`,
+              background: ativa ? `rgb(${intensidade}, ${intensidade + 20}, 255)` : '#e5e7eb',
+              transition: 'all 0.2s',
+            }} />
+          );
+        })}
+      </div>
+    </div>
+  ) : <span className="td-muted">—</span>}
+</td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-ghost btn-sm" onClick={() => setModal(c)}>Editar</button>
