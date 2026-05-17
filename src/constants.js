@@ -8,9 +8,10 @@ export const DEFAULT_TIPOS_LEAD = ["Comprador","Locatário","Corretor","Investid
 
 export const DEFAULT_IMOVEIS = ["Apartamento","Casa","Apt./Casa","Lote","Terreno","Comercial","Galpão"];
 
-export const MODALIDADES = ["Venda","Locação"];
+export const MODALIDADES = ["Compra","Venda","Locação"];
 
 export const ETAPAS_FUNIL = ["tratativa","pesquisa","agendamento","visita","proposta","contrato","financiamento","recebimento","recebido"];
+
 export const ETAPAS_LABEL = {
   tratativa: "Tratativa",
   pesquisa: "Pesquisa",
