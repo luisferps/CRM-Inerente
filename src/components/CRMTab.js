@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 import DetailPanel from './DetailPanel';
@@ -22,30 +22,87 @@ function modalidadeBadge(modalidade) {
   return { bg: '#f3f4f6', color: '#6b7280' };
 }
 
-export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
+function DropdownFilter({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const selected = value.length > 0;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+        border: `1px solid ${selected ? '#2563eb' : '#d1d5db'}`,
+        background: selected ? '#eff6ff' : '#fff',
+        color: selected ? '#2563eb' : '#6b7280',
+        display: 'flex', alignItems: 'center', gap: 4,
+      }}>
+        {label} {selected ? `(${value.length})` : ''} ▾
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 100,
+          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 160, padding: 8, marginTop: 4,
+        }}>
+          <div onClick={() => onChange([])} style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', color: '#6b7280', borderRadius: 4 }}
+            onMouseEnter={e => e.target.style.background = '#f3f4f6'}
+            onMouseLeave={e => e.target.style.background = 'transparent'}>
+            Todos
+          </div>
+          {options.map(opt => (
+            <div key={opt} onClick={() => {
+              onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt]);
+            }} style={{
+              padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4,
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: value.includes(opt) ? '#eff6ff' : 'transparent',
+              color: value.includes(opt) ? '#2563eb' : '#374151',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = value.includes(opt) ? '#dbeafe' : '#f3f4f6'}
+              onMouseLeave={e => e.currentTarget.style.background = value.includes(opt) ? '#eff6ff' : 'transparent'}>
+              <span style={{ fontSize: 10 }}>{value.includes(opt) ? '✓' : ' '}</span>
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isGerente }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
-  const [filterTipo, setFilterTipo] = useState('');
   const [filterAtivo, setFilterAtivo] = useState('');
+  const [filterTipo, setFilterTipo] = useState([]);
+  const [filterModalidade, setFilterModalidade] = useState([]);
+  const [filterCorretor, setFilterCorretor] = useState([]);
+  const [filterFunil, setFilterFunil] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
-  const [tiposLead, setTiposLead] = useState([]);
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState('asc');
 
   useEffect(() => {
     async function loadListas() {
       const { data } = await supabase.from('configuracoes').select('chave, valor');
-      if (data) {
-        data.forEach(row => {
-          if (row.chave === 'origens') setOrigens(row.valor);
-          if (row.chave === 'tipos_lead') setTiposLead(row.valor);
-        });
-      }
+      if (data) data.forEach(row => { if (row.chave === 'origens') setOrigens(row.valor); });
     }
     loadListas();
   }, []);
+
+  const tiposUnicos = useMemo(() => [...new Set(data.map(c => c.tipo).filter(Boolean))].sort(), [data]);
+  const modalidadesUnicas = useMemo(() => [...new Set(data.map(c => c.modalidade).filter(Boolean))].sort(), [data]);
+  const corretoresUnicos = useMemo(() => [...new Set(data.map(c => c.corretor).filter(Boolean))].sort(), [data]);
+  const etapasUnicas = useMemo(() => ETAPAS_FUNIL.filter(e => data.some(c => c[e])).map(e => ETAPAS_LABEL[e]), [data]);
 
   function toggleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -57,8 +114,14 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
     let result = data.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
-      (!filterTipo || c.tipo === filterTipo) &&
-      (!filterAtivo || c.ativo === filterAtivo)
+      (!filterAtivo || c.ativo === filterAtivo) &&
+      (filterTipo.length === 0 || filterTipo.includes(c.tipo)) &&
+      (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
+      (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
+      (filterFunil.length === 0 || filterFunil.some(f => {
+        const etapa = getEtapaAtual(c);
+        return etapa && ETAPAS_LABEL[etapa] === f;
+      }))
     );
     if (sortCol) {
       result = [...result].sort((a, b) => {
@@ -71,7 +134,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterTipo, filterAtivo, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterAtivo, filterTipo, filterModalidade, filterCorretor, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -81,11 +144,14 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
     setSelectedId(null);
   }
 
-  function SortTh({ col, label }) {
+  function SortTh({ col, label, children }) {
     const active = sortCol === col;
     return (
       <th onClick={() => toggleSort(col)} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: active ? '#2563eb' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}>
-        {label} {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <span>{label} {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+          {children}
+        </div>
       </th>
     );
   }
@@ -97,10 +163,6 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
         <select className="input-sm" value={filterOrigem} onChange={e => setFilterOrigem(e.target.value)}>
           <option value="">Todas origens</option>
           {origens.map(o => <option key={o}>{o}</option>)}
-        </select>
-        <select className="input-sm" value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
-          <option value="">Todos tipos</option>
-          {tiposLead.map(t => <option key={t}>{t}</option>)}
         </select>
         <select style={{ width: 120 }} value={filterAtivo} onChange={e => setFilterAtivo(e.target.value)}>
           <option value="">Todos</option>
@@ -118,18 +180,27 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                 <tr>
                   <SortTh col="nome" label="Nome" />
                   <SortTh col="imovel" label="Imóvel" />
-                  <SortTh col="tipo" label="Tipo" />
-                  <SortTh col="modalidade" label="Modalidade" />
+                  <SortTh col="tipo" label="Tipo">
+                    <DropdownFilter label="" options={tiposUnicos} value={filterTipo} onChange={setFilterTipo} />
+                  </SortTh>
+                  <SortTh col="modalidade" label="Modalidade">
+                    <DropdownFilter label="" options={modalidadesUnicas} value={filterModalidade} onChange={setFilterModalidade} />
+                  </SortTh>
                   <SortTh col="valor" label="Valor" />
-                  <SortTh col="localizacao" label="Localização" />
-                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Detalhes</th>
-                  <SortTh col="funil" label="Funil" />
+                  <SortTh col="corretor" label="Corretor">
+                    <DropdownFilter label="" options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
+                  </SortTh>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Localização</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Detalhes</th>
+                  <SortTh col="funil" label="Funil">
+                    <DropdownFilter label="" options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
+                  </SortTh>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
+                  <tr><td colSpan={10}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
                 )}
                 {filtered.map(c => {
                   const etapa = getEtapaAtual(c);
@@ -139,16 +210,13 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                       className={selectedId === c.id ? 'selected' : ''}
                       onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}
                       style={{ opacity: c.ativo === 'N' ? 0.6 : 1 }}>
-                      <td>
-                        <div className="td-name">{c.nome}</div>
-                      </td>
+                      <td><div className="td-name">{c.nome}</div></td>
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.tipo ? <span className={`badge ${tipoBadge(c.tipo)}`}>{c.tipo}</span> : '—'}</td>
                       <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
-                      <td style={{ fontWeight: 600, color: '#059669' }}>
-                        {c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}
-                      </td>
-                      <td className="td-muted" title={c.localizacao || ''}>{c.localizacao || '—'}</td>
+                      <td style={{ fontWeight: 600, color: '#059669' }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
+                      <td className="td-muted">{c.corretor || '—'}</td>
+                      <td className="td-muted" title={c.localizacao || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.localizacao || '—'}</td>
                       <td className="td-muted" title={c.detalhes || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detalhes || '—'}</td>
                       <td>
                         {etapa ? (
@@ -161,11 +229,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                                 const altura = 4 + (i * (16 / (ETAPAS_FUNIL.length - 1)));
                                 const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
                                 return (
-                                  <div key={e} style={{
-                                    width: 8, borderRadius: 2, height: `${altura}px`,
+                                  <div key={e} style={{ width: 8, borderRadius: 2, height: `${altura}px`,
                                     background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
-                                    transition: 'all 0.2s',
-                                  }} />
+                                    transition: 'all 0.2s' }} />
                                 );
                               })}
                             </div>
