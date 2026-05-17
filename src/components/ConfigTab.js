@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   DEFAULT_ORIGENS, DEFAULT_TIPOS_LEAD, DEFAULT_IMOVEIS,
   STORAGE_ORIGENS, STORAGE_TIPOS_LEAD, STORAGE_IMOVEIS,
@@ -6,12 +6,17 @@ import {
 } from '../constants';
 
 function ListManager({ title, storageKey, defaultList }) {
-  const [items, setItems] = useState(() => getList(storageKey, defaultList));
+  const [items, setItems] = useState(defaultList);
   const [newItem, setNewItem] = useState('');
+
+  useEffect(() => {
+    setItems(getList(storageKey, defaultList));
+  }, [storageKey]);
 
   function add() {
     const val = newItem.trim();
-    if (!val || items.includes(val)) return;
+    if (!val) return alert('Digite um item antes de adicionar.');
+    if (items.includes(val)) return alert('Item já existe na lista.');
     const updated = [...items, val];
     setItems(updated);
     saveList(storageKey, updated);
@@ -19,13 +24,14 @@ function ListManager({ title, storageKey, defaultList }) {
   }
 
   function remove(item) {
+    if (!window.confirm(`Remover "${item}"?`)) return;
     const updated = items.filter(i => i !== item);
     setItems(updated);
     saveList(storageKey, updated);
   }
 
   function reset() {
-    if (window.confirm('Restaurar lista padrão?')) {
+    if (window.confirm('Restaurar lista padrão? Isso remove itens personalizados.')) {
       setItems(defaultList);
       saveList(storageKey, defaultList);
     }
@@ -37,6 +43,7 @@ function ListManager({ title, storageKey, defaultList }) {
         <div className="dash-section-title" style={{ margin: 0 }}>{title}</div>
         <button className="btn btn-ghost btn-sm" onClick={reset}>Restaurar padrão</button>
       </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           value={newItem}
@@ -47,7 +54,11 @@ function ListManager({ title, storageKey, defaultList }) {
         />
         <button className="btn btn-primary btn-sm" onClick={add}>+ Adicionar</button>
       </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.length === 0 && (
+          <div style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', padding: 12 }}>Nenhum item cadastrado.</div>
+        )}
         {items.map(item => (
           <div key={item} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -71,7 +82,7 @@ export default function ConfigTab() {
     <div>
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e', marginBottom: 4 }}>Configurações</h2>
-        <p style={{ fontSize: 13, color: '#6b7280' }}>Gerencie as listas usadas nos formulários. As alterações são salvas automaticamente.</p>
+        <p style={{ fontSize: 13, color: '#6b7280' }}>Gerencie as listas usadas nos formulários.</p>
       </div>
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         <ListManager title="Origens" storageKey={STORAGE_ORIGENS} defaultList={DEFAULT_ORIGENS} />
