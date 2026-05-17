@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 import DetailPanel from './DetailPanel';
-import ClienteModal from './ClienteModal';
 
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL.length - 1; i >= 0; i--) {
@@ -16,13 +15,12 @@ function tipoBadge(tipo) {
   return map[tipo] || 'badge-gray';
 }
 
-export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
+export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
   const [filterAtivo, setFilterAtivo] = useState('');
   const [selectedId, setSelectedId] = useState(null);
-  const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
   const [tiposLead, setTiposLead] = useState([]);
@@ -52,12 +50,6 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
 
   const selected = data.find(c => c.id === selectedId) || null;
 
-  async function handleSave(form) {
-    await onSave(form, modal !== 'new' ? modal?.id : null);
-    setModal(null);
-    setSearch('');
-  }
-
   async function handleDelete(id) {
     await onDelete(id);
     setConfirmDelete(null);
@@ -81,7 +73,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
           <option value="S">Ativos</option>
           <option value="N">Inativos</option>
         </select>
-        <button className="btn btn-primary" onClick={() => setModal('new')}>+ Novo Cliente</button>
+        <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Novo Cliente</button>
       </div>
 
       <div className="layout-with-panel">
@@ -149,7 +141,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => setModal(c)}>Editar</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => onOpenModal(c)}>Editar</button>
                           <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>
                           {c.telefone && (
                             <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
@@ -170,21 +162,13 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
         {selected && (
           <DetailPanel
             cliente={selected}
-            onEdit={c => setModal(c)}
+            onEdit={c => onOpenModal(c)}
             onDelete={id => setConfirmDelete(id)}
             onToggleFunil={(id, etapa, val) => onToggleFunil(id, etapa, val)}
             onClose={() => setSelectedId(null)}
           />
         )}
       </div>
-
-      {modal && (
-        <ClienteModal
-          cliente={modal === 'new' ? null : modal}
-          onSave={handleSave}
-          onClose={() => setModal(null)}
-        />
-      )}
 
       {confirmDelete && (
         <div className="modal-overlay">
