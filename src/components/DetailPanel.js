@@ -20,6 +20,7 @@ function whatsappLink(phone) {
 export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, onClose }) {
   if (!cliente) return null;
   const waLink = whatsappLink(cliente.telefone);
+  const template = `Olá ${cliente.nome}, aqui é ${cliente.corretor || 'nosso corretor'}. Tudo bem? Caso tenha interesse em mais informações ou até mesmo agendar uma visita, me coloco à disposição.`;
 
   return (
     <div className="detail-panel">
@@ -41,17 +42,19 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
       {cliente.telefone && (
         <div className="panel-field">
           <div className="panel-field-label">📞 Telefone</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
             <span className="panel-field-value">{cliente.telefone}</span>
             {waLink && (
               <a href={waLink} target="_blank" rel="noreferrer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  background: '#25d366', color: '#fff', borderRadius: 5,
-                  padding: '3px 8px', fontSize: 11, fontWeight: 600,
-                  textDecoration: 'none',
-                }}>
-                💬 WhatsApp
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#25d366', color: '#fff', borderRadius: 5, padding: '3px 8px', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+                💬 WA
+              </a>
+            )}
+            {waLink && (
+              <a href={`${waLink}?text=${encodeURIComponent(template)}`}
+                target="_blank" rel="noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#128c7e', color: '#fff', borderRadius: 5, padding: '3px 8px', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+                📝 Template
               </a>
             )}
           </div>
@@ -61,7 +64,7 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
       <Field label="📧 Email" value={cliente.email} />
       <Field label="📅 Entrada" value={cliente.entrada} />
       <Field label="🏢 Origem" value={cliente.origem} />
-      <Field label="👤 Atendente" value={cliente.atendente} />
+      <Field label="👤 Corretor" value={cliente.corretor} />
       <Field label="🏠 Tipo de Lead" value={cliente.tipo} />
       <Field label="🏗️ Imóvel" value={cliente.imovel} />
       <Field label="💰 Valor" value={cliente.valor ? `R$ ${Number(cliente.valor).toLocaleString('pt-BR')}` : null} />
