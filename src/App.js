@@ -11,6 +11,7 @@ import LoginScreen from './components/LoginScreen';
 import ClienteModal from './components/ClienteModal';
 import PerfilTab from './components/PerfilTab';
 import BackupTab from './components/BackupTab';
+import ImportacaoTab from './components/ImportacaoTab';
 
 export default function App() {
   const [tab, setTab] = useState('crm');
@@ -138,8 +139,8 @@ export default function App() {
   if (!session || !perfil) return <LoginScreen />;
 
   const tabs = isGerente
-    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['corretores','Corretores'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
-    : [['crm','Meus Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['perfil','👤 Perfil']];
+    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['corretores','Corretores'],['importacao','📥 Importar'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
+    : [['crm','Meus Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['importacao','📥 Importar'],['perfil','👤 Perfil']];
 
   return (
     <div className="app-shell">
@@ -180,6 +181,7 @@ export default function App() {
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
             {tab === 'corretores' && isGerente && <CorretoresTab />}
+            {tab === 'importacao' && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
             {tab === 'config' && isGerente && <ConfigTab />}
             {tab === 'backup' && isGerente && <BackupTab />}
             {tab === 'perfil' && <PerfilTab perfil={perfil} onUpdate={setPerfil} />}
