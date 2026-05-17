@@ -22,7 +22,7 @@ function modalidadeBadge(modalidade) {
   return { bg: '#f3f4f6', color: '#6b7280' };
 }
 
-function DropdownFilter({ label, options, value, onChange }) {
+function DropdownFilter({ options, value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -35,39 +35,41 @@ function DropdownFilter({ label, options, value, onChange }) {
   const selected = value.length > 0;
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-        border: `1px solid ${selected ? '#2563eb' : '#d1d5db'}`,
-        background: selected ? '#eff6ff' : '#fff',
-        color: selected ? '#2563eb' : '#6b7280',
-        display: 'flex', alignItems: 'center', gap: 4,
-      }}>
-        {label} {selected ? `(${value.length})` : ''} ▾
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }} onClick={e => e.stopPropagation()}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        style={{
+          padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+          border: `1px solid ${selected ? '#2563eb' : '#d1d5db'}`,
+          background: selected ? '#eff6ff' : '#f9fafb',
+          color: selected ? '#2563eb' : '#9ca3af',
+        }}>
+        ▾{selected ? ` ${value.length}` : ''}
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 100,
+          position: 'fixed', zIndex: 9999,
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 160, padding: 8, marginTop: 4,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', minWidth: 160, padding: 8,
         }}>
-          <div onClick={() => onChange([])} style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', color: '#6b7280', borderRadius: 4 }}
-            onMouseEnter={e => e.target.style.background = '#f3f4f6'}
-            onMouseLeave={e => e.target.style.background = 'transparent'}>
-            Todos
+          <div onClick={() => { onChange([]); setOpen(false); }}
+            style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: '#6b7280', borderRadius: 4, marginBottom: 2 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            Limpar filtro
           </div>
           {options.map(opt => (
-            <div key={opt} onClick={() => {
-              onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt]);
-            }} style={{
-              padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4,
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: value.includes(opt) ? '#eff6ff' : 'transparent',
-              color: value.includes(opt) ? '#2563eb' : '#374151',
-            }}
+            <div key={opt}
+              onClick={() => onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt])}
+              style={{
+                padding: '6px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4,
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: value.includes(opt) ? '#eff6ff' : 'transparent',
+                color: value.includes(opt) ? '#2563eb' : '#374151',
+              }}
               onMouseEnter={e => e.currentTarget.style.background = value.includes(opt) ? '#dbeafe' : '#f3f4f6'}
               onMouseLeave={e => e.currentTarget.style.background = value.includes(opt) ? '#eff6ff' : 'transparent'}>
-              <span style={{ fontSize: 10 }}>{value.includes(opt) ? '✓' : ' '}</span>
+              <span style={{ fontSize: 10, width: 10 }}>{value.includes(opt) ? '✓' : ''}</span>
               {opt}
             </div>
           ))}
@@ -147,9 +149,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
   function SortTh({ col, label, children }) {
     const active = sortCol === col;
     return (
-      <th onClick={() => toggleSort(col)} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: active ? '#2563eb' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          <span>{label} {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: active ? '#2563eb' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', userSelect: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span onClick={() => toggleSort(col)} style={{ cursor: 'pointer' }}>{label} {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
           {children}
         </div>
       </th>
@@ -181,19 +183,19 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
                   <SortTh col="nome" label="Nome" />
                   <SortTh col="imovel" label="Imóvel" />
                   <SortTh col="tipo" label="Tipo">
-                    <DropdownFilter label="" options={tiposUnicos} value={filterTipo} onChange={setFilterTipo} />
+                    <DropdownFilter options={tiposUnicos} value={filterTipo} onChange={setFilterTipo} />
                   </SortTh>
                   <SortTh col="modalidade" label="Modalidade">
-                    <DropdownFilter label="" options={modalidadesUnicas} value={filterModalidade} onChange={setFilterModalidade} />
+                    <DropdownFilter options={modalidadesUnicas} value={filterModalidade} onChange={setFilterModalidade} />
                   </SortTh>
                   <SortTh col="valor" label="Valor" />
                   <SortTh col="corretor" label="Corretor">
-                    <DropdownFilter label="" options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
+                    <DropdownFilter options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
                   </SortTh>
                   <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Localização</th>
                   <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Detalhes</th>
                   <SortTh col="funil" label="Funil">
-                    <DropdownFilter label="" options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
+                    <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
                   <th></th>
                 </tr>
