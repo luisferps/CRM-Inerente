@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { MODALIDADES, ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 
 const emptyForm = {
   nome: '', ativo: 'S', motivo_desistencia: '',
@@ -12,6 +12,7 @@ const emptyForm = {
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
   tratativa: false, pesquisa: false, agendamento: false, visita: false,
   proposta: false, contrato: false, financiamento: false, recebimento: false,
+  recebido: false,
 };
 
 function formatPhone(value) {
@@ -30,7 +31,6 @@ function cleanDate(val) {
 export default function ClienteModal({ cliente, onSave, onClose }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-
   const [origens, setOrigens] = useState([]);
   const [tiposLead, setTiposLead] = useState([]);
   const [imoveis, setImoveis] = useState([]);
@@ -49,17 +49,24 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
     loadListas();
   }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (cliente) {
       setForm({ ...emptyForm, ...cliente });
+      localStorage.removeItem('crm_rascunho');
     } else {
-      setForm({ ...emptyForm, entrada: new Date().toISOString().slice(0, 10) });
+      const rascunho = localStorage.getItem('crm_rascunho');
+      if (rascunho) {
+        try { setForm(JSON.parse(rascunho)); } catch { setForm(emptyForm); }
+      } else {
+        setForm(emptyForm);
+      }
     }
-  }, []);
- function set(key, val) {
+  }, [cliente]);
+
+  function set(key, val) {
     setForm(f => {
       const updated = { ...f, [key]: val };
-      localStorage.setItem('crm_rascunho', JSON.stringify(updated));
+      if (!cliente) localStorage.setItem('crm_rascunho', JSON.stringify(updated));
       return updated;
     });
   }
@@ -67,7 +74,7 @@ useEffect(() => {
   async function handleSave() {
     if (!form.nome.trim()) return alert('Nome é obrigatório.');
     setSaving(true);
-   const payload = {
+    const payload = {
       ...form,
       entrada: cleanDate(form.entrada),
       ultimo_contato: cleanDate(form.ultimo_contato),
@@ -77,6 +84,7 @@ useEffect(() => {
       valor: form.valor === '' || form.valor === null || form.valor === undefined ? null : Number(form.valor),
     };
     await onSave(payload);
+    localStorage.removeItem('crm_rascunho');
     setSaving(false);
   }
 
@@ -87,7 +95,7 @@ useEffect(() => {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{cliente ? 'Editar Cliente' : 'Novo Cliente'}</span>
-          <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose}>✕</button>
+          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>✕</button>
         </div>
         <div className="modal-body">
           <div>
@@ -215,7 +223,7 @@ useEffect(() => {
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
