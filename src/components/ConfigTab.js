@@ -11,19 +11,22 @@ function ListManager({ chave, title }) {
   const [items, setItems] = useState([]);
   const [newItem, setNewItem] = useState('');
   const [loading, setLoading] = useState(true);
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editingVal, setEditingVal] = useState('');
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase.from('configuracoes').select('valor').eq('chave', chave).single();
-      if (data) setItems(data.valor);
+      if (data) setItems([...data.valor].sort((a, b) => a.localeCompare(b, 'pt-BR')));
       setLoading(false);
     }
     load();
   }, [chave]);
 
   async function save(updated) {
-    await supabase.from('configuracoes').update({ valor: updated }).eq('chave', chave);
-    setItems(updated);
+    const sorted = [...updated].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    await supabase.from('configuracoes').update({ valor: sorted }).eq('chave', chave);
+    setItems(sorted);
   }
 
   async function add() {
@@ -37,6 +40,20 @@ function ListManager({ chave, title }) {
   async function remove(item) {
     if (!window.confirm(`Remover "${item}"?`)) return;
     await save(items.filter(i => i !== item));
+  }
+
+  function startEdit(idx) {
+    setEditingIdx(idx);
+    setEditingVal(items[idx]);
+  }
+
+  async function saveEdit(idx) {
+    const val = editingVal.trim();
+    if (!val) return;
+    if (items.includes(val) && val !== items[idx]) return alert('Item já existe.');
+    const updated = items.map((item, i) => i === idx ? val : item);
+    await save(updated);
+    setEditingIdx(null);
   }
 
   if (loading) return <div className="dash-section" style={{ maxWidth: 420 }}>Carregando...</div>;
@@ -60,17 +77,27 @@ function ListManager({ chave, title }) {
         {items.length === 0 && (
           <div style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', padding: 12 }}>Nenhum item.</div>
         )}
-        {items.map(item => (
-          <div key={item} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6,
-            padding: '7px 12px', fontSize: 13
-          }}>
-            <span>{item}</span>
-            <button onClick={() => remove(item)}
-              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>
-              ×
-            </button>
+        {items.map((item, idx) => (
+          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px' }}>
+            {editingIdx === idx ? (
+              <>
+                <input
+                  value={editingVal}
+                  onChange={e => setEditingVal(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveEdit(idx)}
+                  style={{ flex: 1, padding: '4px 8px', fontSize: 13, border: '1px solid #2563eb', borderRadius: 5 }}
+                  autoFocus
+                />
+                <button onClick={() => saveEdit(idx)} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>✓</button>
+                <button onClick={() => setEditingIdx(null)} style={{ background: '#f3f4f6', color: '#6b7280', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>✕</button>
+              </>
+            ) : (
+              <>
+                <span style={{ flex: 1, fontSize: 13 }}>{item}</span>
+                <button onClick={() => startEdit(idx)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 14 }}>✏️</button>
+                <button onClick={() => remove(item)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>×</button>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -83,7 +110,7 @@ export default function ConfigTab() {
     <div>
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e', marginBottom: 4 }}>Configurações</h2>
-        <p style={{ fontSize: 13, color: '#6b7280' }}>Gerencie as listas usadas nos formulários.</p>
+        <p style={{ fontSize: 13, color: '#6b7280' }}>Gerencie as listas usadas nos formulários. Ordenadas alfabeticamente.</p>
       </div>
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         {Object.entries(CHAVES).map(([chave, title]) => (
