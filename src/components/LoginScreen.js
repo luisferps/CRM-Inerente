@@ -1,18 +1,39 @@
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import RegisterScreen from './RegisterScreen';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [showRegister, setShowRegister] = useState(false);
+
+  if (showRegister) return <RegisterScreen onBack={() => setShowRegister(false)} />;
 
   async function handleLogin() {
     if (!email || !senha) return setErro('Preencha email e senha.');
     setLoading(true);
     setErro('');
+
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if (error) setErro('Email ou senha incorretos.');
+
+    if (error) {
+      setErro('Email ou senha incorretos.');
+      setLoading(false);
+      return;
+    }
+
+    // Verificar se está aprovado
+    const { data: perfil } = await supabase.from('perfis').select('aprovado, role').eq('id', (await supabase.auth.getUser()).data.user.id).single();
+
+    if (!perfil || !perfil.aprovado) {
+      await supabase.auth.signOut();
+      setErro('Seu acesso ainda não foi aprovado pelo gerente.');
+      setLoading(false);
+      return;
+    }
+
     setLoading(false);
   }
 
@@ -26,26 +47,18 @@ export default function LoginScreen() {
 
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             placeholder="seu@email.com"
-            style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}
-          />
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
         </div>
 
         <div style={{ marginBottom: 20 }}>
           <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>Senha</label>
-          <input
-            type="password"
-            value={senha}
-            onChange={e => setSenha(e.target.value)}
+          <input type="password" value={senha} onChange={e => setSenha(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             placeholder="••••••••"
-            style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}
-          />
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
         </div>
 
         {erro && (
@@ -54,12 +67,18 @@ export default function LoginScreen() {
           </div>
         )}
 
-        <button
-          onClick={handleLogin}
-          disabled={loading}
+        <button onClick={handleLogin} disabled={loading}
           style={{ width: '100%', padding: '10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
           {loading ? 'Entrando...' : 'Entrar'}
         </button>
+
+        <div style={{ textAlign: 'center', marginTop: 16, borderTop: '1px solid #f3f4f6', paddingTop: 16 }}>
+          <span style={{ fontSize: 13, color: '#6b7280' }}>É corretor e não tem acesso? </span>
+          <button onClick={() => setShowRegister(true)}
+            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            Solicitar cadastro
+          </button>
+        </div>
       </div>
     </div>
   );
