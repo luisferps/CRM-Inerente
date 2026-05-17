@@ -337,3 +337,61 @@ td { padding: 12px 16px; }
 .confirm-icon { font-size: 36px; margin-bottom: 12px; }
 .confirm-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
 .confirm-text { font-size: 13px; color: #6b7280; margin-bottom: 20px; }
+
+/* ============ MODO ESCURO ============ */
+body.dark { background: #0f1117; color: #e2e8f0; }
+body.dark .header { background: #1e2335; border-color: #2a3050; }
+body.dark .header-logo { color: #e2e8f0; }
+body.dark .stats-bar { background: #1e2335; border-color: #2a3050; }
+body.dark .stat-label { color: #64748b; }
+body.dark .tab-btn { color: #9ca3af; }
+body.dark .tab-btn:hover { background: #2a3050; color: #e2e8f0; }
+body.dark .tab-btn.active { background: #1d3a7a; color: #60a5fa; }
+body.dark .main { background: #0f1117; }
+body.dark .table-wrapper { background: #1e2335; border-color: #2a3050; }
+body.dark thead tr { background: #13172299; border-color: #2a3050; }
+body.dark th { color: #9ca3af; }
+body.dark tbody tr { border-color: #2a3050; }
+body.dark tbody tr:hover { background: #1e2335; }
+body.dark tbody tr.selected { background: #1d3a7a33; }
+body.dark td { color: #e2e8f0; }
+body.dark .td-muted { color: #9ca3af; }
+body.dark .td-name { color: #e2e8f0; }
+body.dark .empty-state { color: #4b5563; }
+body.dark .loading { color: #9ca3af; }
+body.dark .toolbar input,
+body.dark .toolbar select { background: #1e2335; border-color: #2a3050; color: #e2e8f0; }
+body.dark input, body.dark select, body.dark textarea { background: #1e2335; border-color: #2a3050; color: #e2e8f0; }
+body.dark input:focus, body.dark select:focus, body.dark textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px #3b82f622; }
+body.dark .modal { background: #1e2335; }
+body.dark .modal-header { border-color: #2a3050; }
+body.dark .modal-footer { border-color: #2a3050; }
+body.dark .modal-title { color: #e2e8f0; }
+body.dark .modal-overlay { background: rgba(0,0,0,0.6); }
+body.dark .form-label { color: #9ca3af; }
+body.dark .btn-ghost { background: transparent; border-color: #2a3050; color: #9ca3af; }
+body.dark .btn-ghost:hover { background: #2a3050; }
+body.dark .dash-section { background: #1e2335; border-color: #2a3050; }
+body.dark .dash-card { background: #1e2335; border-color: #2a3050; }
+body.dark .dash-section-title { color: #9ca3af; }
+body.dark .dash-card-label { color: #64748b; }
+body.dark .detail-panel { background: #1e2335; border-color: #2a3050; }
+body.dark .panel-name { color: #e2e8f0; }
+body.dark .panel-section { border-color: #2a3050; }
+body.dark .panel-field-label { color: #64748b; }
+body.dark .panel-field-value { color: #e2e8f0; }
+body.dark .funil-step { color: #9ca3af; border-color: transparent; }
+body.dark .funil-step:hover { background: #2a3050; }
+body.dark .funil-step.done { background: #052e1688; border-color: #10b98155; color: #10b981; }
+body.dark .funil-check { background: #0f1117; border-color: #2a3050; }
+body.dark .confirm-dialog { background: #1e2335; }
+body.dark .confirm-title { color: #e2e8f0; }
+body.dark .confirm-text { color: #9ca3af; }
+body.dark .funnel-bar-wrap { background: #2a3050; }
+body.dark .funnel-label { color: #9ca3af; }
+body.dark .funnel-pct { color: #9ca3af; }
+body.dark .origem-item { background: #13172299; border-color: #2a3050; }
+body.dark .origem-name { color: #9ca3af; }
+body.dark .badge-gray { background: #2a3050; color: #9ca3af; }
+body.dark .progress-bar { background: #2a3050; }
+body.dark .error-banner { background: #7f1d1d; color: #fca5a5; }
