@@ -99,7 +99,7 @@ export default function App() {
       <header className="header">
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
-          {[['crm','Clientes'],['vendas','Vendas'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['config','⚙️ Config']].map(([t, l]) => (
+          {[['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['config','⚙️ Config']].map(([t, l]) => (
             <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
           ))}
         </nav>
@@ -130,7 +130,7 @@ export default function App() {
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
             {tab === 'crm' && <CRMTab data={data.filter(c => c.ativo === 'S')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
-            {tab === 'vendas' && <CRMTab data={data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
+            
             {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onSave={handleSave} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
