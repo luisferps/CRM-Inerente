@@ -49,14 +49,13 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
     loadListas();
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (cliente) {
       setForm({ ...emptyForm, ...cliente });
     } else {
-      setForm(emptyForm);
+      setForm({ ...emptyForm, entrada: new Date().toISOString().slice(0, 10) });
     }
-  }, [cliente]);
-
+  }, []);
   function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
   async function handleSave() {
