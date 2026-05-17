@@ -36,22 +36,15 @@ function DropdownFilter({ options, value, onChange }) {
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }} onClick={e => e.stopPropagation()}>
-      <button
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        style={{
-          padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+      <button onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        style={{ padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer',
           border: `1px solid ${selected ? '#2563eb' : '#d1d5db'}`,
           background: selected ? '#eff6ff' : '#f9fafb',
-          color: selected ? '#2563eb' : '#9ca3af',
-        }}>
+          color: selected ? '#2563eb' : '#9ca3af' }}>
         ▾{selected ? ` ${value.length}` : ''}
       </button>
       {open && (
-        <div style={{
-          position: 'fixed', zIndex: 9999,
-          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', minWidth: 160, padding: 8,
-        }}>
+        <div style={{ position: 'fixed', zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', minWidth: 160, padding: 8 }}>
           <div onClick={() => { onChange([]); setOpen(false); }}
             style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: '#6b7280', borderRadius: 4, marginBottom: 2 }}
             onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
@@ -59,14 +52,10 @@ function DropdownFilter({ options, value, onChange }) {
             Limpar filtro
           </div>
           {options.map(opt => (
-            <div key={opt}
-              onClick={() => onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt])}
-              style={{
-                padding: '6px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4,
-                display: 'flex', alignItems: 'center', gap: 6,
+            <div key={opt} onClick={() => onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt])}
+              style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6,
                 background: value.includes(opt) ? '#eff6ff' : 'transparent',
-                color: value.includes(opt) ? '#2563eb' : '#374151',
-              }}
+                color: value.includes(opt) ? '#2563eb' : '#374151' }}
               onMouseEnter={e => e.currentTarget.style.background = value.includes(opt) ? '#dbeafe' : '#f3f4f6'}
               onMouseLeave={e => e.currentTarget.style.background = value.includes(opt) ? '#eff6ff' : 'transparent'}>
               <span style={{ fontSize: 10, width: 10 }}>{value.includes(opt) ? '✓' : ''}</span>
@@ -79,10 +68,9 @@ function DropdownFilter({ options, value, onChange }) {
   );
 }
 
-export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isGerente }) {
+export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
-  const [filterAtivo, setFilterAtivo] = useState('');
   const [filterTipo, setFilterTipo] = useState([]);
   const [filterModalidade, setFilterModalidade] = useState([]);
   const [filterCorretor, setFilterCorretor] = useState([]);
@@ -116,27 +104,22 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
     let result = data.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
-      (!filterAtivo || c.ativo === filterAtivo) &&
       (filterTipo.length === 0 || filterTipo.includes(c.tipo)) &&
       (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
       (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
-      (filterFunil.length === 0 || filterFunil.some(f => {
-        const etapa = getEtapaAtual(c);
-        return etapa && ETAPAS_LABEL[etapa] === f;
-      }))
+      (filterFunil.length === 0 || filterFunil.some(f => { const etapa = getEtapaAtual(c); return etapa && ETAPAS_LABEL[etapa] === f; }))
     );
     if (sortCol) {
       result = [...result].sort((a, b) => {
         const getVal = (c) => sortCol === 'funil'
           ? (ETAPAS_FUNIL.indexOf(getEtapaAtual(c))).toString()
           : (c[sortCol] || '').toString().toLowerCase();
-        const av = getVal(a);
-        const bv = getVal(b);
+        const av = getVal(a), bv = getVal(b);
         return sortDir === 'asc' ? av.localeCompare(bv, 'pt-BR') : bv.localeCompare(av, 'pt-BR');
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterAtivo, filterTipo, filterModalidade, filterCorretor, filterFunil, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterTipo, filterModalidade, filterCorretor, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -166,11 +149,6 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
           <option value="">Todas origens</option>
           {origens.map(o => <option key={o}>{o}</option>)}
         </select>
-        <select style={{ width: 120 }} value={filterAtivo} onChange={e => setFilterAtivo(e.target.value)}>
-          <option value="">Todos</option>
-          <option value="S">Ativos</option>
-          <option value="N">Inativos</option>
-        </select>
         <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Novo Cliente</button>
       </div>
 
@@ -192,8 +170,8 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
                   <SortTh col="corretor" label="Corretor">
                     <DropdownFilter options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
                   </SortTh>
-                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Localização</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Detalhes</th>
+                  <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Localização</th>
+                  <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Detalhes</th>
                   <SortTh col="funil" label="Funil">
                     <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
@@ -208,10 +186,8 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
                   const etapa = getEtapaAtual(c);
                   const modColors = modalidadeBadge(c.modalidade);
                   return (
-                    <tr key={c.id}
-                      className={selectedId === c.id ? 'selected' : ''}
-                      onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}
-                      style={{ opacity: c.ativo === 'N' ? 0.6 : 1 }}>
+                    <tr key={c.id} className={selectedId === c.id ? 'selected' : ''}
+                      onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}>
                       <td><div className="td-name">{c.nome}</div></td>
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.tipo ? <span className={`badge ${tipoBadge(c.tipo)}`}>{c.tipo}</span> : '—'}</td>
@@ -265,8 +241,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, isG
             cliente={selected}
             onEdit={c => onOpenModal(c)}
             onDelete={id => setConfirmDelete(id)}
-            onToggleFunil={(id, etapa, val) => onToggleFunil(id, etapa, val)}
+            onToggleFunil={onToggleFunil}
             onClose={() => setSelectedId(null)}
+            onNovaNegociacao={onNovaNegociacao}
           />
         )}
       </div>
