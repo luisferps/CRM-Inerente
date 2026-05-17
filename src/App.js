@@ -5,6 +5,7 @@ import CRMTab from './components/CRMTab';
 import FunilTab from './components/FunilTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
+import InativosTab from './components/InativosTab';
 import LoginScreen from './components/LoginScreen';
 import ClienteModal from './components/ClienteModal';
 
@@ -25,13 +26,8 @@ export default function App() {
       setCheckingAuth(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (_event === 'SIGNED_OUT') {
-        sessionRef.current = null;
-        setSession(null);
-      } else if (_event === 'SIGNED_IN' && !sessionRef.current) {
-        sessionRef.current = session;
-        setSession(session);
-      }
+      if (_event === 'SIGNED_OUT') { sessionRef.current = null; setSession(null); }
+      else if (_event === 'SIGNED_IN' && !sessionRef.current) { sessionRef.current = session; setSession(session); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -41,9 +37,7 @@ export default function App() {
     async function load() {
       setLoading(true);
       const { data: rows, error: err } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from('clientes').select('*').order('created_at', { ascending: false });
       if (err) setError(err.message);
       else setData(rows || []);
       setLoading(false);
@@ -51,21 +45,24 @@ export default function App() {
     load();
   }, [session]);
 
-  async function handleSave(form, id) {
+  async function handleSave(form) {
     const payload = { ...form };
+    const editId = payload.id || null;
     delete payload.id;
     delete payload.created_at;
-    if (id) {
+
+    if (editId) {
       const { data: updated, error: err } = await supabase
-        .from('clientes').update(payload).eq('id', id).select().single();
+        .from('clientes').update(payload).eq('id', editId).select().single();
       if (err) return alert('Erro ao salvar: ' + err.message);
-      setData(d => d.map(c => c.id === id ? updated : c));
+      setData(d => d.map(c => c.id === editId ? updated : c));
     } else {
       const { data: inserted, error: err } = await supabase
         .from('clientes').insert(payload).select().single();
       if (err) return alert('Erro ao inserir: ' + err.message);
       setData(d => [inserted, ...d]);
     }
+    localStorage.removeItem('crm_rascunho');
     setModal(null);
   }
 
@@ -88,13 +85,13 @@ export default function App() {
   }
 
   const stats = useMemo(() => ({
-    total: data.length,
-    ativos: data.filter(c => c.ativo === 'S').length,
+    total: data.filter(c => c.ativo === 'S').length,
+    vendas: data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda').length,
+    locacoes: data.filter(c => c.ativo === 'S' && c.modalidade === 'Locação').length,
     contratos: data.filter(c => c.contrato).length,
   }), [data]);
 
   if (checkingAuth) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: '#9ca3af' }}>Carregando...</div>;
-
   if (!session) return <LoginScreen />;
 
   return (
@@ -102,43 +99,45 @@ export default function App() {
       <header className="header">
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
-          {[['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['config','⚙️ Config']].map(([t, l]) => (
+          {[['crm','Clientes'],['vendas','Vendas'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['config','⚙️ Config']].map(([t, l]) => (
             <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
           ))}
         </nav>
-        <button onClick={handleLogout}
-          style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 14px', fontSize: 12, color: '#6b7280', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+        <button onClick={handleLogout} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 14px', fontSize: 12, color: '#6b7280', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
           Sair
         </button>
       </header>
       <div className="stats-bar">
         <div className="stat-item">
-          <span className="stat-label">Total</span>
+          <span className="stat-label">Ativos</span>
           <span className="stat-value stat-blue">{stats.total}</span>
         </div>
         <div className="stat-item">
-          <span className="stat-label">Ativos</span>
-          <span className="stat-value stat-green">{stats.ativos}</span>
+          <span className="stat-label">Vendas</span>
+          <span className="stat-value stat-green">{stats.vendas}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Locações</span>
+          <span className="stat-value stat-purple">{stats.locacoes}</span>
         </div>
         <div className="stat-item">
           <span className="stat-label">Contratos</span>
-          <span className="stat-value stat-purple">{stats.contratos}</span>
+          <span className="stat-value stat-orange">{stats.contratos}</span>
         </div>
       </div>
       {error && <div className="error-banner">⚠️ Erro de conexão: {error}</div>}
       <main className="main">
-        {loading ? (
-          <div className="loading">Carregando dados...</div>
-        ) : (
+        {loading ? <div className="loading">Carregando dados...</div> : (
           <>
-            {tab === 'crm' && <CRMTab data={data} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
+            {tab === 'crm' && <CRMTab data={data.filter(c => c.ativo === 'S')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
+            {tab === 'vendas' && <CRMTab data={data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
             {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onSave={handleSave} />}
             {tab === 'dash' && <DashboardTab data={data} />}
+            {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
             {tab === 'config' && <ConfigTab />}
           </>
         )}
       </main>
-
       {modal !== null && (
         <ClienteModal
           cliente={modal === 'new' ? null : modal}
