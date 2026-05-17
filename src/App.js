@@ -21,7 +21,21 @@ export default function App() {
   const [perfil, setPerfil] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [modal, setModal] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('crm_dark') === 'true');
   const sessionRef = useRef(null);
+
+  useEffect(() => {
+    document.body.classList.toggle('dark', darkMode);
+  }, [darkMode]);
+
+  function toggleDark() {
+    setDarkMode(d => {
+      const next = !d;
+      localStorage.setItem('crm_dark', next);
+      document.body.classList.toggle('dark', next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -140,6 +154,9 @@ export default function App() {
           <span style={{ fontSize: 12, color: '#6b7280' }}>
             {perfil.nome} · <span style={{ color: isGerente ? '#2563eb' : '#059669', fontWeight: 600 }}>{isGerente ? 'Gerente' : 'Corretor'}</span>
           </span>
+          <button onClick={toggleDark} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 14, color: '#6b7280', cursor: 'pointer' }}>
+            {darkMode ? '☀️' : '🌙'}
+          </button>
           <button onClick={handleLogout} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 14px', fontSize: 12, color: '#6b7280', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
             Sair
           </button>
