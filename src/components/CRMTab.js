@@ -15,6 +15,13 @@ function tipoBadge(tipo) {
   return map[tipo] || 'badge-gray';
 }
 
+function modalidadeBadge(modalidade) {
+  if (modalidade === 'Venda') return { bg: '#dbeafe', color: '#1d4ed8' };
+  if (modalidade === 'Locação') return { bg: '#ede9fe', color: '#7e22ce' };
+  if (modalidade === 'Compra') return { bg: '#dcfce7', color: '#065f46' };
+  return { bg: '#f3f4f6', color: '#6b7280' };
+}
+
 export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
@@ -24,6 +31,8 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
   const [tiposLead, setTiposLead] = useState([]);
+  const [sortCol, setSortCol] = useState('');
+  const [sortDir, setSortDir] = useState('asc');
 
   useEffect(() => {
     async function loadListas() {
@@ -38,15 +47,28 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
     loadListas();
   }, []);
 
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  }
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return data.filter(c =>
+    let result = data.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
       (!filterTipo || c.tipo === filterTipo) &&
       (!filterAtivo || c.ativo === filterAtivo)
     );
-  }, [data, search, filterOrigem, filterTipo, filterAtivo]);
+    if (sortCol) {
+      result = [...result].sort((a, b) => {
+        const av = (a[sortCol] || '').toString().toLowerCase();
+        const bv = (b[sortCol] || '').toString().toLowerCase();
+        return sortDir === 'asc' ? av.localeCompare(bv, 'pt-BR') : bv.localeCompare(av, 'pt-BR');
+      });
+    }
+    return result;
+  }, [data, search, filterOrigem, filterTipo, filterAtivo, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -54,6 +76,15 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
     await onDelete(id);
     setConfirmDelete(null);
     setSelectedId(null);
+  }
+
+  function SortTh({ col, label }) {
+    const active = sortCol === col;
+    return (
+      <th onClick={() => toggleSort(col)} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: active ? '#2563eb' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}>
+        {label} {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+      </th>
+    );
   }
 
   return (
@@ -82,14 +113,14 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
             <table>
               <thead>
                 <tr>
-                  <th>Nome</th>
-                  <th>Imóvel</th>
-                  <th>Tipo</th>
-                  <th>Modalidade</th>
-                  <th>Valor</th>
-                  <th>Localização</th>
-                  <th>Detalhes</th>
-                  <th>Funil</th>
+                  <SortTh col="nome" label="Nome" />
+                  <SortTh col="imovel" label="Imóvel" />
+                  <SortTh col="tipo" label="Tipo" />
+                  <SortTh col="modalidade" label="Modalidade" />
+                  <SortTh col="valor" label="Valor" />
+                  <SortTh col="localizacao" label="Localização" />
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Detalhes</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Funil</th>
                   <th></th>
                 </tr>
               </thead>
@@ -99,6 +130,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                 )}
                 {filtered.map(c => {
                   const etapa = getEtapaAtual(c);
+                  const modColors = modalidadeBadge(c.modalidade);
                   return (
                     <tr key={c.id}
                       className={selectedId === c.id ? 'selected' : ''}
@@ -106,11 +138,10 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                       style={{ opacity: c.ativo === 'N' ? 0.6 : 1 }}>
                       <td>
                         <div className="td-name">{c.nome}</div>
-                        <div className="td-sub">{c.ativo === 'S' ? '● Ativo' : '○ Inativo'}</div>
                       </td>
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.tipo ? <span className={`badge ${tipoBadge(c.tipo)}`}>{c.tipo}</span> : '—'}</td>
-                      <td>{c.modalidade ? <span className="badge badge-blue">{c.modalidade}</span> : '—'}</td>
+                      <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
                       <td style={{ fontWeight: 600, color: '#059669' }}>
                         {c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}
                       </td>
@@ -128,8 +159,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                                 const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
                                 return (
                                   <div key={e} style={{
-                                    width: 8, borderRadius: 2,
-                                    height: `${altura}px`,
+                                    width: 8, borderRadius: 2, height: `${altura}px`,
                                     background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
                                     transition: 'all 0.2s',
                                   }} />
