@@ -56,7 +56,13 @@ useEffect(() => {
       setForm({ ...emptyForm, entrada: new Date().toISOString().slice(0, 10) });
     }
   }, []);
-  function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
+ function set(key, val) {
+    setForm(f => {
+      const updated = { ...f, [key]: val };
+      localStorage.setItem('crm_rascunho', JSON.stringify(updated));
+      return updated;
+    });
+  }
 
   async function handleSave() {
     if (!form.nome.trim()) return alert('Nome é obrigatório.');
