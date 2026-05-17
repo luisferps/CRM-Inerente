@@ -83,7 +83,7 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
       motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
       valor: form.valor === '' || form.valor === null || form.valor === undefined ? null : Number(form.valor),
     };
-    await onSave(payload);
+   await onSave({ ...payload, id: cliente?.id || null });
     localStorage.removeItem('crm_rascunho');
     setSaving(false);
   }
