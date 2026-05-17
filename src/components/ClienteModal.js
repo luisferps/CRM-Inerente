@@ -62,13 +62,14 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
   async function handleSave() {
     if (!form.nome.trim()) return alert('Nome é obrigatório.');
     setSaving(true);
-    const payload = {
+   const payload = {
       ...form,
       entrada: cleanDate(form.entrada),
       ultimo_contato: cleanDate(form.ultimo_contato),
       prox_contato: cleanDate(form.prox_contato),
       final_contato: cleanDate(form.final_contato),
       motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
+      valor: form.valor === '' || form.valor === null || form.valor === undefined ? null : Number(form.valor),
     };
     await onSave(payload);
     setSaving(false);
