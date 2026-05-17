@@ -16,18 +16,27 @@ export default function LoginScreen() {
     setLoading(true);
     setErro('');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-
+    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password: senha });
     if (error) {
       setErro('Email ou senha incorretos.');
       setLoading(false);
       return;
     }
 
-    // Verificar se está aprovado
-    const { data: perfil } = await supabase.from('perfis').select('aprovado, role').eq('id', (await supabase.auth.getUser()).data.user.id).single();
+    const { data: perfil, error: perfErr } = await supabase
+      .from('perfis')
+      .select('aprovado, role')
+      .eq('id', authData.user.id)
+      .single();
 
-    if (!perfil || !perfil.aprovado) {
+    if (perfErr || !perfil) {
+      await supabase.auth.signOut();
+      setErro('Perfil não encontrado. Contate o gerente.');
+      setLoading(false);
+      return;
+    }
+
+    if (!perfil.aprovado) {
       await supabase.auth.signOut();
       setErro('Seu acesso ainda não foi aprovado pelo gerente.');
       setLoading(false);
@@ -44,7 +53,6 @@ export default function LoginScreen() {
           <div style={{ fontSize: 22, fontWeight: 700, color: '#1a1a2e' }}>CRM <span style={{ color: '#2563eb' }}>Imobiliário</span></div>
           <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 4 }}>Faça login para continuar</div>
         </div>
-
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>Email</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)}
@@ -52,7 +60,6 @@ export default function LoginScreen() {
             placeholder="seu@email.com"
             style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
         </div>
-
         <div style={{ marginBottom: 20 }}>
           <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>Senha</label>
           <input type="password" value={senha} onChange={e => setSenha(e.target.value)}
@@ -60,18 +67,15 @@ export default function LoginScreen() {
             placeholder="••••••••"
             style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
         </div>
-
         {erro && (
           <div style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '8px 12px', fontSize: 12, marginBottom: 14 }}>
             {erro}
           </div>
         )}
-
         <button onClick={handleLogin} disabled={loading}
           style={{ width: '100%', padding: '10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
           {loading ? 'Entrando...' : 'Entrar'}
         </button>
-
         <div style={{ textAlign: 'center', marginTop: 16, borderTop: '1px solid #f3f4f6', paddingTop: 16 }}>
           <span style={{ fontSize: 13, color: '#6b7280' }}>É corretor e não tem acesso? </span>
           <button onClick={() => setShowRegister(true)}
