@@ -210,4 +210,4 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
             <div className="confirm-title">Confirmar exclusão</div>
             <div className="confirm-text">Esta ação não pode ser desfeita.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}
+             <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
