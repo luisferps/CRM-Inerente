@@ -12,10 +12,50 @@ import ClienteModal from './components/ClienteModal';
 import PerfilTab from './components/PerfilTab';
 import BackupTab from './components/BackupTab';
 import ImportacaoTab from './components/ImportacaoTab';
+import ResumoDemandasTab from './components/ResumoDemandasTab';
+
+function splitForm(form) {
+  const clienteData = {
+    nome: form.nome,
+    telefone: form.telefone,
+    email: form.email,
+    tipo: form.tipo,
+    entrada: form.entrada || new Date().toISOString().slice(0, 10),
+  };
+  const negociacaoData = {
+    modalidade: form.modalidade,
+    imovel: form.imovel,
+    valor: form.valor ? Number(form.valor) : null,
+    localizacao: form.localizacao,
+    detalhes: form.detalhes,
+    proxima_acao: form.proxima_acao,
+    imoveis_visitados: form.imoveis_visitados,
+    ultimo_contato: form.ultimo_contato || null,
+    prox_contato: form.prox_contato || null,
+    final_contato: form.final_contato || null,
+    prorrogacao: form.prorrogacao || null,
+    origem: form.origem,
+    ativo: form.ativo,
+    motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
+    tratativa: form.tratativa || false,
+    pesquisa: form.pesquisa || false,
+    agendamento: form.agendamento || false,
+    visita: form.visita || false,
+    proposta: form.proposta || false,
+    contrato: form.contrato || false,
+    financiamento: form.financiamento || false,
+    recebimento: form.recebimento || false,
+    recebido: form.recebido || false,
+    corretor_id: form.corretor_id,
+    corretor: form.corretor,
+  };
+  return { clienteData, negociacaoData };
+}
 
 export default function App() {
   const [tab, setTab] = useState('crm');
-  const [data, setData] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [negociacoes, setNegociacoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
@@ -25,9 +65,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('crm_dark') === 'true');
   const sessionRef = useRef(null);
 
-  useEffect(() => {
-    document.body.classList.toggle('dark', darkMode);
-  }, [darkMode]);
+  useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
 
   function toggleDark() {
     setDarkMode(d => {
@@ -46,16 +84,8 @@ export default function App() {
       else setCheckingAuth(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (_event === 'SIGNED_OUT') {
-        sessionRef.current = null;
-        setSession(null);
-        setPerfil(null);
-        setCheckingAuth(false);
-      } else if (_event === 'SIGNED_IN' && !sessionRef.current) {
-        sessionRef.current = session;
-        setSession(session);
-        loadPerfil(session.user.id);
-      }
+      if (_event === 'SIGNED_OUT') { sessionRef.current = null; setSession(null); setPerfil(null); setCheckingAuth(false); }
+      else if (_event === 'SIGNED_IN' && !sessionRef.current) { sessionRef.current = session; setSession(session); loadPerfil(session.user.id); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -66,59 +96,80 @@ export default function App() {
     setCheckingAuth(false);
   }
 
-  useEffect(() => {
-    if (!session || !perfil) return;
-    load();
-  }, [session, perfil]);
+  useEffect(() => { if (!session || !perfil) return; load(); }, [session, perfil]);
 
   async function load() {
     setLoading(true);
-    const { data: rows, error: err } = await supabase
-      .from('clientes').select('*').order('created_at', { ascending: false });
-    if (err) setError(err.message);
-    else setData(rows || []);
+    const [{ data: clientesData, error: err1 }, { data: negData, error: err2 }] = await Promise.all([
+      supabase.from('clientes').select('*').order('created_at', { ascending: false }),
+      supabase.from('negociacoes').select('*').order('created_at', { ascending: false }),
+    ]);
+    if (err1 || err2) setError((err1 || err2).message);
+    else { setClientes(clientesData || []); setNegociacoes(negData || []); }
     setLoading(false);
   }
 
-  async function handleSave(form) {
-    const payload = { ...form };
-    const editId = payload.id || null;
-    delete payload.id;
-    delete payload.created_at;
-    if (perfil?.role === 'corretor') payload.corretor_id = perfil.id;
+  const data = useMemo(() => {
+    return negociacoes.map(neg => {
+      const cliente = clientes.find(c => c.id === neg.cliente_id) || {};
+      return {
+        ...neg,
+        negociacao_id: neg.id,
+        id: neg.id,
+        cliente_real_id: cliente.id,
+        nome: cliente.nome || '',
+        telefone: cliente.telefone || '',
+        email: cliente.email || '',
+        tipo: cliente.tipo || '',
+        entrada: cliente.entrada || '',
+      };
+    });
+  }, [clientes, negociacoes]);
 
-    if (editId) {
-      const { data: updated, error: err } = await supabase
-        .from('clientes').update(payload).eq('id', editId).select().single();
-      if (err) return alert('Erro ao salvar: ' + err.message);
-      setData(d => d.map(c => c.id === editId ? updated : c));
+  async function handleSave(form) {
+    const { clienteData, negociacaoData } = splitForm(form);
+    const editNegId = form.negociacao_id || null;
+    const editClienteId = form.cliente_real_id || null;
+
+    if (editNegId && editClienteId) {
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        supabase.from('clientes').update(clienteData).eq('id', editClienteId),
+        supabase.from('negociacoes').update(negociacaoData).eq('id', editNegId),
+      ]);
+      if (e1 || e2) return alert('Erro ao salvar: ' + (e1 || e2).message);
     } else {
-      const { data: inserted, error: err } = await supabase
-        .from('clientes').insert(payload).select().single();
-      if (err) return alert('Erro ao inserir: ' + err.message);
-      setData(d => [inserted, ...d]);
+      if (perfil?.role === 'corretor') { negociacaoData.corretor_id = perfil.id; negociacaoData.corretor = perfil.nome; }
+      const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clienteData).select().single();
+      if (e1) return alert('Erro ao inserir cliente: ' + e1.message);
+      const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: novoCliente.id });
+      if (e2) return alert('Erro ao inserir negociação: ' + e2.message);
     }
     localStorage.removeItem('crm_rascunho');
     setModal(null);
+    await load();
   }
 
-  async function handleDelete(id) {
-    const { error: err } = await supabase.from('clientes').delete().eq('id', id);
+  async function handleNovaNegociacao(clienteRealId) {
+    const cliente = clientes.find(c => c.id === clienteRealId);
+    if (!cliente) return;
+    setModal({ cliente, negociacao: null, novaNegociacao: true });
+  }
+
+  async function handleDelete(negId) {
+    const { error: err } = await supabase.from('negociacoes').delete().eq('id', negId);
     if (err) return alert('Erro ao excluir: ' + err.message);
-    setData(d => d.filter(c => c.id !== id));
+    await load();
   }
 
-  async function handleToggleFunil(id, etapa, val) {
-    const { data: updated, error: err } = await supabase
-      .from('clientes').update({ [etapa]: val }).eq('id', id).select().single();
+  async function handleToggleFunil(negId, etapa, val) {
+    const { error: err } = await supabase.from('negociacoes').update({ [etapa]: val }).eq('id', negId);
     if (err) return alert('Erro: ' + err.message);
-    setData(d => d.map(c => c.id === id ? updated : c));
+    setNegociacoes(n => n.map(neg => neg.id === negId ? { ...neg, [etapa]: val } : neg));
   }
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    setData([]);
-    setPerfil(null);
+    setClientes([]); setNegociacoes([]); setPerfil(null);
   }
 
   const isGerente = perfil?.role === 'gerente';
@@ -131,16 +182,14 @@ export default function App() {
   }), [data]);
 
   if (checkingAuth) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: '#9ca3af' }}>
-      Carregando...
-    </div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: '#9ca3af' }}>Carregando...</div>
   );
 
   if (!session || !perfil) return <LoginScreen />;
 
   const tabs = isGerente
-    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['corretores','Corretores'],['importacao','📥 Importar'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
-    : [['crm','Meus Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['importacao','📥 Importar'],['perfil','👤 Perfil']];
+    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['resumo','📋 Demandas'],['corretores','Corretores'],['importacao','📥 Importar'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
+    : [['crm','Meus Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['resumo','📋 Demandas'],['importacao','📥 Importar'],['perfil','👤 Perfil']];
 
   return (
     <div className="app-shell">
@@ -176,10 +225,11 @@ export default function App() {
       <main className="main">
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
-            {tab === 'crm' && <CRMTab data={data.filter(c => c.ativo === 'S')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} isGerente={isGerente} />}
+            {tab === 'crm' && <CRMTab data={data.filter(c => c.ativo === 'S')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} onNovaNegociacao={handleNovaNegociacao} isGerente={isGerente} />}
             {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onOpenModal={setModal} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
+            {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} />}
             {tab === 'corretores' && isGerente && <CorretoresTab />}
             {tab === 'importacao' && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
             {tab === 'config' && isGerente && <ConfigTab />}
@@ -191,7 +241,7 @@ export default function App() {
 
       {modal !== null && (
         <ClienteModal
-          cliente={modal === 'new' ? null : modal}
+          modal={modal}
           onSave={handleSave}
           onClose={() => { localStorage.removeItem('crm_rascunho'); setModal(null); }}
           perfil={perfil}
