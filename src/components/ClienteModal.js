@@ -30,6 +30,86 @@ function cleanDate(val) {
   return val;
 }
 
+// Componente de select com quick add
+function SelectComAdd({ label, value, onChange, options, setOptions, chave, required, errStyle }) {
+  const [adding, setAdding] = useState(false);
+  const [novoValor, setNovoValor] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleAdd() {
+    const v = novoValor.trim();
+    if (!v) return;
+    if (options.includes(v)) {
+      onChange(v);
+      setAdding(false);
+      setNovoValor('');
+      return;
+    }
+    setSaving(true);
+    const novaLista = [...options, v];
+    const { error } = await supabase
+      .from('configuracoes')
+      .upsert({ chave, valor: novaLista }, { onConflict: 'chave' });
+    if (error) {
+      alert('Erro ao salvar: ' + error.message);
+    } else {
+      setOptions(novaLista);
+      onChange(v);
+    }
+    setSaving(false);
+    setAdding(false);
+    setNovoValor('');
+  }
+
+  return (
+    <div>
+      <label className="form-label">{label}{required ? ' *' : ''}</label>
+      {adding ? (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            autoFocus
+            value={novoValor}
+            onChange={e => setNovoValor(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNovoValor(''); } }}
+            placeholder={`Nova opção...`}
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={saving}
+            style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            {saving ? '...' : '✓'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setAdding(false); setNovoValor(''); }}
+            style={{ padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 13, cursor: 'pointer' }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={value} onChange={e => onChange(e.target.value)} style={{ flex: 1, ...(errStyle || {}) }}>
+            <option value="">Selecionar</option>
+            {options.map(o => <option key={o}>{o}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            title="Adicionar nova opção"
+            style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#2563eb', fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}
+          >
+            +
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -99,12 +179,6 @@ export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
     set('valor', number);
   }
 
-  function handleCorretorChange(id) {
-    const c = corretores.find(c => c.id === id);
-    set('corretor_id', id);
-    set('corretor', c ? c.nome : '');
-  }
-
   function validate() {
     const errs = {};
     if (!form.nome.trim()) errs.nome = true;
@@ -141,7 +215,6 @@ export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
   }
 
   const isInativo = form.ativo === 'N';
-  const isGerente = perfil?.role === 'gerente';
   const errStyle = (key) => errors[key] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
 
   return (
@@ -190,26 +263,31 @@ export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
           </div>
           <div>
             <label className="form-label">Corretor</label>
-            <input
-              value={form.corretor || ''}
-              readOnly
-              style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }}
-            />
+            <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
           </div>
-          <div>
-            <label className="form-label">Origem</label>
-            <select value={form.origem} onChange={e => set('origem', e.target.value)}>
-              <option value="">Selecionar</option>
-              {origens.map(o => <option key={o}>{o}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="form-label">Tipo de Lead *</label>
-            <select value={form.tipo} onChange={e => set('tipo', e.target.value)} style={errStyle('tipo')}>
-              <option value="">Selecionar</option>
-              {tiposLead.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </div>
+
+          {/* Origem com quick add */}
+          <SelectComAdd
+            label="Origem"
+            value={form.origem}
+            onChange={v => set('origem', v)}
+            options={origens}
+            setOptions={setOrigens}
+            chave="origens"
+          />
+
+          {/* Tipo de Lead com quick add */}
+          <SelectComAdd
+            label="Tipo de Lead"
+            value={form.tipo}
+            onChange={v => { set('tipo', v); if (errors.tipo) setErrors(e => ({ ...e, tipo: false })); }}
+            options={tiposLead}
+            setOptions={setTiposLead}
+            chave="tipos_lead"
+            required
+            errStyle={errStyle('tipo')}
+          />
+
           <div className="field-full">
             <label className="form-label">Modalidade *</label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -233,13 +311,19 @@ export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
               })}
             </div>
           </div>
-          <div>
-            <label className="form-label">Tipo de Imóvel *</label>
-            <select value={form.imovel} onChange={e => set('imovel', e.target.value)} style={errStyle('imovel')}>
-              <option value="">Selecionar</option>
-              {imoveis.map(i => <option key={i}>{i}</option>)}
-            </select>
-          </div>
+
+          {/* Tipo de Imóvel com quick add */}
+          <SelectComAdd
+            label="Tipo de Imóvel"
+            value={form.imovel}
+            onChange={v => { set('imovel', v); if (errors.imovel) setErrors(e => ({ ...e, imovel: false })); }}
+            options={imoveis}
+            setOptions={setImoveis}
+            chave="imoveis"
+            required
+            errStyle={errStyle('imovel')}
+          />
+
           <div>
             <label className="form-label">Valor (R$)</label>
             <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" />
