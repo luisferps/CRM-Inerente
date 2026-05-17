@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import './index.css';
 import { supabase } from './supabaseClient';
 import CRMTab from './components/CRMTab';
@@ -14,14 +14,22 @@ export default function App() {
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const sessionRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      sessionRef.current = session;
       setSession(session);
       setCheckingAuth(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      if (_event === 'SIGNED_OUT') {
+        sessionRef.current = null;
+        setSession(null);
+      } else if (_event === 'SIGNED_IN' && !sessionRef.current) {
+        sessionRef.current = session;
+        setSession(session);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
