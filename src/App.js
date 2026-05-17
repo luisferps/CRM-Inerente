@@ -6,6 +6,7 @@ import FunilTab from './components/FunilTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
 import LoginScreen from './components/LoginScreen';
+import ClienteModal from './components/ClienteModal';
 
 export default function App() {
   const [tab, setTab] = useState('crm');
@@ -14,6 +15,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [modal, setModal] = useState(null);
   const sessionRef = useRef(null);
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function App() {
       if (err) return alert('Erro ao inserir: ' + err.message);
       setData(d => [inserted, ...d]);
     }
+    setModal(null);
   }
 
   async function handleDelete(id) {
@@ -128,13 +131,21 @@ export default function App() {
           <div className="loading">Carregando dados...</div>
         ) : (
           <>
-            {tab === 'crm' && <CRMTab data={data} onSave={handleSave} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
+            {tab === 'crm' && <CRMTab data={data} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} />}
             {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onSave={handleSave} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'config' && <ConfigTab />}
           </>
         )}
       </main>
+
+      {modal !== null && (
+        <ClienteModal
+          cliente={modal === 'new' ? null : modal}
+          onSave={handleSave}
+          onClose={() => { localStorage.removeItem('crm_rascunho'); setModal(null); }}
+        />
+      )}
     </div>
   );
 }
