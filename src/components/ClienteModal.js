@@ -3,13 +3,12 @@ import { supabase } from '../supabaseClient';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 
 const hoje = new Date().toISOString().slice(0, 10);
-const anoAtual = new Date().getFullYear();
 
 const emptyForm = {
   nome: '', ativo: 'S', motivo_desistencia: '',
   telefone: '', email: '',
   entrada: hoje,
-  origem: '', corretor: '', tipo: '', imovel: '', modalidade: '',
+  origem: '', corretor: '', corretor_id: null, tipo: '', imovel: '', modalidade: '',
   valor: '', detalhes: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
@@ -26,46 +25,37 @@ function formatPhone(value) {
   return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
 }
 
-function formatValor(value) {
-  const digits = value.replace(/\D/g, '');
-  if (!digits) return '';
-  const number = parseInt(digits, 10) / 100;
-  return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
 function cleanDate(val) {
   if (!val || String(val).trim() === '') return null;
   return val;
 }
 
-function defaultDate(field) {
-  if (field === 'ultimo_contato' || field === 'prox_contato') {
-    return `${anoAtual}-01-01`;
-  }
-  return '';
-}
-
-export default function ClienteModal({ cliente, onSave, onClose }) {
+export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [origens, setOrigens] = useState([]);
   const [tiposLead, setTiposLead] = useState([]);
   const [imoveis, setImoveis] = useState([]);
+  const [corretores, setCorretores] = useState([]);
   const [valorDisplay, setValorDisplay] = useState('');
 
   useEffect(() => {
-    async function loadListas() {
-      const { data } = await supabase.from('configuracoes').select('chave, valor');
-      if (data) {
-        data.forEach(row => {
+    async function loadDados() {
+      const [{ data: config }, { data: perfis }] = await Promise.all([
+        supabase.from('configuracoes').select('chave, valor'),
+        supabase.from('perfis').select('id, nome').eq('aprovado', true).order('nome'),
+      ]);
+      if (config) {
+        config.forEach(row => {
           if (row.chave === 'origens') setOrigens(row.valor);
           if (row.chave === 'tipos_lead') setTiposLead(row.valor);
           if (row.chave === 'imoveis') setImoveis(row.valor);
         });
       }
+      if (perfis) setCorretores(perfis);
     }
-    loadListas();
+    loadDados();
   }, []);
 
   useEffect(() => {
@@ -82,10 +72,15 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
           setValorDisplay(r.valor ? Number(r.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
         } catch { setForm(emptyForm); }
       } else {
-        setForm(emptyForm);
+        const initial = { ...emptyForm };
+        if (perfil) {
+          initial.corretor = perfil.nome;
+          initial.corretor_id = perfil.id;
+        }
+        setForm(initial);
       }
     }
-  }, [cliente]);
+  }, [cliente, perfil]);
 
   function set(key, val) {
     setForm(f => {
@@ -102,6 +97,12 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
     const number = parseInt(raw, 10) / 100;
     setValorDisplay(number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
     set('valor', number);
+  }
+
+  function handleCorretorChange(id) {
+    const c = corretores.find(c => c.id === id);
+    set('corretor_id', id);
+    set('corretor', c ? c.nome : '');
   }
 
   function validate() {
@@ -140,6 +141,7 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
   }
 
   const isInativo = form.ativo === 'N';
+  const isGerente = perfil?.role === 'gerente';
   const errStyle = (key) => errors[key] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
 
   return (
@@ -150,13 +152,10 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
           <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>✕</button>
         </div>
         <div className="modal-body">
-          {/* Nome */}
           <div>
             <label className="form-label">Nome *</label>
             <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo" style={errStyle('nome')} />
           </div>
-
-          {/* Status */}
           <div>
             <label className="form-label">Status</label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -171,40 +170,35 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
               ))}
             </div>
           </div>
-
-          {/* Motivo desistência */}
           {isInativo && (
             <div className="field-full">
               <label className="form-label">Motivo da Desistência</label>
               <input value={form.motivo_desistencia} onChange={e => set('motivo_desistencia', e.target.value)} placeholder="Por que o cliente desistiu?" />
             </div>
           )}
-
-          {/* Telefone */}
           <div>
             <label className="form-label">Telefone *</label>
             <input value={form.telefone} onChange={e => set('telefone', formatPhone(e.target.value))} placeholder="(62) 9 9999-9999" style={errStyle('telefone')} />
           </div>
-
-          {/* Email */}
           <div>
             <label className="form-label">Email</label>
             <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" />
           </div>
-
-          {/* Entrada - preenchida automaticamente */}
           <div>
             <label className="form-label">Data de Entrada</label>
             <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} />
           </div>
-
-          {/* Corretor */}
           <div>
             <label className="form-label">Corretor</label>
-            <input value={form.corretor || ''} onChange={e => set('corretor', e.target.value)} placeholder="Nome do corretor" />
+            <select
+              value={form.corretor_id || ''}
+              onChange={e => handleCorretorChange(e.target.value)}
+              disabled={!isGerente}
+              style={{ opacity: !isGerente ? 0.7 : 1 }}>
+              <option value="">Selecionar corretor</option>
+              {corretores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
           </div>
-
-          {/* Origem */}
           <div>
             <label className="form-label">Origem</label>
             <select value={form.origem} onChange={e => set('origem', e.target.value)}>
@@ -212,8 +206,6 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
               {origens.map(o => <option key={o}>{o}</option>)}
             </select>
           </div>
-
-          {/* Tipo de Lead */}
           <div>
             <label className="form-label">Tipo de Lead *</label>
             <select value={form.tipo} onChange={e => set('tipo', e.target.value)} style={errStyle('tipo')}>
@@ -221,8 +213,6 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
               {tiposLead.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
-
-          {/* Modalidade */}
           <div className="field-full">
             <label className="form-label">Modalidade *</label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -246,8 +236,6 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
               })}
             </div>
           </div>
-
-          {/* Tipo de Imóvel */}
           <div>
             <label className="form-label">Tipo de Imóvel *</label>
             <select value={form.imovel} onChange={e => set('imovel', e.target.value)} style={errStyle('imovel')}>
@@ -255,36 +243,22 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
               {imoveis.map(i => <option key={i}>{i}</option>)}
             </select>
           </div>
-
-          {/* Valor */}
           <div>
             <label className="form-label">Valor (R$)</label>
-            <input
-              value={valorDisplay}
-              onChange={handleValorChange}
-              placeholder="R$ 0,00"
-            />
+            <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" />
           </div>
-
-          {/* Localização */}
           <div>
             <label className="form-label">Localização *</label>
             <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
           </div>
-
-          {/* Próxima Ação */}
           <div>
             <label className="form-label">Próxima Ação</label>
             <input value={form.proxima_acao} onChange={e => set('proxima_acao', e.target.value)} placeholder="O que fazer?" />
           </div>
-
-          {/* Detalhes */}
           <div className="field-full">
             <label className="form-label">Detalhes / Observações *</label>
             <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)} placeholder="Informações adicionais..." style={errStyle('detalhes')} />
           </div>
-
-          {/* Datas */}
           <div>
             <label className="form-label">Último Contato</label>
             <input type="date" value={form.ultimo_contato || ''} onChange={e => set('ultimo_contato', e.target.value)} />
@@ -293,14 +267,10 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
             <label className="form-label">Próx. Contato</label>
             <input type="date" value={form.prox_contato || ''} onChange={e => set('prox_contato', e.target.value)} />
           </div>
-
-          {/* Imóveis Visitados */}
           <div>
             <label className="form-label">Imóveis Visitados</label>
             <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
           </div>
-
-          {/* Funil */}
           <div className="field-full">
             <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
               Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
@@ -318,7 +288,6 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
             </div>
           </div>
         </div>
-
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
