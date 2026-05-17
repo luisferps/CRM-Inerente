@@ -190,14 +190,11 @@ export default function ClienteModal({ cliente, onSave, onClose, perfil }) {
           </div>
           <div>
             <label className="form-label">Corretor</label>
-            <select
-              value={form.corretor_id || ''}
-              onChange={e => handleCorretorChange(e.target.value)}
-              disabled={!isGerente}
-              style={{ opacity: !isGerente ? 0.7 : 1 }}>
-              <option value="">Selecionar corretor</option>
-              {corretores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+            <input
+              value={form.corretor || ''}
+              readOnly
+              style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }}
+            />
           </div>
           <div>
             <label className="form-label">Origem</label>
