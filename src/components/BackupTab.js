@@ -21,9 +21,7 @@ function downloadCSV(filename, csv) {
   const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -34,21 +32,26 @@ export default function BackupTab() {
   async function handleBackup() {
     setLoading(true);
     try {
-      const { data: clientes } = await supabase.from('clientes').select('*').order('created_at', { ascending: false });
-      const { data: perfis } = await supabase.from('perfis').select('*').order('nome');
-      const { data: config } = await supabase.from('configuracoes').select('*');
+      const [
+        { data: clientes },
+        { data: negociacoes },
+        { data: perfis },
+        { data: config },
+      ] = await Promise.all([
+        supabase.from('clientes').select('*').order('created_at', { ascending: false }),
+        supabase.from('negociacoes').select('*').order('created_at', { ascending: false }),
+        supabase.from('perfis').select('*').order('nome'),
+        supabase.from('configuracoes').select('*'),
+      ]);
 
       const now = new Date();
       const dateStr = now.toLocaleDateString('pt-BR').replace(/\//g, '-');
       const timeStr = now.toLocaleTimeString('pt-BR').replace(/:/g, '-');
 
       downloadCSV(`clientes_${dateStr}_${timeStr}.csv`, toCSV(clientes || []));
-      setTimeout(() => {
-        downloadCSV(`corretores_${dateStr}_${timeStr}.csv`, toCSV(perfis || []));
-      }, 500);
-      setTimeout(() => {
-        downloadCSV(`configuracoes_${dateStr}_${timeStr}.csv`, toCSV(config || []));
-      }, 1000);
+      setTimeout(() => downloadCSV(`negociacoes_${dateStr}_${timeStr}.csv`, toCSV(negociacoes || [])), 400);
+      setTimeout(() => downloadCSV(`corretores_${dateStr}_${timeStr}.csv`, toCSV(perfis || [])), 800);
+      setTimeout(() => downloadCSV(`configuracoes_${dateStr}_${timeStr}.csv`, toCSV(config || [])), 1200);
 
       const timestamp = now.toLocaleString('pt-BR');
       localStorage.setItem('crm_last_backup', timestamp);
@@ -69,7 +72,7 @@ export default function BackupTab() {
       <div className="dash-section">
         <div className="dash-section-title">Backup Manual</div>
         <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
-          Clique no botão abaixo para baixar 3 arquivos CSV — clientes, corretores e configurações.
+          Clique no botão abaixo para baixar 4 arquivos CSV — clientes, negociações, corretores e configurações.
         </p>
 
         {lastBackup && (
@@ -78,16 +81,13 @@ export default function BackupTab() {
           </div>
         )}
 
-        <button
-          className="btn btn-primary"
-          onClick={handleBackup}
-          disabled={loading}
+        <button className="btn btn-primary" onClick={handleBackup} disabled={loading}
           style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, padding: '10px 24px' }}>
           {loading ? <>⏳ Gerando backup...</> : <>📥 Baixar Backup CSV</>}
         </button>
 
         <div style={{ marginTop: 20, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
-          <strong>💡 Dica:</strong> Faça backup regularmente e salve os arquivos em um local seguro (Google Drive, pendrive, etc). Recomendamos backup semanal.
+          <strong>💡 Dica:</strong> Faça backup regularmente e salve os arquivos em um local seguro. Recomendamos backup semanal.
         </div>
       </div>
 
@@ -95,14 +95,15 @@ export default function BackupTab() {
         <div className="dash-section-title">O que é incluído no backup?</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
           {[
-            ['📋 Clientes', 'Todos os dados dos clientes — nome, telefone, etapas do funil, etc.'],
-            ['👥 Corretores', 'Dados dos corretores cadastrados no sistema.'],
-            ['⚙️ Configurações', 'Origens, tipos de lead e tipos de imóvel cadastrados.'],
-          ].map(([title, desc]) => (
+            ['📋', 'Clientes', 'Dados pessoais dos clientes — nome, telefone, email, tipo.'],
+            ['🤝', 'Negociações', 'Todas as negociações — modalidade, imóvel, valor, funil, datas.'],
+            ['👥', 'Corretores', 'Dados dos corretores cadastrados no sistema.'],
+            ['⚙️', 'Configurações', 'Origens, tipos de lead e tipos de imóvel cadastrados.'],
+          ].map(([icon, title, desc]) => (
             <div key={title} style={{ display: 'flex', gap: 12, padding: '10px 14px', background: '#f9fafb', borderRadius: 7, border: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 20 }}>{title.split(' ')[0]}</div>
+              <div style={{ fontSize: 20 }}>{icon}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a2e' }}>{title.split(' ').slice(1).join(' ')}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a2e' }}>{title}</div>
                 <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{desc}</div>
               </div>
             </div>
