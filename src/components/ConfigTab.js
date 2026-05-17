@@ -41,7 +41,6 @@ function ListManager({ title, storageKey, defaultList }) {
     <div className="dash-section" style={{ maxWidth: 420 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div className="dash-section-title" style={{ margin: 0 }}>{title}</div>
-        <button className="btn btn-ghost btn-sm" onClick={reset}>Restaurar padrão</button>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
