@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
-import {
-  MODALIDADES, ETAPAS_FUNIL, ETAPAS_LABEL,
-  DEFAULT_ORIGENS, DEFAULT_TIPOS_LEAD, DEFAULT_IMOVEIS,
-  STORAGE_ORIGENS, STORAGE_TIPOS_LEAD, STORAGE_IMOVEIS, getList
-} from '../constants';
+import { supabase } from '../supabaseClient';
+import { MODALIDADES, ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 
 const emptyForm = {
   nome: '', ativo: 'S', motivo_desistencia: '',
@@ -34,9 +31,23 @@ export default function ClienteModal({ cliente, onSave, onClose }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const origens = getList(STORAGE_ORIGENS, DEFAULT_ORIGENS);
-  const tiposLead = getList(STORAGE_TIPOS_LEAD, DEFAULT_TIPOS_LEAD);
-  const imoveis = getList(STORAGE_IMOVEIS, DEFAULT_IMOVEIS);
+  const [origens, setOrigens] = useState([]);
+  const [tiposLead, setTiposLead] = useState([]);
+  const [imoveis, setImoveis] = useState([]);
+
+  useEffect(() => {
+    async function loadListas() {
+      const { data } = await supabase.from('configuracoes').select('chave, valor');
+      if (data) {
+        data.forEach(row => {
+          if (row.chave === 'origens') setOrigens(row.valor);
+          if (row.chave === 'tipos_lead') setTiposLead(row.valor);
+          if (row.chave === 'imoveis') setImoveis(row.valor);
+        });
+      }
+    }
+    loadListas();
+  }, []);
 
   useEffect(() => {
     if (cliente) {
