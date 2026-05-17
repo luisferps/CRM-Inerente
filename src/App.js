@@ -10,6 +10,7 @@ import CorretoresTab from './components/CorretoresTab';
 import LoginScreen from './components/LoginScreen';
 import ClienteModal from './components/ClienteModal';
 import PerfilTab from './components/PerfilTab';
+import BackupTab from './components/BackupTab';
 
 export default function App() {
   const [tab, setTab] = useState('crm');
@@ -123,7 +124,7 @@ export default function App() {
   if (!session || !perfil) return <LoginScreen />;
 
   const tabs = isGerente
-    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['corretores','Corretores'],['config','⚙️ Config'],['perfil','👤 Perfil']]
+    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['corretores','Corretores'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
     : [['crm','Meus Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['perfil','👤 Perfil']];
 
   return (
@@ -163,6 +164,7 @@ export default function App() {
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
             {tab === 'corretores' && isGerente && <CorretoresTab />}
             {tab === 'config' && isGerente && <ConfigTab />}
+            {tab === 'backup' && isGerente && <BackupTab />}
             {tab === 'perfil' && <PerfilTab perfil={perfil} onUpdate={setPerfil} />}
           </>
         )}
