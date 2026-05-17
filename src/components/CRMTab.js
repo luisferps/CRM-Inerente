@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
-import { DEFAULT_ORIGENS, DEFAULT_TIPOS_LEAD, STORAGE_ORIGENS, STORAGE_TIPOS_LEAD, ETAPAS_FUNIL, ETAPAS_LABEL, getList } from '../constants';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../supabaseClient';
+import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 import DetailPanel from './DetailPanel';
 import ClienteModal from './ClienteModal';
 
@@ -8,12 +9,6 @@ function getEtapaAtual(c) {
     if (c[ETAPAS_FUNIL[i]]) return ETAPAS_FUNIL[i];
   }
   return null;
-}
-
-function getProgress(c) {
-  const idx = ETAPAS_FUNIL.map((e, i) => c[e] ? i : -1).filter(i => i >= 0);
-  if (!idx.length) return 0;
-  return ((Math.max(...idx) + 1) / ETAPAS_FUNIL.length) * 100;
 }
 
 function tipoBadge(tipo) {
@@ -29,9 +24,21 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
   const [selectedId, setSelectedId] = useState(null);
   const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [origens, setOrigens] = useState([]);
+  const [tiposLead, setTiposLead] = useState([]);
 
-  const origens = getList(STORAGE_ORIGENS, DEFAULT_ORIGENS);
-  const tiposLead = getList(STORAGE_TIPOS_LEAD, DEFAULT_TIPOS_LEAD);
+  useEffect(() => {
+    async function loadListas() {
+      const { data } = await supabase.from('configuracoes').select('chave, valor');
+      if (data) {
+        data.forEach(row => {
+          if (row.chave === 'origens') setOrigens(row.valor);
+          if (row.chave === 'tipos_lead') setTiposLead(row.valor);
+        });
+      }
+    }
+    loadListas();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -48,6 +55,7 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
   async function handleSave(form) {
     await onSave(form, modal !== 'new' ? modal?.id : null);
     setModal(null);
+    setSearch('');
   }
 
   async function handleDelete(id) {
@@ -82,24 +90,23 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
             <table>
               <thead>
                 <tr>
-<th>Nome</th>
-<th>Imóvel</th>
-            <th>Tipo</th>
-<th>Modalidade</th>
-<th>Valor</th>
-<th>Localização</th>
-<th>Detalhes</th>
-<th>Funil</th>
-<th></th>
+                  <th>Nome</th>
+                  <th>Imóvel</th>
+                  <th>Tipo</th>
+                  <th>Modalidade</th>
+                  <th>Valor</th>
+                  <th>Localização</th>
+                  <th>Detalhes</th>
+                  <th>Funil</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
+                  <tr><td colSpan={9}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
                 )}
                 {filtered.map(c => {
                   const etapa = getEtapaAtual(c);
-                  const prog = getProgress(c);
                   return (
                     <tr key={c.id}
                       className={selectedId === c.id ? 'selected' : ''}
@@ -116,40 +123,40 @@ export default function CRMTab({ data, onSave, onDelete, onToggleFunil }) {
                         {c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}
                       </td>
                       <td className="td-muted" title={c.localizacao || ''}>{c.localizacao || '—'}</td>
-<td className="td-muted" title={c.detalhes || ''} style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.detalhes || '—'}</td>
+                      <td className="td-muted" title={c.detalhes || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detalhes || '—'}</td>
                       <td>
-  {etapa ? (
-    <div style={{ minWidth: 120 }}>
-      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{ETAPAS_LABEL[etapa]}</div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 20 }}>
-        {ETAPAS_FUNIL.map((e, i) => {
-          const etapaIdx = ETAPAS_FUNIL.indexOf(etapa);
-          const ativa = i <= etapaIdx;
-          const altura = 4 + (i * (16 / (ETAPAS_FUNIL.length - 1)));
-          const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
-          return (
-            <div key={e} style={{
-              width: 8, borderRadius: 2,
-              height: `${altura}px`,
-              background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
-              transition: 'all 0.2s',
-            }} />
-          );
-        })}
-      </div>
-    </div>
-  ) : <span className="td-muted">—</span>}
-</td>
+                        {etapa ? (
+                          <div style={{ minWidth: 120 }}>
+                            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{ETAPAS_LABEL[etapa]}</div>
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 20 }}>
+                              {ETAPAS_FUNIL.map((e, i) => {
+                                const etapaIdx = ETAPAS_FUNIL.indexOf(etapa);
+                                const ativa = i <= etapaIdx;
+                                const altura = 4 + (i * (16 / (ETAPAS_FUNIL.length - 1)));
+                                const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
+                                return (
+                                  <div key={e} style={{
+                                    width: 8, borderRadius: 2,
+                                    height: `${altura}px`,
+                                    background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
+                                    transition: 'all 0.2s',
+                                  }} />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : <span className="td-muted">—</span>}
+                      </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-ghost btn-sm" onClick={() => setModal(c)}>Editar</button>
-<button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>
-{c.telefone && (
-  <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
-    style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:30, height:30, borderRadius:6, background:'#25d366', textDecoration:'none', color:'#fff', fontSize:13, fontWeight:700 }}>
-    WA
-  </a>
-)}
+                          <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>
+                          {c.telefone && (
+                            <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
+                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 6, background: '#25d366', textDecoration: 'none', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                              WA
+                            </a>
+                          )}
                         </div>
                       </td>
                     </tr>
