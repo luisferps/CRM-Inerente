@@ -1,48 +1,51 @@
 import { useState, useEffect } from 'react';
-import {
-  DEFAULT_ORIGENS, DEFAULT_TIPOS_LEAD, DEFAULT_IMOVEIS,
-  STORAGE_ORIGENS, STORAGE_TIPOS_LEAD, STORAGE_IMOVEIS,
-  getList, saveList
-} from '../constants';
+import { supabase } from '../supabaseClient';
 
-function ListManager({ title, storageKey, defaultList }) {
-  const [items, setItems] = useState(defaultList);
+const CHAVES = {
+  origens: 'Origens',
+  tipos_lead: 'Tipos de Lead',
+  imoveis: 'Tipos de Imóvel',
+};
+
+function ListManager({ chave, title }) {
+  const [items, setItems] = useState([]);
   const [newItem, setNewItem] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setItems(getList(storageKey, defaultList));
-  }, [storageKey]);
+    async function load() {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', chave).single();
+      if (data) setItems(data.valor);
+      setLoading(false);
+    }
+    load();
+  }, [chave]);
 
-  function add() {
+  async function save(updated) {
+    await supabase.from('configuracoes').update({ valor: updated }).eq('chave', chave);
+    setItems(updated);
+  }
+
+  async function add() {
     const val = newItem.trim();
     if (!val) return alert('Digite um item antes de adicionar.');
     if (items.includes(val)) return alert('Item já existe na lista.');
-    const updated = [...items, val];
-    setItems(updated);
-    saveList(storageKey, updated);
+    await save([...items, val]);
     setNewItem('');
   }
 
-  function remove(item) {
+  async function remove(item) {
     if (!window.confirm(`Remover "${item}"?`)) return;
-    const updated = items.filter(i => i !== item);
-    setItems(updated);
-    saveList(storageKey, updated);
+    await save(items.filter(i => i !== item));
   }
 
-  function reset() {
-    if (window.confirm('Restaurar lista padrão? Isso remove itens personalizados.')) {
-      setItems(defaultList);
-      saveList(storageKey, defaultList);
-    }
-  }
+  if (loading) return <div className="dash-section" style={{ maxWidth: 420 }}>Carregando...</div>;
 
   return (
     <div className="dash-section" style={{ maxWidth: 420 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <div style={{ marginBottom: 14 }}>
         <div className="dash-section-title" style={{ margin: 0 }}>{title}</div>
       </div>
-
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           value={newItem}
@@ -53,10 +56,9 @@ function ListManager({ title, storageKey, defaultList }) {
         />
         <button className="btn btn-primary btn-sm" onClick={add}>+ Adicionar</button>
       </div>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {items.length === 0 && (
-          <div style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', padding: 12 }}>Nenhum item cadastrado.</div>
+          <div style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', padding: 12 }}>Nenhum item.</div>
         )}
         {items.map(item => (
           <div key={item} style={{
@@ -66,7 +68,7 @@ function ListManager({ title, storageKey, defaultList }) {
           }}>
             <span>{item}</span>
             <button onClick={() => remove(item)}
-              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>
+              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>
               ×
             </button>
           </div>
@@ -84,9 +86,9 @@ export default function ConfigTab() {
         <p style={{ fontSize: 13, color: '#6b7280' }}>Gerencie as listas usadas nos formulários.</p>
       </div>
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-        <ListManager title="Origens" storageKey={STORAGE_ORIGENS} defaultList={DEFAULT_ORIGENS} />
-        <ListManager title="Tipos de Lead" storageKey={STORAGE_TIPOS_LEAD} defaultList={DEFAULT_TIPOS_LEAD} />
-        <ListManager title="Tipos de Imóvel" storageKey={STORAGE_IMOVEIS} defaultList={DEFAULT_IMOVEIS} />
+        {Object.entries(CHAVES).map(([chave, title]) => (
+          <ListManager key={chave} chave={chave} title={title} />
+        ))}
       </div>
     </div>
   );
