@@ -1,0 +1,22 @@
+{
+  "short_name": "CRM Inerente",
+  "name": "CRM Imobiliário Inerente",
+  "description": "Sistema de gestão imobiliária",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/demsusjwf/image/upload/v1778785144/logo_png_fuv27j.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://res.cloudinary.com/demsusjwf/image/upload/v1778785144/logo_png_fuv27j.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
