@@ -62,8 +62,11 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
     );
     if (sortCol) {
       result = [...result].sort((a, b) => {
-        const av = (a[sortCol] || '').toString().toLowerCase();
-        const bv = (b[sortCol] || '').toString().toLowerCase();
+        const getVal = (c) => sortCol === 'funil'
+          ? (ETAPAS_FUNIL.indexOf(getEtapaAtual(c))).toString()
+          : (c[sortCol] || '').toString().toLowerCase();
+        const av = getVal(a);
+        const bv = getVal(b);
         return sortDir === 'asc' ? av.localeCompare(bv, 'pt-BR') : bv.localeCompare(av, 'pt-BR');
       });
     }
@@ -120,7 +123,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
                   <SortTh col="valor" label="Valor" />
                   <SortTh col="localizacao" label="Localização" />
                   <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Detalhes</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Funil</th>
+                  <SortTh col="funil" label="Funil" />
                   <th></th>
                 </tr>
               </thead>
@@ -207,12 +210,4 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil }) {
             <div className="confirm-title">Confirmar exclusão</div>
             <div className="confirm-text">Esta ação não pode ser desfeita.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
-              <button className="btn btn-danger" onClick={() => handleDelete(confirmDelete)}>Excluir</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
+              <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}
