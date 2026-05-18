@@ -8,100 +8,97 @@ function getEtapaAtual(c) {
   return null;
 }
 
-const ETAPA_COLORS = {
-  tratativa:    { bg: '#f0f7ff', border: '#c8dff7', dot: '#93c5e8', text: '#4a90b8' },
-  pesquisa:     { bg: '#e6f1fc', border: '#b3d0f0', dot: '#6aaedd', text: '#2e7ab5' },
-  agendamento:  { bg: '#daeaf9', border: '#9dc0e8', dot: '#4d96d1', text: '#1a6499' },
-  visita:       { bg: '#cde3f7', border: '#85aedd', dot: '#2e7fbe', text: '#155085' },
-  proposta:     { bg: '#bfd9f4', border: '#6098d0', dot: '#1a6aad', text: '#0d4578' },
-  contrato:     { bg: '#b0cff0', border: '#4a87c4', dot: '#0f5799', text: '#073d6e' },
-  financiamento:{ bg: '#a0c4ec', border: '#3575b8', dot: '#0a4880', text: '#052e55' },
-  recebimento:  { bg: '#92bbe8', border: '#2060b0', dot: '#063570', text: '#042650' },
+const CORES_COMPRA = {
+  tratativa:    { bg: '#f0fdf4', border: '#bbf7d0', dot: '#4ade80', text: '#15803d' },
+  pesquisa:     { bg: '#dcfce7', border: '#86efac', dot: '#22c55e', text: '#16a34a' },
+  agendamento:  { bg: '#d1fae5', border: '#6ee7b7', dot: '#10b981', text: '#059669' },
+  visita:       { bg: '#a7f3d0', border: '#34d399', dot: '#059669', text: '#047857' },
+  proposta:     { bg: '#6ee7b7', border: '#10b981', dot: '#047857', text: '#065f46' },
+  contrato:     { bg: '#34d399', border: '#059669', dot: '#065f46', text: '#064e3b' },
+  financiamento:{ bg: '#10b981', border: '#047857', dot: '#064e3b', text: '#fff' },
+  recebimento:  { bg: '#059669', border: '#065f46', dot: '#064e3b', text: '#fff' },
 };
 
-const ETAPA_ICONS = {
+const CORES_LOCACAO = {
+  tratativa:    { bg: '#f5f3ff', border: '#ddd6fe', dot: '#c4b5fd', text: '#6d28d9' },
+  pesquisa:     { bg: '#ede9fe', border: '#c4b5fd', dot: '#a78bfa', text: '#5b21b6' },
+  agendamento:  { bg: '#e0d9fb', border: '#a78bfa', dot: '#7c3aed', text: '#4c1d95' },
+  visita:       { bg: '#d4c9f8', border: '#7c3aed', dot: '#6d28d9', text: '#4c1d95' },
+  proposta:     { bg: '#c4b5fd', border: '#6d28d9', dot: '#5b21b6', text: '#3b0764' },
+  contrato:     { bg: '#a78bfa', border: '#5b21b6', dot: '#4c1d95', text: '#fff' },
+  financiamento:{ bg: '#8b5cf6', border: '#4c1d95', dot: '#3b0764', text: '#fff' },
+  recebimento:  { bg: '#7c3aed', border: '#3b0764', dot: '#2e1065', text: '#fff' },
+};
+
+const ICONS = {
   tratativa: '💬', pesquisa: '🔍', agendamento: '📅', visita: '🏠',
   proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '🕐',
 };
 
-export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
-  // Funil só para Compra e Locação, ativas, não recebidas
-  const ativos = data.filter(c => c.ativo === 'S' && c.modalidade !== 'Venda' && !c.recebido);
-
-  const clientesPorEtapa = {};
-  ETAPAS_FUNIL.forEach(e => { clientesPorEtapa[e] = []; });
+function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
+  const ativos = data.filter(c => c.ativo === 'S' && !c.recebido);
+  const porEtapa = {};
+  ETAPAS_FUNIL.forEach(e => { porEtapa[e] = []; });
   ativos.forEach(c => {
-    const etapa = getEtapaAtual(c);
-    if (etapa) clientesPorEtapa[etapa].push(c);
+    const e = getEtapaAtual(c);
+    if (e) porEtapa[e].push(c);
   });
-
-  const semEtapa = ativos.filter(c => getEtapaAtual(c) === null);
-  const totalEmAndamento = ativos.filter(c => getEtapaAtual(c) !== null).length;
+  const semEtapa = ativos.filter(c => !getEtapaAtual(c));
+  const total = ativos.filter(c => getEtapaAtual(c)).length;
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 18px', fontSize: 12 }}>
+    <div style={{ marginBottom: 40 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{titulo}</h3>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 14px', fontSize: 12 }}>
           <span style={{ color: '#9ca3af' }}>Em andamento </span>
-          <span style={{ fontWeight: 700, color: '#2563eb', fontSize: 18 }}>{totalEmAndamento}</span>
+          <span style={{ fontWeight: 700, color: '#2563eb', fontSize: 16 }}>{total}</span>
         </div>
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 18px', fontSize: 12 }}>
-          <span style={{ color: '#9ca3af' }}>Sem etapa </span>
-          <span style={{ fontWeight: 700, color: '#9ca3af', fontSize: 18 }}>{semEtapa.length}</span>
-        </div>
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 18px', fontSize: 12 }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 14px', fontSize: 12 }}>
           <span style={{ color: '#9ca3af' }}>Contratos </span>
-          <span style={{ fontWeight: 700, color: '#059669', fontSize: 18 }}>{clientesPorEtapa['contrato']?.length || 0}</span>
+          <span style={{ fontWeight: 700, color: '#059669', fontSize: 16 }}>{porEtapa['contrato']?.length || 0}</span>
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto', paddingBottom: 16 }}>
+      <div style={{ overflowX: 'auto', paddingBottom: 12 }}>
         <div style={{ display: 'flex', gap: 0, minWidth: 'max-content' }}>
           {ETAPAS_FUNIL.map((etapa, idx) => {
-            const clientes = clientesPorEtapa[etapa] || [];
-            const colors = ETAPA_COLORS[etapa] || ETAPA_COLORS.tratativa;
-            const isLast = idx === ETAPAS_FUNIL.length - 1;
+            const clientes = porEtapa[etapa] || [];
+            const colors = coresMap[etapa];
             return (
-              <div key={etapa} style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-                <div style={{ width: 180 }}>
-                  <div style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '10px 10px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 16 }}>{ETAPA_ICONS[etapa]}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{ETAPAS_LABEL[etapa]}</span>
+              <div key={etapa} style={{ display: 'flex', alignItems: 'flex-start' }}>
+                <div style={{ width: 175 }}>
+                  <div style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '10px 10px 0 0', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 14 }}>{ICONS[etapa]}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: colors.text }}>{ETAPAS_LABEL[etapa]}</span>
                     </div>
-                    <span style={{ background: colors.dot, color: '#fff', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700, minWidth: 20, textAlign: 'center' }}>{clientes.length}</span>
+                    <span style={{ background: colors.dot, color: typeof colors.text === 'string' && colors.text === '#fff' ? '#fff' : '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{clientes.length}</span>
                   </div>
-                  <div style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderTop: `2px solid ${colors.dot}`, borderRadius: '0 0 10px 10px', minHeight: 300, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {clientes.length === 0 && (
-                      <div style={{ textAlign: 'center', color: '#d1d5db', fontSize: 28, marginTop: 40 }}>—</div>
-                    )}
+                  <div style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderTop: `2px solid ${colors.dot}`, borderRadius: '0 0 10px 10px', minHeight: 250, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {clientes.length === 0 && <div style={{ textAlign: 'center', color: '#d1d5db', fontSize: 24, marginTop: 30 }}>—</div>}
                     {clientes.map(c => (
                       <div key={c.id} onClick={() => onOpenModal(c)}
                         onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
                         onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}
-                        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: colors.dot, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 7, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: '50%', background: colors.dot, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                             {c.nome.charAt(0).toUpperCase()}
                           </div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.3 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.3 }}>
                             {c.nome.split(' ').slice(0, 2).join(' ')}
                           </div>
                         </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3 }}>{c.imovel || '—'}</div>
-                        {c.modalidade && <div style={{ fontSize: 10, color: colors.text, fontWeight: 600, marginBottom: 3 }}>{c.modalidade === 'Locação' ? '🔑' : '🛒'} {c.modalidade}</div>}
+                        <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 2 }}>{c.imovel || '—'}</div>
                         {c.valor && <div style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>R$ {Number(c.valor).toLocaleString('pt-BR')}</div>}
-                        {c.proxima_acao && (
-                          <div style={{ marginTop: 5, fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 4, padding: '3px 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            🎯 {c.proxima_acao}
-                          </div>
-                        )}
+                        {c.proxima_acao && <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 4, padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {c.proxima_acao}</div>}
                       </div>
                     ))}
                   </div>
                 </div>
-                {!isLast && (
-                  <div style={{ display: 'flex', alignItems: 'center', paddingTop: 20, color: '#d1d5db', fontSize: 20, margin: '0 -2px' }}>›</div>
+                {idx < ETAPAS_FUNIL.length - 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', paddingTop: 18, color: '#d1d5db', fontSize: 18, margin: '0 -1px' }}>›</div>
                 )}
               </div>
             );
@@ -110,20 +107,46 @@ export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
       </div>
 
       {semEtapa.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Sem etapa definida</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sem etapa</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {semEtapa.map(c => (
               <div key={c.id} onClick={() => onOpenModal(c)}
-                style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 12px', fontSize: 12, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#9ca3af' }}>
-                  {c.nome.charAt(0).toUpperCase()}
-                </div>
-                {c.nome.split(' ').slice(0, 2).join(' ')}
+                style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: '#6b7280', cursor: 'pointer' }}>
+                {c.nome.split(' ').slice(0,2).join(' ')}
               </div>
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
+  const [aba, setAba] = useState('compra');
+  const compras = data.filter(c => c.modalidade === 'Compra');
+  const locacoes = data.filter(c => c.modalidade === 'Locação');
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        {[['compra','🛒 Compra', compras.filter(c => c.ativo === 'S').length],['locacao','🔑 Locação', locacoes.filter(c => c.ativo === 'S').length]].map(([key, label, count]) => (
+          <button key={key} onClick={() => setAba(key)}
+            style={{ padding: '8px 20px', borderRadius: 8, border: `2px solid ${aba === key ? (key === 'compra' ? '#059669' : '#7c3aed') : '#e5e7eb'}`,
+              background: aba === key ? (key === 'compra' ? '#f0fdf4' : '#f5f3ff') : '#fff',
+              color: aba === key ? (key === 'compra' ? '#059669' : '#7c3aed') : '#6b7280',
+              fontWeight: aba === key ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
+            {label} <span style={{ marginLeft: 6, fontWeight: 700 }}>{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {aba === 'compra' && (
+        <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} />
+      )}
+      {aba === 'locacao' && (
+        <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} />
       )}
     </div>
   );
