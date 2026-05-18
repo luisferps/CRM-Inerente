@@ -295,7 +295,7 @@ export default function App() {
               filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
-            {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onOpenModal={podeEditar ? setModal : null} />}
+            {tab === 'funil' && <FunilTab data={data} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} />}
