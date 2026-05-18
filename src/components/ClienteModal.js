@@ -13,19 +13,17 @@ const emptyForm = {
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
+  solicitar_parceria: false,
   tratativa: false, pesquisa: false, agendamento: false, visita: false,
   proposta: false, contrato: false, financiamento: false, recebimento: false, recebido: false,
 };
 
 function isIntl(value) { return (value || '').trim().startsWith('+'); }
 
+// Telefone: só dígitos, sem formatação
 function formatPhone(value, intl) {
-  if (intl) return value;
-  const d = value.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 2) return d;
-  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
-  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if (intl) return value.replace(/[^\d+]/g, '');
+  return value.replace(/\D/g, '').slice(0, 11);
 }
 
 function validarTel(value, intl) {
@@ -205,7 +203,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     if (!form.imovel) errs.imovel = true;
     if (!form.modalidade) errs.modalidade = true;
     if (!form.localizacao.trim()) errs.localizacao = true;
-    if (!form.valor) errs.valor = true;
+    if (form.valor === '' || form.valor === null || form.valor === undefined) errs.valor = true;
     if (!(form.detalhes_externos || '').trim()) errs.detalhes_externos = true;
     if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
     return errs;
@@ -402,6 +400,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="field-full">
+            <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
+                border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
+                background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
+              <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
+              </div>
+            </button>
           </div>
         </div>
 
