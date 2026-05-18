@@ -65,7 +65,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [filterModalidade, setFilterModalidade] = useState([]);
   const [filterCorretor, setFilterCorretor] = useState([]);
   const [filterFunil, setFilterFunil] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [filtroTipo, setFiltroTipo] = useState('todos'); // 'todos' | 'clientes' | 'corretores'
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
   const [sortCol, setSortCol] = useState('');
@@ -92,6 +92,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
       (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
+      (filtroTipo === 'todos' || (filtroTipo === 'corretores' ? c.is_corretor : !c.is_corretor)) &&
       (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
       (filterFunil.length === 0 || filterFunil.some(f => { const e = getEtapaAtual(c); return e && ETAPAS_LABEL[e] === f; }))
     );
@@ -102,7 +103,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterModalidade, filterCorretor, filterFunil, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterModalidade, filtroTipo, filterCorretor, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -139,6 +140,14 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
           <option value="">Todas aquisições</option>
           {origens.map(o => <option key={o}>{o}</option>)}
         </select>
+      <div style={{ display: 'flex', gap: 6 }}>
+          {[['todos','Todos'],['clientes','Clientes'],['corretores','Corretores']].map(([val, label]) => (
+            <button key={val} onClick={() => setFiltroTipo(val)}
+              style={{ padding: '7px 14px', borderRadius: 7, border: `1px solid ${filtroTipo === val ? '#2563eb' : '#e5e7eb'}`, background: filtroTipo === val ? '#eff6ff' : '#fff', color: filtroTipo === val ? '#2563eb' : '#6b7280', fontSize: 12, fontWeight: filtroTipo === val ? 700 : 400, cursor: 'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
         {onOpenModal && <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Nova Tratativa</button>}
       </div>
 
