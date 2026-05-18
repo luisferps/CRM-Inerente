@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { supabase } from '../supabaseClient';
 
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL.length - 1; i >= 0; i--) {
@@ -35,7 +36,7 @@ const ICONS = {
   proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '🕐',
 };
 
-function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
+function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
   const ativos = data.filter(c => c.ativo === 'S' && !c.recebido);
   const porEtapa = {};
   ETAPAS_FUNIL.forEach(e => { porEtapa[e] = []; });
@@ -45,6 +46,23 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
   });
   const semEtapa = ativos.filter(c => !getEtapaAtual(c));
   const total = ativos.filter(c => getEtapaAtual(c)).length;
+
+  const dragCard = useRef(null);
+  const [dragOver, setDragOver] = useState(null);
+
+  async function handleDrop(etapaDestino) {
+    if (!dragCard.current) return;
+    const card = dragCard.current;
+    dragCard.current = null;
+    setDragOver(null);
+    if (getEtapaAtual(card) === etapaDestino) return;
+    const updates = {};
+    ETAPAS_FUNIL.forEach(e => { updates[e] = false; });
+    const idx = ETAPAS_FUNIL.indexOf(etapaDestino);
+    ETAPAS_FUNIL.slice(0, idx + 1).forEach(e => { updates[e] = true; });
+    await supabase.from('negociacoes').update(updates).eq('id', card.id);
+    if (onMoverCard) onMoverCard(card.id, updates);
+  }
 
   return (
     <div style={{ marginBottom: 40 }}>
@@ -65,23 +83,39 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
           {ETAPAS_FUNIL.map((etapa, idx) => {
             const clientes = porEtapa[etapa] || [];
             const colors = coresMap[etapa];
+            const isDragOver = dragOver === etapa;
             return (
               <div key={etapa} style={{ display: 'flex', alignItems: 'flex-start' }}>
-                <div style={{ width: 175 }}>
+                <div style={{ width: 175 }}
+                  onDragOver={e => { e.preventDefault(); setDragOver(etapa); }}
+                  onDragLeave={() => setDragOver(null)}
+                  onDrop={() => handleDrop(etapa)}>
                   <div style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '10px 10px 0 0', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ fontSize: 14 }}>{ICONS[etapa]}</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: colors.text }}>{ETAPAS_LABEL[etapa]}</span>
                     </div>
-                    <span style={{ background: colors.dot, color: typeof colors.text === 'string' && colors.text === '#fff' ? '#fff' : '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{clientes.length}</span>
+                    <span style={{ background: colors.dot, color: '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{clientes.length}</span>
                   </div>
-                  <div style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderTop: `2px solid ${colors.dot}`, borderRadius: '0 0 10px 10px', minHeight: 250, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {clientes.length === 0 && <div style={{ textAlign: 'center', color: '#d1d5db', fontSize: 24, marginTop: 30 }}>—</div>}
+                  <div style={{
+                    background: isDragOver ? (colors.bg) : colors.bg,
+                    border: `${isDragOver ? '2px dashed' : '1px solid'} ${isDragOver ? colors.dot : colors.border}`,
+                    borderTop: `2px solid ${colors.dot}`,
+                    borderRadius: '0 0 10px 10px', minHeight: 250, padding: 8,
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                    transition: 'all 0.15s',
+                  }}>
+                    {clientes.length === 0 && !isDragOver && <div style={{ textAlign: 'center', color: '#d1d5db', fontSize: 24, marginTop: 30 }}>—</div>}
+                    {isDragOver && clientes.length === 0 && <div style={{ textAlign: 'center', color: colors.dot, fontSize: 13, marginTop: 30, fontWeight: 600 }}>Soltar aqui</div>}
                     {clientes.map(c => (
-                      <div key={c.id} onClick={() => onOpenModal(c)}
+                      <div key={c.id}
+                        draggable
+                        onDragStart={() => { dragCard.current = c; }}
+                        onDragEnd={() => { dragCard.current = null; setDragOver(null); }}
+                        onClick={() => onOpenModal && onOpenModal(c)}
                         onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
                         onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}
-                        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 7, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                        style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 7, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'grab', userSelect: 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <div style={{ width: 26, height: 26, borderRadius: '50%', background: colors.dot, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                             {c.nome.charAt(0).toUpperCase()}
@@ -91,8 +125,13 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
                           </div>
                         </div>
                         <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 2 }}>{c.imovel || '—'}</div>
-                        {c.valor && <div style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>R$ {Number(c.valor).toLocaleString('pt-BR')}</div>}
+                        {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
+                          <div style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>
+                            {Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
+                          </div>
+                        )}
                         {c.proxima_acao && <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 4, padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {c.proxima_acao}</div>}
+                        <div style={{ marginTop: 4, fontSize: 9, color: '#d1d5db', textAlign: 'right' }}>⠿ arrastar</div>
                       </div>
                     ))}
                   </div>
@@ -111,7 +150,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
           <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sem etapa</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {semEtapa.map(c => (
-              <div key={c.id} onClick={() => onOpenModal(c)}
+              <div key={c.id} onClick={() => onOpenModal && onOpenModal(c)}
                 style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: '#6b7280', cursor: 'pointer' }}>
                 {c.nome.split(' ').slice(0,2).join(' ')}
               </div>
@@ -123,7 +162,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal }) {
   );
 }
 
-export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
+export default function FunilTab({ data, onOpenModal, onMoverCard }) {
   const [aba, setAba] = useState('compra');
   const compras = data.filter(c => c.modalidade === 'Compra');
   const locacoes = data.filter(c => c.modalidade === 'Locação');
@@ -141,13 +180,8 @@ export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
           </button>
         ))}
       </div>
-
-      {aba === 'compra' && (
-        <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} />
-      )}
-      {aba === 'locacao' && (
-        <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} />
-      )}
+      {aba === 'compra' && <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} onMoverCard={onMoverCard} />}
+      {aba === 'locacao' && <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} onMoverCard={onMoverCard} />}
     </div>
   );
 }
