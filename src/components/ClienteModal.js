@@ -10,7 +10,7 @@ const emptyForm = {
   ativo: 'S', motivo_desistencia: '',
   corretor: '', corretor_id: null,
   imovel: '', modalidade: '',
-  valor: '', detalhes: '', detalhes_externos: '', localizacao: '', regiao: '',
+  valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
   tratativa: false, pesquisa: false, agendamento: false, visita: false,
@@ -205,7 +205,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     if (!form.imovel) errs.imovel = true;
     if (!form.modalidade) errs.modalidade = true;
     if (!form.localizacao.trim()) errs.localizacao = true;
-    if (!form.detalhes.trim()) errs.detalhes = true;
+    if (!form.valor) errs.valor = true;
+    if (!(form.detalhes_externos || '').trim()) errs.detalhes_externos = true;
     if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
     return errs;
   }
@@ -339,8 +340,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             isGerente={isGerente} perfil={perfil} />
 
           <div>
-            <label className="form-label">Valor (R$)</label>
-            <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" />
+            <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
+            <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" style={errStyle('valor')} />
           </div>
 
           <div>
@@ -349,31 +350,26 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           </div>
 
           <div>
-            <label className="form-label">Região</label>
-            <input value={form.regiao || ''} onChange={e => set('regiao', e.target.value)} placeholder="Ex: Setor Bueno, Jardim Goiás..." />
-          </div>
-
-          <div>
             <label className="form-label">Próxima Ação</label>
             <input value={form.proxima_acao} onChange={e => set('proxima_acao', e.target.value)} placeholder="O que fazer?" />
           </div>
 
           <div className="field-full">
-            <label className="form-label" style={errors.detalhes ? { color: '#dc2626' } : {}}>
-              Observações Internas * <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
+            <label className="form-label">
+              Observações Internas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
             </label>
             <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
               placeholder="Anotações internas, perfil do cliente, situação financeira..."
-              style={{ ...errStyle('detalhes'), background: '#fffbeb', borderColor: errors.detalhes ? '#dc2626' : '#fde68a' }} />
+              style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
           </div>
 
           <div className="field-full">
-            <label className="form-label">
-              Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
+            <label className="form-label" style={errors.detalhes_externos ? { color: '#dc2626' } : {}}>
+              Observações Externas * <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
             </label>
             <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
               placeholder="Informações para enviar a parceiros ou clientes..."
-              style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
+              style={{ ...errStyle('detalhes_externos'), background: '#f0fdf4', borderColor: errors.detalhes_externos ? '#dc2626' : '#bbf7d0' }} />
           </div>
 
           <div>
