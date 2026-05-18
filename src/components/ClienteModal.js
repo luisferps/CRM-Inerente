@@ -157,7 +157,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     const digits = telefone.replace(/\D/g,'');
     if (digits.length < 10) return;
     setBuscando(true);
-    const { data } = await supabase.from('clientes').select('*').ilike('telefone', `%${digits}%`).limit(1);
+    // Busca pelos últimos 8 dígitos — funciona com telefone formatado ou sem formatação no banco
+    const sufixo = digits.slice(-8);
+    const { data } = await supabase.from('clientes').select('*').ilike('telefone', `%${sufixo}%`).limit(1);
     if (data && data.length > 0) {
       const c = data[0];
       setClienteEncontrado(c);
