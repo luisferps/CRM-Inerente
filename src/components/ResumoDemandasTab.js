@@ -1,7 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+
+function capitalize(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function formatarLinha(c) {
+  const partes = [];
+  // IMÓVEL + REGIÃO
+  const imovelRegiao = [c.imovel, c.localizacao].filter(Boolean).join(' + ');
+  if (imovelRegiao) partes.push(capitalize(imovelRegiao));
+  // OBSERVAÇÕES EXTERNAS
+  if (c.detalhes_externos) partes.push(capitalize(c.detalhes_externos.trim()));
+  // PREÇO
+  if (c.valor) partes.push(`R$ ${Number(c.valor).toLocaleString('pt-BR')}`);
+  return `- ${partes.join('. ')}`;
+}
+
+function gerarTexto(ativas, porModalidade) {
+  if (ativas.length === 0) return '';
+  let out = 'Preciso de: (enviar somente imóveis nos perfis relacionados)\n\n';
+  const ordem = ['Compra', 'Venda', 'Locação'];
+  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
+  mods.forEach(mod => {
+    const icon = mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄';
+    out += `${icon} *${capitalize(mod)}:*\n`;
+    porModalidade[mod].forEach(c => { out += formatarLinha(c) + '\n'; });
+    out += '\n';
+  });
+  return out.trim();
+}
 
 export default function ResumoDemandasTab({ data, darkMode }) {
   const [copiado, setCopiado] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [textoEditado, setTextoEditado] = useState('');
 
   const ativas = useMemo(() => data.filter(c => c.ativo === 'S' && !c.is_corretor), [data]);
 
@@ -15,32 +48,29 @@ export default function ResumoDemandasTab({ data, darkMode }) {
     return grupos;
   }, [ativas]);
 
-  function formatarLinha(c) {
-    const partes = [];
-    if (c.imovel) partes.push(c.imovel);
-    if (c.localizacao) partes.push(`em ${c.localizacao}`);
-    if (c.valor) partes.push(`R$ ${Number(c.valor).toLocaleString('pt-BR')}`);
-    if (c.detalhes) partes.push(c.detalhes);
-    return `- ${partes.join('. ')}`;
-  }
+  const textoGerado = useMemo(() => gerarTexto(ativas, porModalidade), [ativas, porModalidade]);
 
-  const texto = useMemo(() => {
-    if (ativas.length === 0) return '';
-    let out = 'Preciso de: (ENVIAR SOMENTE IMÓVEIS NOS PERFIS RELACIONADOS)\n';
-    const ordem = ['Compra', 'Venda', 'Locação'];
-    const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
-    mods.forEach(mod => {
-      out += `${mod.toUpperCase()}:\n`;
-      porModalidade[mod].forEach(c => { out += formatarLinha(c) + '\n'; });
-    });
-    return out.trim();
-  }, [ativas, porModalidade]);
+  useEffect(() => {
+    setTextoEditado(textoGerado);
+    setEditando(false);
+  }, [textoGerado]);
+
+  const textoFinal = textoEditado || textoGerado;
 
   function copiar() {
-    navigator.clipboard.writeText(texto).then(() => {
+    navigator.clipboard.writeText(textoFinal).then(() => {
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     });
+  }
+
+  function abrirWhatsApp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(textoFinal)}`, '_blank');
+  }
+
+  function resetar() {
+    setTextoEditado(textoGerado);
+    setEditando(false);
   }
 
   const card = darkMode ? '#16213e' : '#ffffff';
@@ -65,16 +95,64 @@ export default function ResumoDemandasTab({ data, darkMode }) {
       ) : (
         <>
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>Prévia do Resumo</span>
-              <button onClick={copiar}
-                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}>
-                {copiado ? '✓ Copiado!' : '📋 Copiar Texto'}
-              </button>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>
+                Mensagem {editando && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 400 }}>— editando</span>}
+              </span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {editando && (
+                  <button onClick={resetar}
+                    style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    ↺ Resetar
+                  </button>
+                )}
+                <button onClick={() => setEditando(e => !e)}
+                  style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${editando ? '#f59e0b' : '#d1d5db'}`, background: editando ? '#fffbeb' : '#fff', color: editando ? '#b45309' : '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  {editando ? '✓ Concluir' : '✏️ Editar'}
+                </button>
+                <button onClick={copiar}
+                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}>
+                  {copiado ? '✓ Copiado!' : '📋 Copiar'}
+                </button>
+                <button onClick={abrirWhatsApp}
+                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#25d366', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  💬 WhatsApp
+                </button>
+              </div>
             </div>
-            <pre style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: textColor, margin: 0 }}>{texto}</pre>
+
+            {/* Texto editável ou preview */}
+            {editando ? (
+              <textarea
+                value={textoFinal}
+                onChange={e => setTextoEditado(e.target.value)}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  minHeight: 220, padding: '12px 14px',
+                  fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8,
+                  border: '2px solid #f59e0b', borderRadius: 8,
+                  background: darkMode ? '#0f1117' : '#fffbeb',
+                  color: textColor, resize: 'vertical', outline: 'none',
+                }}
+              />
+            ) : (
+              <pre style={{
+                fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8,
+                whiteSpace: 'pre-wrap', color: textColor, margin: 0,
+                padding: '12px 14px', background: darkMode ? '#0f1117' : '#f8fafc',
+                borderRadius: 8, border: `1px solid ${border}`,
+              }}>
+                {textoFinal}
+              </pre>
+            )}
+
+            <div style={{ marginTop: 10, fontSize: 11, color: textMuted }}>
+              Formato: <strong>Imóvel + Região. Observações externas. Preço</strong>
+            </div>
           </div>
 
+          {/* Cards por modalidade */}
           {Object.entries(porModalidade).map(([mod, clientes]) => (
             <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -89,12 +167,11 @@ export default function ResumoDemandasTab({ data, darkMode }) {
                 {clientes.map(c => (
                   <div key={c.id} style={{ background: darkMode ? '#0f1117' : '#f8fafc', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.nome}</div>
-                    <div style={{ color: textMuted, lineHeight: 1.6 }}>
-                      {c.imovel && <span>{c.imovel}</span>}
-                      {c.localizacao && <span> · {c.localizacao}</span>}
+                    <div style={{ color: textMuted, lineHeight: 1.7, fontSize: 12 }}>
+                      {[c.imovel, c.localizacao].filter(Boolean).join(' + ')}
+                      {c.detalhes_externos && <span> · {c.detalhes_externos}</span>}
                       {c.valor && <span style={{ color: '#059669', fontWeight: 600 }}> · R$ {Number(c.valor).toLocaleString('pt-BR')}</span>}
                     </div>
-                    {c.detalhes && <div style={{ color: textMuted, fontSize: 12, marginTop: 4 }}>{c.detalhes}</div>}
                   </div>
                 ))}
               </div>
