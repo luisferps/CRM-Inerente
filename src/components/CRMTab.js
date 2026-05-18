@@ -70,45 +70,41 @@ function FunilInline({ cliente, onToggleFunil, podeEditar }) {
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
+  // Ao clicar numa barra, marca até aquela etapa e desmarca as posteriores
+  function handleBarClick(e, etapaClicada) {
+    e.stopPropagation();
+    if (!podeEditar) return;
+    const idxClicado = ETAPAS_FUNIL.indexOf(etapaClicada);
+    const idxAtual = etapa ? ETAPAS_FUNIL.indexOf(etapa) : -1;
+    // Se clicar na etapa atual, desmarca ela (volta para anterior)
+    const novoIdx = idxClicado === idxAtual ? idxClicado - 1 : idxClicado;
+    const updates = {};
+    ETAPAS_FUNIL.forEach((e, i) => { updates[e] = i <= novoIdx; });
+    onToggleFunil(cliente.id, updates);
+  }
+
   return (
     <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-      <div onClick={() => podeEditar && setOpen(o => !o)}
-        style={{ cursor: podeEditar ? 'pointer' : 'default', minWidth: 100 }}>
-        {etapa ? (
-          <>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3 }}>{ETAPAS_LABEL[etapa]}</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 16 }}>
-              {ETAPAS_FUNIL.map((e, i) => {
-                const etapaIdx = ETAPAS_FUNIL.indexOf(etapa);
-                const ativa = i <= etapaIdx;
-                const altura = 3 + (i * (13 / (ETAPAS_FUNIL.length - 1)));
-                const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
-                return <div key={e} style={{ width: 7, borderRadius: 2, height: `${altura}px`, background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb' }} />;
-              })}
-            </div>
-          </>
-        ) : (
-          <span style={{ fontSize: 11, color: '#d1d5db' }}>{podeEditar ? '+ etapa' : '—'}</span>
-        )}
+      {/* Barras clicáveis */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 22, cursor: podeEditar ? 'pointer' : 'default', marginBottom: 2 }}>
+        {ETAPAS_FUNIL.map((e, i) => {
+          const etapaIdx = etapa ? ETAPAS_FUNIL.indexOf(etapa) : -1;
+          const ativa = i <= etapaIdx;
+          const altura = 4 + (i * (18 / (ETAPAS_FUNIL.length - 1)));
+          const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
+          return (
+            <div key={e} title={ETAPAS_LABEL[e]}
+              onClick={ev => handleBarClick(ev, e)}
+              onMouseEnter={ev => { if (podeEditar) ev.currentTarget.style.opacity = '0.7'; }}
+              onMouseLeave={ev => { ev.currentTarget.style.opacity = '1'; }}
+              style={{ width: 9, borderRadius: 2, height: `${altura}px`, transition: 'all 0.15s',
+                background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
+                cursor: podeEditar ? 'pointer' : 'default' }} />
+          );
+        })}
       </div>
-
-      {open && podeEditar && (
-        <div style={{ position: 'fixed', zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: 10, minWidth: 170 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, padding: '0 4px' }}>Etapas do Funil</div>
-          {ETAPAS_FUNIL.map(e => (
-            <div key={e} onClick={() => onToggleFunil(cliente.id, e, !cliente[e])}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
-                background: cliente[e] ? '#d1fae5' : 'transparent' }}
-              onMouseEnter={ev => ev.currentTarget.style.background = cliente[e] ? '#a7f3d0' : '#f3f4f6'}
-              onMouseLeave={ev => ev.currentTarget.style.background = cliente[e] ? '#d1fae5' : 'transparent'}>
-              <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${cliente[e] ? '#059669' : '#d1d5db'}`, background: cliente[e] ? '#059669' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {cliente[e] && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
-              </div>
-              <span style={{ fontSize: 12, color: cliente[e] ? '#065f46' : '#374151', fontWeight: cliente[e] ? 600 : 400 }}>{ETAPAS_LABEL[e]}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Label da etapa atual */}
+      <div style={{ fontSize: 10, color: '#9ca3af' }}>{etapa ? ETAPAS_LABEL[etapa] : <span style={{ color: '#d1d5db' }}>—</span>}</div>
     </div>
   );
 }
