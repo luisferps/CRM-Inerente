@@ -3,9 +3,9 @@ import { useState, useMemo } from 'react';
 export default function ResumoDemandasTab({ data, darkMode }) {
   const [copiado, setCopiado] = useState(false);
 
-  // Exclui tipo "Corretor" e negociações inativas
+  // Exclui clientes marcados como corretor e negociações inativas
   const ativas = useMemo(() =>
-    data.filter(c => c.ativo === 'S' && (c.tipo || '').toLowerCase() !== 'corretor'),
+    data.filter(c => c.ativo === 'S' && !c.is_corretor),
     [data]
   );
 
@@ -68,12 +68,10 @@ export default function ResumoDemandasTab({ data, darkMode }) {
         </div>
       ) : (
         <>
-          {/* Preview formatado */}
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>Prévia do Resumo</span>
-              <button
-                onClick={copiar}
+              <button onClick={copiar}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}>
                 {copiado ? '✓ Copiado!' : '📋 Copiar Texto'}
               </button>
@@ -83,7 +81,6 @@ export default function ResumoDemandasTab({ data, darkMode }) {
             </pre>
           </div>
 
-          {/* Cards por modalidade */}
           {Object.entries(porModalidade).map(([mod, clientes]) => (
             <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
