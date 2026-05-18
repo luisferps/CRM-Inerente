@@ -97,6 +97,7 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
       <Field label="🏗️ Imóvel" value={cliente.imovel} />
       <Field label="💰 Valor" value={cliente.valor ? `R$ ${Number(cliente.valor).toLocaleString('pt-BR')}` : null} />
       <Field label="📍 Localização" value={cliente.localizacao} />
+      <Field label="🗺️ Região" value={cliente.regiao} />
       <Field label="🔒 Observações Internas" value={cliente.detalhes} />
       {cliente.detalhes_externos && (
         <div className="panel-field">
