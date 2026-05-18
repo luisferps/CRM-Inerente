@@ -97,7 +97,15 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
       <Field label="🏗️ Imóvel" value={cliente.imovel} />
       <Field label="💰 Valor" value={cliente.valor ? `R$ ${Number(cliente.valor).toLocaleString('pt-BR')}` : null} />
       <Field label="📍 Localização" value={cliente.localizacao} />
-      <Field label="📝 Detalhes" value={cliente.detalhes} />
+      <Field label="🔒 Observações Internas" value={cliente.detalhes} />
+      {cliente.detalhes_externos && (
+        <div className="panel-field">
+          <div className="panel-field-label">🌐 Observações Externas</div>
+          <div style={{ marginTop: 4, padding: '8px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#374151', lineHeight: 1.5 }}>
+            {cliente.detalhes_externos}
+          </div>
+        </div>
+      )}
       <Field label="🎯 Próxima Ação" value={cliente.proxima_acao} />
       <Field label="📆 Último Contato" value={cliente.ultimo_contato} />
       <Field label="📆 Próx. Contato" value={cliente.prox_contato} />
