@@ -10,11 +10,6 @@ function getEtapaAtual(c) {
   return null;
 }
 
-function tipoBadge(tipo) {
-  const map = { Comprador: 'badge-blue', Locatário: 'badge-purple', Corretor: 'badge-orange', Investidor: 'badge-green' };
-  return map[tipo] || 'badge-gray';
-}
-
 function modalidadeBadge(modalidade) {
   if (modalidade === 'Venda') return { bg: '#dbeafe', color: '#1d4ed8' };
   if (modalidade === 'Locação') return { bg: '#ede9fe', color: '#7e22ce' };
@@ -25,15 +20,12 @@ function modalidadeBadge(modalidade) {
 function DropdownFilter({ options, value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-
   useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
-
   const selected = value.length > 0;
-
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }} onClick={e => e.stopPropagation()}>
       <button onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
@@ -58,8 +50,7 @@ function DropdownFilter({ options, value, onChange }) {
                 color: value.includes(opt) ? '#2563eb' : '#374151' }}
               onMouseEnter={e => e.currentTarget.style.background = value.includes(opt) ? '#dbeafe' : '#f3f4f6'}
               onMouseLeave={e => e.currentTarget.style.background = value.includes(opt) ? '#eff6ff' : 'transparent'}>
-              <span style={{ fontSize: 10, width: 10 }}>{value.includes(opt) ? '✓' : ''}</span>
-              {opt}
+              <span style={{ fontSize: 10, width: 10 }}>{value.includes(opt) ? '✓' : ''}</span>{opt}
             </div>
           ))}
         </div>
@@ -68,10 +59,9 @@ function DropdownFilter({ options, value, onChange }) {
   );
 }
 
-export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente }) {
+export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, filtroClienteNome, onLimparFiltro }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
-  const [filterTipo, setFilterTipo] = useState([]);
   const [filterModalidade, setFilterModalidade] = useState([]);
   const [filterCorretor, setFilterCorretor] = useState([]);
   const [filterFunil, setFilterFunil] = useState([]);
@@ -82,14 +72,11 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [sortDir, setSortDir] = useState('asc');
 
   useEffect(() => {
-    async function loadListas() {
-      const { data } = await supabase.from('configuracoes').select('chave, valor');
+    supabase.from('configuracoes').select('chave, valor').then(({ data }) => {
       if (data) data.forEach(row => { if (row.chave === 'origens') setOrigens(row.valor); });
-    }
-    loadListas();
+    });
   }, []);
 
-  const tiposUnicos = useMemo(() => [...new Set(data.map(c => c.tipo).filter(Boolean))].sort(), [data]);
   const modalidadesUnicas = useMemo(() => [...new Set(data.map(c => c.modalidade).filter(Boolean))].sort(), [data]);
   const corretoresUnicos = useMemo(() => [...new Set(data.map(c => c.corretor).filter(Boolean))].sort(), [data]);
   const etapasUnicas = useMemo(() => ETAPAS_FUNIL.filter(e => data.some(c => c[e])).map(e => ETAPAS_LABEL[e]), [data]);
@@ -104,27 +91,23 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
     let result = data.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
-      (filterTipo.length === 0 || filterTipo.includes(c.tipo)) &&
       (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
       (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
-      (filterFunil.length === 0 || filterFunil.some(f => { const etapa = getEtapaAtual(c); return etapa && ETAPAS_LABEL[etapa] === f; }))
+      (filterFunil.length === 0 || filterFunil.some(f => { const e = getEtapaAtual(c); return e && ETAPAS_LABEL[e] === f; }))
     );
     if (sortCol) {
       result = [...result].sort((a, b) => {
-        const getVal = (c) => sortCol === 'funil'
-          ? (ETAPAS_FUNIL.indexOf(getEtapaAtual(c))).toString()
-          : (c[sortCol] || '').toString().toLowerCase();
-        const av = getVal(a), bv = getVal(b);
-        return sortDir === 'asc' ? av.localeCompare(bv, 'pt-BR') : bv.localeCompare(av, 'pt-BR');
+        const getVal = c => sortCol === 'funil' ? ETAPAS_FUNIL.indexOf(getEtapaAtual(c)).toString() : (c[sortCol] || '').toString().toLowerCase();
+        return sortDir === 'asc' ? getVal(a).localeCompare(getVal(b), 'pt-BR') : getVal(b).localeCompare(getVal(a), 'pt-BR');
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterTipo, filterModalidade, filterCorretor, filterFunil, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterModalidade, filterCorretor, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
   async function handleDelete(id) {
-    await onDelete(id);
+    if (onDelete) await onDelete(id);
     setConfirmDelete(null);
     setSelectedId(null);
   }
@@ -143,13 +126,20 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
 
   return (
     <>
+      {filtroClienteNome && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+          <span>Mostrando tratativas de: <strong>{filtroClienteNome}</strong></span>
+          <button onClick={onLimparFiltro} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✕ Ver todas</button>
+        </div>
+      )}
+
       <div className="toolbar">
         <input className="input-search" placeholder="🔍  Buscar por nome, telefone ou email..." value={search} onChange={e => setSearch(e.target.value)} />
         <select className="input-sm" value={filterOrigem} onChange={e => setFilterOrigem(e.target.value)}>
-          <option value="">Todas origens</option>
+          <option value="">Todas aquisições</option>
           {origens.map(o => <option key={o}>{o}</option>)}
         </select>
-        <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Novo Cliente</button>
+        {onOpenModal && <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Nova Tratativa</button>}
       </div>
 
       <div className="layout-with-panel">
@@ -160,9 +150,6 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                 <tr>
                   <SortTh col="nome" label="Nome" />
                   <SortTh col="imovel" label="Imóvel" />
-                  <SortTh col="tipo" label="Tipo">
-                    <DropdownFilter options={tiposUnicos} value={filterTipo} onChange={setFilterTipo} />
-                  </SortTh>
                   <SortTh col="modalidade" label="Modalidade">
                     <DropdownFilter options={modalidadesUnicas} value={filterModalidade} onChange={setFilterModalidade} />
                   </SortTh>
@@ -180,7 +167,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={10}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
+                  <tr><td colSpan={9}><div className="empty-state">Nenhuma tratativa encontrada.</div></td></tr>
                 )}
                 {filtered.map(c => {
                   const etapa = getEtapaAtual(c);
@@ -188,9 +175,11 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                   return (
                     <tr key={c.id} className={selectedId === c.id ? 'selected' : ''}
                       onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}>
-                      <td><div className="td-name">{c.nome}</div></td>
+                      <td>
+                        <div className="td-name">{c.nome}</div>
+                        {c.is_corretor && <div style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', display: 'inline-block', padding: '1px 5px', borderRadius: 4, marginTop: 2 }}>Corretor</div>}
+                      </td>
                       <td className="td-muted">{c.imovel || '—'}</td>
-                      <td>{c.tipo ? <span className={`badge ${tipoBadge(c.tipo)}`}>{c.tipo}</span> : '—'}</td>
                       <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
                       <td style={{ fontWeight: 600, color: '#059669' }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
                       <td className="td-muted">{c.corretor || '—'}</td>
@@ -206,11 +195,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                                 const ativa = i <= etapaIdx;
                                 const altura = 4 + (i * (16 / (ETAPAS_FUNIL.length - 1)));
                                 const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
-                                return (
-                                  <div key={e} style={{ width: 8, borderRadius: 2, height: `${altura}px`,
-                                    background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb',
-                                    transition: 'all 0.2s' }} />
-                                );
+                                return <div key={e} style={{ width: 8, borderRadius: 2, height: `${altura}px`, background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb', transition: 'all 0.2s' }} />;
                               })}
                             </div>
                           </div>
@@ -218,8 +203,8 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => onOpenModal(c)}>Editar</button>
-                          <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>
+                          {onOpenModal && <button className="btn btn-ghost btn-sm" onClick={() => onOpenModal(c)}>Editar</button>}
+                          {onDelete && <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>}
                           {c.telefone && (
                             <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
                               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 6, background: '#25d366', textDecoration: 'none', color: '#fff', fontSize: 13, fontWeight: 700 }}>
@@ -239,16 +224,17 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
         {selected && (
           <DetailPanel
             cliente={selected}
-            onEdit={c => onOpenModal(c)}
+            onEdit={c => onOpenModal && onOpenModal(c)}
             onDelete={id => setConfirmDelete(id)}
             onToggleFunil={onToggleFunil}
             onClose={() => setSelectedId(null)}
             onNovaNegociacao={onNovaNegociacao}
+            podeEditar={!!onOpenModal}
           />
         )}
       </div>
 
-      {confirmDelete && (
+      {confirmDelete && onDelete && (
         <div className="modal-overlay">
           <div className="confirm-dialog">
             <div className="confirm-icon">⚠️</div>
