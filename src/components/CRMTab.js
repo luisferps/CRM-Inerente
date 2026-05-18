@@ -217,7 +217,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                   <SortTh col="corretor" label="Corretor">
                     <DropdownFilter options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
                   </SortTh>
-                  <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Localização</th>
+                  <SortTh col="localizacao" label="Localização" />
                   <SortTh col="funil" label="Funil">
                     <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
