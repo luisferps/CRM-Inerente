@@ -31,7 +31,6 @@ function splitForm(form) {
     imovel: form.imovel,
     valor: form.valor ? Number(form.valor) : null,
     localizacao: form.localizacao,
-    regiao: form.regiao || null,
     detalhes: form.detalhes,
     detalhes_externos: form.detalhes_externos || null,
     proxima_acao: form.proxima_acao,
@@ -42,6 +41,7 @@ function splitForm(form) {
     prorrogacao: form.prorrogacao || null,
     ativo: form.ativo,
     motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
+    solicitar_parceria: form.solicitar_parceria || false,
     tratativa: form.tratativa || false,
     pesquisa: form.pesquisa || false,
     agendamento: form.agendamento || false,
@@ -224,7 +224,6 @@ export default function App() {
 
   // Abas por função
   const todasAbas = [
-    ['clientes', 'Clientes'],
     ['tratativas', 'Tratativas'],
     ['funil', 'Funil'],
     ['vendas', '🏠 Vendas'],
@@ -232,6 +231,7 @@ export default function App() {
     ['recebidos', '💰 Recebidos'],
     ['inativos', 'Finalizadas'],
     ['resumo', '📋 Demandas'],
+    ['clientes', '👤 Clientes'],
     ['usuarios', '👥 Usuários', 'gerente'],
     ['importacao', '📥 Importar', 'gerente_corretor'],
     ['config', '⚙️ Config'],
