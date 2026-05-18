@@ -98,7 +98,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [buscando, setBuscando] = useState(false);
   const [clienteEncontrado, setClienteEncontrado] = useState(null);
   const [origemBloqueada, setOrigemBloqueada] = useState(false);
-  const timer = useRef(null);
+  const [duplicatas, setDuplicatas] = useState([]);
+  const timerNome = useRef(null);
 
   const isEdit = modal && modal.negociacao_id;
   const isNovaNeg = modal && modal.novaNegociacao;
@@ -197,7 +198,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     timer.current = setTimeout(() => buscarPorTelefone(val), 700);
   }
 
-  function set(key, val) {
+  async function buscarDuplicatas(nome) {
+    if (!nome || nome.trim().length < 3) { setDuplicatas([]); return; }
+    const primeiros = nome.trim().split(' ').slice(0,2).join(' ');
+    const { data } = await supabase.from('clientes').select('id, nome, telefone').ilike('nome', `%${primeiros}%`).limit(5);
+    setDuplicatas((data || []).filter(c => c.id !== form.cliente_real_id));
+  }
+
+  function handleNomeChange(e) {
+    set('nome', e.target.value);
+    if (timerNome.current) clearTimeout(timerNome.current);
+    timerNome.current = setTimeout(() => buscarDuplicatas(e.target.value), 600);
+  }
     setForm(f => {
       const u = { ...f, [key]: val };
       if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
@@ -294,7 +306,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
 
           <div>
             <label className="form-label">Nome *</label>
-            <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo" style={errStyle('nome')} disabled={clienteLocked} />
+            <input value={form.nome} onChange={handleNomeChange} placeholder="Nome completo" style={errStyle('nome')} disabled={clienteLocked} />
+            {!clienteLocked && duplicatas.length > 0 && (
+              <div style={{ marginTop: 6, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12 }}>
+                <div style={{ fontWeight: 600, color: '#92400e', marginBottom: 4 }}>⚠️ Clientes parecidos encontrados:</div>
+                {duplicatas.map(d => (
+                  <div key={d.id} style={{ color: '#78350f', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{d.nome}</span>
+                    <span style={{ color: '#9ca3af' }}>{d.telefone || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
