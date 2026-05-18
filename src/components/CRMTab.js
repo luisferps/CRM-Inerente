@@ -59,13 +59,67 @@ function DropdownFilter({ options, value, onChange }) {
   );
 }
 
+function FunilInline({ cliente, onToggleFunil, podeEditar }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const etapa = getEtapaAtual(cliente);
+
+  useEffect(() => {
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <div onClick={() => podeEditar && setOpen(o => !o)}
+        style={{ cursor: podeEditar ? 'pointer' : 'default', minWidth: 100 }}>
+        {etapa ? (
+          <>
+            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3 }}>{ETAPAS_LABEL[etapa]}</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 16 }}>
+              {ETAPAS_FUNIL.map((e, i) => {
+                const etapaIdx = ETAPAS_FUNIL.indexOf(etapa);
+                const ativa = i <= etapaIdx;
+                const altura = 3 + (i * (13 / (ETAPAS_FUNIL.length - 1)));
+                const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
+                return <div key={e} style={{ width: 7, borderRadius: 2, height: `${altura}px`, background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb' }} />;
+              })}
+            </div>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: '#d1d5db' }}>{podeEditar ? '+ etapa' : '—'}</span>
+        )}
+      </div>
+
+      {open && podeEditar && (
+        <div style={{ position: 'fixed', zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: 10, minWidth: 170 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, padding: '0 4px' }}>Etapas do Funil</div>
+          {ETAPAS_FUNIL.map(e => (
+            <div key={e} onClick={() => onToggleFunil(cliente.id, e, !cliente[e])}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
+                background: cliente[e] ? '#d1fae5' : 'transparent' }}
+              onMouseEnter={ev => ev.currentTarget.style.background = cliente[e] ? '#a7f3d0' : '#f3f4f6'}
+              onMouseLeave={ev => ev.currentTarget.style.background = cliente[e] ? '#d1fae5' : 'transparent'}>
+              <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${cliente[e] ? '#059669' : '#d1d5db'}`, background: cliente[e] ? '#059669' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {cliente[e] && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+              </div>
+              <span style={{ fontSize: 12, color: cliente[e] ? '#065f46' : '#374151', fontWeight: cliente[e] ? 600 : 400 }}>{ETAPAS_LABEL[e]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, filtroClienteNome, onLimparFiltro }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
   const [filterModalidade, setFilterModalidade] = useState([]);
   const [filterCorretor, setFilterCorretor] = useState([]);
   const [filterFunil, setFilterFunil] = useState([]);
-  const [filtroTipo, setFiltroTipo] = useState('todos'); // 'todos' | 'clientes' | 'corretores'
+  const [filtroTipo, setFiltroTipo] = useState('todos');
   const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
@@ -141,7 +195,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
           <option value="">Todas aquisições</option>
           {origens.map(o => <option key={o}>{o}</option>)}
         </select>
-      <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           {[['todos','Todos'],['clientes','Clientes'],['corretores','Corretores']].map(([val, label]) => (
             <button key={val} onClick={() => setFiltroTipo(val)}
               style={{ padding: '7px 14px', borderRadius: 7, border: `1px solid ${filtroTipo === val ? '#2563eb' : '#e5e7eb'}`, background: filtroTipo === val ? '#eff6ff' : '#fff', color: filtroTipo === val ? '#2563eb' : '#6b7280', fontSize: 12, fontWeight: filtroTipo === val ? 700 : 400, cursor: 'pointer' }}>
@@ -168,7 +222,6 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                     <DropdownFilter options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
                   </SortTh>
                   <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Localização</th>
-                  <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', width: 150 }}>Detalhes</th>
                   <SortTh col="funil" label="Funil">
                     <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
@@ -177,10 +230,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9}><div className="empty-state">Nenhuma tratativa encontrada.</div></td></tr>
+                  <tr><td colSpan={8}><div className="empty-state">Nenhuma tratativa encontrada.</div></td></tr>
                 )}
                 {filtered.map(c => {
-                  const etapa = getEtapaAtual(c);
                   const modColors = modalidadeBadge(c.modalidade);
                   return (
                     <tr key={c.id} className={selectedId === c.id ? 'selected' : ''}
@@ -191,25 +243,11 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                       </td>
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
-                      <td style={{ fontWeight: 600, color: '#059669' }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
+                      <td style={{ fontWeight: 600, color: '#059669' }}>{c.valor !== '' && c.valor !== null && c.valor !== undefined ? (Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`) : '—'}</td>
                       <td className="td-muted">{c.corretor || '—'}</td>
                       <td className="td-muted" title={c.localizacao || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.localizacao || '—'}</td>
-                      <td className="td-muted" title={c.detalhes || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detalhes || '—'}</td>
-                      <td>
-                        {etapa ? (
-                          <div style={{ minWidth: 120 }}>
-                            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{ETAPAS_LABEL[etapa]}</div>
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 20 }}>
-                              {ETAPAS_FUNIL.map((e, i) => {
-                                const etapaIdx = ETAPAS_FUNIL.indexOf(etapa);
-                                const ativa = i <= etapaIdx;
-                                const altura = 4 + (i * (16 / (ETAPAS_FUNIL.length - 1)));
-                                const intensidade = Math.round(180 - (i * (120 / (ETAPAS_FUNIL.length - 1))));
-                                return <div key={e} style={{ width: 8, borderRadius: 2, height: `${altura}px`, background: ativa ? (i === ETAPAS_FUNIL.length - 1 ? '#16a34a' : `rgb(${intensidade}, ${intensidade + 20}, 255)`) : '#e5e7eb', transition: 'all 0.2s' }} />;
-                              })}
-                            </div>
-                          </div>
-                        ) : <span className="td-muted">—</span>}
+                      <td onClick={e => e.stopPropagation()}>
+                        <FunilInline cliente={c} onToggleFunil={onToggleFunil} podeEditar={!!onOpenModal} />
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
