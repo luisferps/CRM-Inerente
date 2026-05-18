@@ -6,39 +6,84 @@ export default function RecebidosTab({ data, onOpenModal }) {
   const [filterCorretor, setFilterCorretor] = useState('');
 
   const recebidos = useMemo(() => data.filter(c => c.recebido), [data]);
+  const aReceber = useMemo(() => data.filter(c => c.recebimento && !c.recebido && c.ativo === 'S'), [data]);
+  const corretoresUnicos = useMemo(() => [...new Set([...recebidos, ...aReceber].map(c => c.corretor).filter(Boolean))].sort(), [recebidos, aReceber]);
 
-  const corretoresUnicos = useMemo(() => [...new Set(recebidos.map(c => c.corretor).filter(Boolean))].sort(), [recebidos]);
-
-  const filtered = useMemo(() => {
+  const filtrar = (list) => {
     const q = search.toLowerCase();
-    return recebidos.filter(c =>
-      (!q || c.nome.toLowerCase().includes(q) || (c.localizacao || '').toLowerCase().includes(q)) &&
+    return list.filter(c =>
+      (!q || c.nome.toLowerCase().includes(q) || (c.corretor || '').toLowerCase().includes(q)) &&
       (!filterModalidade || c.modalidade === filterModalidade) &&
       (!filterCorretor || c.corretor === filterCorretor)
     );
-  }, [recebidos, search, filterModalidade, filterCorretor]);
+  };
 
-  const totalValor = useMemo(() => filtered.reduce((sum, c) => sum + (Number(c.valor) || 0), 0), [filtered]);
+  const totalRecebido = useMemo(() => recebidos.reduce((s, c) => s + (Number(c.valor) || 0), 0), [recebidos]);
+  const totalAReceber = useMemo(() => aReceber.reduce((s, c) => s + (Number(c.valor) || 0), 0), [aReceber]);
 
   const modColors = { Compra: { bg: '#dcfce7', color: '#065f46' }, Venda: { bg: '#dbeafe', color: '#1d4ed8' }, Locação: { bg: '#ede9fe', color: '#7e22ce' } };
 
+  function Tabela({ list, titulo, corHeader }) {
+    const rows = filtrar(list);
+    return (
+      <div className="dash-section" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div className="dash-section-title" style={{ margin: 0, color: corHeader }}>{titulo}</div>
+          <span style={{ fontSize: 12, color: '#6b7280' }}>{rows.length} item{rows.length !== 1 ? 's' : ''}</span>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+              {['Nome','Modalidade','Imóvel','Valor','Corretor','Localização',''].map(h => (
+                <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>Nenhum item.</td></tr>}
+            {rows.map(c => {
+              const mc = modColors[c.modalidade] || { bg: '#f3f4f6', color: '#4b5563' };
+              return (
+                <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '10px 14px', fontWeight: 600 }}>{c.nome}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    {c.modalidade ? <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: mc.bg, color: mc.color }}>{c.modalidade}</span> : '—'}
+                  </td>
+                  <td style={{ padding: '10px 14px', color: '#6b7280' }}>{c.imovel || '—'}</td>
+                  <td style={{ padding: '10px 14px', color: '#059669', fontWeight: 600 }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
+                  <td style={{ padding: '10px 14px', color: '#6b7280' }}>{c.corretor || '—'}</td>
+                  <td style={{ padding: '10px 14px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Editar</button>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   return (
     <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>💰 Recebidos</h2>
+        <p style={{ fontSize: 13, color: '#6b7280' }}>Controle de recebimentos de comissões.</p>
+      </div>
+
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 18px', fontSize: 12 }}>
-          <span style={{ color: '#9ca3af' }}>Total recebidos </span>
-          <span style={{ fontWeight: 700, color: '#059669', fontSize: 18 }}>{filtered.length}</span>
-        </div>
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 18px', fontSize: 12 }}>
-          <span style={{ color: '#9ca3af' }}>Valor total </span>
-          <span style={{ fontWeight: 700, color: '#059669', fontSize: 18 }}>
-            {totalValor > 0 ? `R$ ${totalValor.toLocaleString('pt-BR')}` : '—'}
-          </span>
-        </div>
+        {[['💰 À Receber', aReceber.length, totalAReceber, '#b45309'],['✅ Recebidos', recebidos.length, totalRecebido, '#059669']].map(([l, count, total, cor]) => (
+          <div key={l} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 20px', minWidth: 180 }}>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: cor }}>{count}</div>
+            {total > 0 && <div style={{ fontSize: 12, color: cor, fontWeight: 600, marginTop: 2 }}>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>}
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <input placeholder="🔍 Buscar por nome ou localização..." value={search} onChange={e => setSearch(e.target.value)}
+        <input placeholder="🔍 Buscar..." value={search} onChange={e => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
         <select value={filterModalidade} onChange={e => setFilterModalidade(e.target.value)}
           style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13 }}>
@@ -52,41 +97,8 @@ export default function RecebidosTab({ data, onOpenModal }) {
         </select>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-              {['Cliente','Modalidade','Imóvel','Localização','Valor','Corretor','Corretor Original',''].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhum recebido encontrado.</td></tr>
-            )}
-            {filtered.map(c => {
-              const mc = modColors[c.modalidade] || { bg: '#f3f4f6', color: '#4b5563' };
-              return (
-                <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>{c.nome}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: mc.bg, color: mc.color }}>{c.modalidade || '—'}</span>
-                  </td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.imovel || '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#059669', fontWeight: 600 }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.corretor || '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#9ca3af', fontSize: 12 }}>{c.corretor_original && c.corretor_original !== c.corretor ? c.corretor_original : '—'}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Ver</button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Tabela list={aReceber} titulo="💳 À Receber" corHeader="#b45309" />
+      <Tabela list={recebidos} titulo="✅ Já Recebidos" corHeader="#059669" />
     </div>
   );
 }
