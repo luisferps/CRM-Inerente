@@ -5,15 +5,23 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function formatarPreco(valor) {
+  const n = Number(valor);
+  if (valor === '' || valor === null || valor === undefined) return null;
+  if (n === 0) return 'Em aberto';
+  return `R$ ${n.toLocaleString('pt-BR')}`;
+}
+
 function formatarLinha(c) {
   const partes = [];
-  // IMÓVEL + REGIÃO
-  const imovelRegiao = [c.imovel, c.localizacao].filter(Boolean).join(' + ');
+  // IMÓVEL REGIÃO (sem +, só espaço)
+  const imovelRegiao = [c.imovel, c.localizacao].filter(Boolean).join(' ');
   if (imovelRegiao) partes.push(capitalize(imovelRegiao));
   // OBSERVAÇÕES EXTERNAS
   if (c.detalhes_externos) partes.push(capitalize(c.detalhes_externos.trim()));
   // PREÇO
-  if (c.valor) partes.push(`R$ ${Number(c.valor).toLocaleString('pt-BR')}`);
+  const preco = formatarPreco(c.valor);
+  if (preco) partes.push(preco);
   return `- ${partes.join('. ')}`;
 }
 
@@ -36,7 +44,14 @@ export default function ResumoDemandasTab({ data, darkMode }) {
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
 
-  const ativas = useMemo(() => data.filter(c => c.ativo === 'S' && !c.is_corretor), [data]);
+  // Filtro: solicitar_parceria = true, não é corretor, ativo
+  // E deve ter (tratativa E pesquisa) OU só pesquisa marcados
+  const ativas = useMemo(() => data.filter(c =>
+    c.ativo === 'S' &&
+    !c.is_corretor &&
+    c.solicitar_parceria &&
+    (c.pesquisa || (c.tratativa && c.pesquisa))
+  ), [data]);
 
   const porModalidade = useMemo(() => {
     const grupos = {};
@@ -81,16 +96,18 @@ export default function ResumoDemandasTab({ data, darkMode }) {
   return (
     <div style={{ maxWidth: 760, color: textColor }}>
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📋 Resumo de Demandas</h2>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📋 Demandas</h2>
         <p style={{ margin: '6px 0 0', color: textMuted, fontSize: 14 }}>
-          Tratativas ativas agrupadas por modalidade — excluindo corretores.
-          {' '}<strong>{ativas.length}</strong> tratativa{ativas.length !== 1 ? 's' : ''} no total.
+          Tratativas com parceria solicitada e etapa pesquisa marcada.
+          {' '}<strong>{ativas.length}</strong> demanda{ativas.length !== 1 ? 's' : ''} no total.
         </p>
       </div>
 
       {ativas.length === 0 ? (
         <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 40, textAlign: 'center', color: textMuted }}>
-          Nenhuma tratativa ativa encontrada.
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🤝</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Nenhuma demanda encontrada</div>
+          <div style={{ fontSize: 13 }}>Marque "Solicitar Parceria" e a etapa "Pesquisa" em uma tratativa para ela aparecer aqui.</div>
         </div>
       ) : (
         <>
@@ -122,7 +139,6 @@ export default function ResumoDemandasTab({ data, darkMode }) {
               </div>
             </div>
 
-            {/* Texto editável ou preview */}
             {editando ? (
               <textarea
                 value={textoFinal}
@@ -148,7 +164,7 @@ export default function ResumoDemandasTab({ data, darkMode }) {
             )}
 
             <div style={{ marginTop: 10, fontSize: 11, color: textMuted }}>
-              Formato: <strong>Imóvel + Região. Observações externas. Preço</strong>
+              Formato: <strong>Imóvel Região. Observações externas. Preço</strong>
             </div>
           </div>
 
@@ -160,7 +176,7 @@ export default function ResumoDemandasTab({ data, darkMode }) {
                   {mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄'} {mod}
                 </span>
                 <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '3px 10px', borderRadius: 20 }}>
-                  {clientes.length} tratativa{clientes.length !== 1 ? 's' : ''}
+                  {clientes.length} demanda{clientes.length !== 1 ? 's' : ''}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -168,9 +184,13 @@ export default function ResumoDemandasTab({ data, darkMode }) {
                   <div key={c.id} style={{ background: darkMode ? '#0f1117' : '#f8fafc', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.nome}</div>
                     <div style={{ color: textMuted, lineHeight: 1.7, fontSize: 12 }}>
-                      {[c.imovel, c.localizacao].filter(Boolean).join(' + ')}
+                      {[c.imovel, c.localizacao].filter(Boolean).join(' ')}
                       {c.detalhes_externos && <span> · {c.detalhes_externos}</span>}
-                      {c.valor && <span style={{ color: '#059669', fontWeight: 600 }}> · R$ {Number(c.valor).toLocaleString('pt-BR')}</span>}
+                      {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
+                        <span style={{ color: Number(c.valor) === 0 ? '#9ca3af' : '#059669', fontWeight: 600 }}>
+                          {' · '}{Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
