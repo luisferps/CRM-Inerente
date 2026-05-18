@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
 
@@ -17,53 +17,67 @@ const emptyForm = {
   proposta: false, contrato: false, financiamento: false, recebimento: false, recebido: false,
 };
 
-function isInternacional(value) { return (value || '').trim().startsWith('+'); }
+function isIntl(value) { return (value || '').trim().startsWith('+'); }
 
 function formatPhone(value, intl) {
   if (intl) return value;
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0,2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+  const d = value.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
 }
 
-function validarTelefone(value, intl) {
-  if (!value || !value.trim()) return false;
+function validarTel(value, intl) {
+  if (!value?.trim()) return false;
   if (intl) return value.trim().length >= 8;
-  return value.replace(/\D/g, '').length === 11;
+  return value.replace(/\D/g,'').length === 11;
 }
 
-function SelectComAdd({ label, value, onChange, options, setOptions, chave, required, errStyle }) {
+function SelectComAdd({ label, value, onChange, options, setOptions, chave, required, errStyle, isGerente, perfil, bloqueado }) {
   const [adding, setAdding] = useState(false);
-  const [novoValor, setNovoValor] = useState('');
+  const [novo, setNovo] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleAdd() {
-    const v = novoValor.trim();
+    const v = novo.trim();
     if (!v) return;
-    if (options.includes(v)) { onChange(v); setAdding(false); setNovoValor(''); return; }
+    if (options.includes(v)) { onChange(v); setAdding(false); setNovo(''); return; }
     setSaving(true);
-    const novaLista = [...options, v];
-    const { error } = await supabase.from('configuracoes').upsert({ chave, valor: novaLista }, { onConflict: 'chave' });
-    if (error) alert('Erro: ' + error.message);
-    else { setOptions(novaLista); onChange(v); }
-    setSaving(false); setAdding(false); setNovoValor('');
+    if (isGerente) {
+      const lista = [...options, v];
+      const { error } = await supabase.from('configuracoes').upsert({ chave, valor: lista }, { onConflict: 'chave' });
+      if (!error) { setOptions(lista); onChange(v); }
+      else alert('Erro: ' + error.message);
+    } else {
+      const { error } = await supabase.from('sugestoes_lista').insert({ chave, valor: v, sugerido_por: perfil?.id, sugerido_por_nome: perfil?.nome, status: 'pendente' });
+      if (!error) alert('Sugestão enviada para aprovação do gerente!');
+      else alert('Erro: ' + error.message);
+    }
+    setSaving(false); setAdding(false); setNovo('');
   }
+
+  if (bloqueado) return (
+    <div>
+      <label className="form-label">{label}{required ? ' *' : ''}</label>
+      <input value={value} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
+      <span style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, display: 'block' }}>Preenchido automaticamente como Carteira</span>
+    </div>
+  );
 
   return (
     <div>
       <label className="form-label">{label}{required ? ' *' : ''}</label>
       {adding ? (
         <div style={{ display: 'flex', gap: 6 }}>
-          <input autoFocus value={novoValor} onChange={e => setNovoValor(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNovoValor(''); }}}
-            placeholder="Nova opção..." style={{ flex: 1 }} />
+          <input autoFocus value={novo} onChange={e => setNovo(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNovo(''); }}}
+            placeholder={isGerente ? 'Nova opção...' : 'Sugerir opção...'} style={{ flex: 1 }} />
           <button type="button" onClick={handleAdd} disabled={saving}
-            style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            {saving ? '...' : '✓'}
+            style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: isGerente ? '#2563eb' : '#f59e0b', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            {saving ? '...' : isGerente ? '✓' : '💡'}
           </button>
-          <button type="button" onClick={() => { setAdding(false); setNovoValor(''); }}
+          <button type="button" onClick={() => { setAdding(false); setNovo(''); }}
             style={{ padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 13, cursor: 'pointer' }}>✕</button>
         </div>
       ) : (
@@ -73,7 +87,8 @@ function SelectComAdd({ label, value, onChange, options, setOptions, chave, requ
             {options.map(o => <option key={o}>{o}</option>)}
           </select>
           <button type="button" onClick={() => setAdding(true)}
-            style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#2563eb', fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>+</button>
+            title={isGerente ? 'Adicionar' : 'Sugerir'}
+            style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: isGerente ? '#2563eb' : '#f59e0b', fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>+</button>
         </div>
       )}
     </div>
@@ -88,14 +103,19 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [imoveis, setImoveis] = useState([]);
   const [valorDisplay, setValorDisplay] = useState('');
   const [internacional, setInternacional] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [clienteEncontrado, setClienteEncontrado] = useState(null);
+  const [origemBloqueada, setOrigemBloqueada] = useState(false);
+  const timer = useRef(null);
 
   const isNew = modal === 'new';
   const isEdit = modal && modal.negociacao_id;
   const isNovaNeg = modal && modal.novaNegociacao;
+  const isGerente = perfil?.is_gerente;
 
   useEffect(() => {
-    supabase.from('configuracoes').select('chave, valor').then(({ data: config }) => {
-      if (config) config.forEach(row => {
+    supabase.from('configuracoes').select('chave, valor').then(({ data }) => {
+      if (data) data.forEach(row => {
         if (row.chave === 'origens') setOrigens(row.valor);
         if (row.chave === 'imoveis') setImoveis(row.valor);
       });
@@ -106,14 +126,15 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     if (isEdit) {
       setForm({ ...emptyForm, ...modal });
       setValorDisplay(modal.valor ? Number(modal.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
-      setInternacional(isInternacional(modal.telefone || ''));
+      setInternacional(isIntl(modal.telefone || ''));
       localStorage.removeItem('crm_rascunho');
     } else if (isNovaNeg) {
       const c = modal.cliente;
-      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: c.origem || '', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
+      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: 'Carteira', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
       if (perfil) { initial.corretor = perfil.nome; initial.corretor_id = perfil.id; }
       setForm(initial);
-      setInternacional(isInternacional(c.telefone || ''));
+      setOrigemBloqueada(true);
+      setInternacional(isIntl(c.telefone || ''));
       setValorDisplay('');
     } else {
       const rascunho = localStorage.getItem('crm_rascunho');
@@ -122,7 +143,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           const r = JSON.parse(rascunho);
           setForm(r);
           setValorDisplay(r.valor ? Number(r.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
-          setInternacional(isInternacional(r.telefone || ''));
+          setInternacional(isIntl(r.telefone || ''));
         } catch { setForm(emptyForm); }
       } else {
         const initial = { ...emptyForm };
@@ -132,11 +153,37 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     }
   }, [modal, perfil]);
 
+  async function buscarPorTelefone(telefone) {
+    const digits = telefone.replace(/\D/g,'');
+    if (digits.length < 10) return;
+    setBuscando(true);
+    const { data } = await supabase.from('clientes').select('*').ilike('telefone', `%${digits}%`).limit(1);
+    if (data && data.length > 0) {
+      const c = data[0];
+      setClienteEncontrado(c);
+      const { data: negs } = await supabase.from('negociacoes').select('id').eq('cliente_id', c.id).limit(1);
+      const temTratativas = negs && negs.length > 0;
+      setForm(f => ({ ...f, nome: c.nome, email: c.email || f.email, origem: temTratativas ? 'Carteira' : (c.origem || f.origem), is_corretor: c.is_corretor || false, cliente_real_id: c.id }));
+      setOrigemBloqueada(temTratativas);
+    } else {
+      setClienteEncontrado(null);
+      setOrigemBloqueada(false);
+    }
+    setBuscando(false);
+  }
+
+  function handleTelChange(e) {
+    const f = formatPhone(e.target.value, internacional);
+    set('telefone', f);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => buscarPorTelefone(f), 600);
+  }
+
   function set(key, val) {
     setForm(f => {
-      const updated = { ...f, [key]: val };
-      if (isNew) localStorage.setItem('crm_rascunho', JSON.stringify(updated));
-      return updated;
+      const u = { ...f, [key]: val };
+      if (isNew) localStorage.setItem('crm_rascunho', JSON.stringify(u));
+      return u;
     });
     if (errors[key]) setErrors(e => ({ ...e, [key]: false }));
   }
@@ -144,15 +191,15 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   function handleValorChange(e) {
     const raw = e.target.value.replace(/\D/g, '');
     if (!raw) { setValorDisplay(''); set('valor', ''); return; }
-    const number = parseInt(raw, 10) / 100;
-    setValorDisplay(number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-    set('valor', number);
+    const n = parseInt(raw, 10) / 100;
+    setValorDisplay(n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+    set('valor', n);
   }
 
   function validate() {
     const errs = {};
     if (!form.nome.trim()) errs.nome = true;
-    if (!validarTelefone(form.telefone, internacional)) errs.telefone = true;
+    if (!validarTel(form.telefone, internacional)) errs.telefone = true;
     if (!form.imovel) errs.imovel = true;
     if (!form.modalidade) errs.modalidade = true;
     if (!form.localizacao.trim()) errs.localizacao = true;
@@ -165,12 +212,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
     setSaving(true);
-    await onSave(form);
+    await onSave({ ...form, cliente_real_id: form.cliente_real_id || clienteEncontrado?.id });
     setSaving(false);
   }
 
-  const errStyle = (key) => errors[key] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
-  const titulo = isNovaNeg ? `Nova Negociação — ${modal.cliente?.nome}` : isEdit ? 'Editar' : 'Novo Cliente';
+  const errStyle = k => errors[k] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
+  const titulo = isNovaNeg ? `Nova Tratativa — ${modal.cliente?.nome}` : isEdit ? 'Editar Tratativa' : 'Nova Tratativa';
+  const clienteLocked = (isNovaNeg || !!clienteEncontrado) && !isEdit;
 
   return (
     <div className="modal-overlay">
@@ -186,26 +234,35 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           </div>
 
           <div>
-            <label className="form-label">Nome *</label>
-            <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo" style={errStyle('nome')} disabled={isNovaNeg} />
-          </div>
-
-          <div>
             <label className="form-label">
               Telefone *
               <label style={{ marginLeft: 12, fontSize: 11, fontWeight: 400, color: '#6b7280', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); }} style={{ width: 'auto', margin: 0 }} />
+                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); setClienteEncontrado(null); }} style={{ width: 'auto', margin: 0 }} disabled={isNovaNeg || isEdit} />
                 Internacional
               </label>
             </label>
-            <input value={form.telefone} onChange={e => set('telefone', formatPhone(e.target.value, internacional))}
-              placeholder={internacional ? '+1 555 000 0000' : '(62) 9 9999-9999'} style={errStyle('telefone')} disabled={isNovaNeg} />
+            <div style={{ position: 'relative' }}>
+              <input value={form.telefone} onChange={handleTelChange}
+                placeholder={internacional ? '+1 555 000 0000' : '(62) 9 9999-9999'}
+                style={errStyle('telefone')} disabled={isNovaNeg || isEdit} />
+              {buscando && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#9ca3af' }}>🔍</span>}
+            </div>
             {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>{internacional ? 'Digite um número válido.' : 'Nacional: (XX) X XXXX-XXXX — 11 dígitos.'}</span>}
+            {clienteEncontrado && (
+              <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 12, color: '#065f46' }}>
+                ✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="form-label">Nome *</label>
+            <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo" style={errStyle('nome')} disabled={clienteLocked} />
           </div>
 
           <div>
             <label className="form-label">Email</label>
-            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" disabled={isNovaNeg} />
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" disabled={clienteLocked} />
           </div>
 
           <div>
@@ -213,16 +270,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} />
           </div>
 
-          <SelectComAdd label="Origem" value={form.origem} onChange={v => set('origem', v)} options={origens} setOptions={setOrigens} chave="origens" />
+          <SelectComAdd label="Aquisição" value={form.origem} onChange={v => set('origem', v)}
+            options={origens} setOptions={setOrigens} chave="origens"
+            isGerente={isGerente} perfil={perfil} bloqueado={origemBloqueada && !isEdit} />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 20 }}>
             <input type="checkbox" id="is_corretor" checked={form.is_corretor || false} onChange={e => set('is_corretor', e.target.checked)}
-              style={{ width: 16, height: 16, cursor: 'pointer', margin: 0 }} disabled={isNovaNeg} />
+              style={{ width: 16, height: 16, cursor: 'pointer', margin: 0 }} disabled={clienteLocked} />
             <label htmlFor="is_corretor" style={{ fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>Este cliente é corretor</label>
           </div>
 
           <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginTop: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Negociação</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tratativa</span>
           </div>
 
           <div>
@@ -274,7 +333,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
 
           <SelectComAdd label="Tipo de Imóvel" value={form.imovel}
             onChange={v => { set('imovel', v); if (errors.imovel) setErrors(e => ({ ...e, imovel: false })); }}
-            options={imoveis} setOptions={setImoveis} chave="imoveis" required errStyle={errStyle('imovel')} />
+            options={imoveis} setOptions={setImoveis} chave="imoveis" required errStyle={errStyle('imovel')}
+            isGerente={isGerente} perfil={perfil} />
 
           <div>
             <label className="form-label">Valor (R$)</label>
