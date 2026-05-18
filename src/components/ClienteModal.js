@@ -10,7 +10,7 @@ const emptyForm = {
   ativo: 'S', motivo_desistencia: '',
   corretor: '', corretor_id: null,
   imovel: '', modalidade: '',
-  valor: '', detalhes: '', localizacao: '',
+  valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
   tratativa: false, pesquisa: false, agendamento: false, visita: false,
@@ -354,8 +354,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           </div>
 
           <div className="field-full">
-            <label className="form-label">Detalhes / Observações *</label>
-            <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)} placeholder="Informações adicionais..." style={errStyle('detalhes')} />
+            <label className="form-label" style={errors.detalhes ? { color: '#dc2626' } : {}}>
+              Observações Internas * <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
+            </label>
+            <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
+              placeholder="Anotações internas, perfil do cliente, situação financeira..."
+              style={{ ...errStyle('detalhes'), background: '#fffbeb', borderColor: errors.detalhes ? '#dc2626' : '#fde68a' }} />
+          </div>
+
+          <div className="field-full">
+            <label className="form-label">
+              Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
+            </label>
+            <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
+              placeholder="Informações para enviar a parceiros ou clientes..."
+              style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
           </div>
 
           <div>
