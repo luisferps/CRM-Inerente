@@ -44,13 +44,12 @@ export default function ResumoDemandasTab({ data, darkMode }) {
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
 
-  // Filtro: solicitar_parceria = true, não é corretor, ativo
-  // E deve ter (tratativa E pesquisa) OU só pesquisa marcados
+  // Filtro: ativo, não corretor, (solicitar_parceria OU pesquisa marcada), e pesquisa obrigatória
   const ativas = useMemo(() => data.filter(c =>
     c.ativo === 'S' &&
     !c.is_corretor &&
-    c.solicitar_parceria &&
-    (c.pesquisa || (c.tratativa && c.pesquisa))
+    c.pesquisa === true &&
+    (c.solicitar_parceria === true || c.pesquisa === true)
   ), [data]);
 
   const porModalidade = useMemo(() => {
