@@ -31,6 +31,7 @@ function splitForm(form) {
     imovel: form.imovel,
     valor: form.valor ? Number(form.valor) : null,
     localizacao: form.localizacao,
+    regiao: form.regiao || null,
     detalhes: form.detalhes,
     detalhes_externos: form.detalhes_externos || null,
     proxima_acao: form.proxima_acao,
