@@ -10,7 +10,7 @@ const emptyForm = {
   ativo: 'S', motivo_desistencia: '',
   corretor: '', corretor_id: null,
   imovel: '', modalidade: '',
-  valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
+  valor: '', detalhes: '', detalhes_externos: '', localizacao: '', regiao: '',
   proxima_acao: '', imoveis_visitados: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
   tratativa: false, pesquisa: false, agendamento: false, visita: false,
@@ -346,6 +346,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           <div>
             <label className="form-label">Localização *</label>
             <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
+          </div>
+
+          <div>
+            <label className="form-label">Região</label>
+            <input value={form.regiao || ''} onChange={e => set('regiao', e.target.value)} placeholder="Ex: Setor Bueno, Jardim Goiás..." />
           </div>
 
           <div>
