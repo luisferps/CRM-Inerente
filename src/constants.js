@@ -1,208 +1,82 @@
-import { useState, useMemo, useEffect } from 'react';
-
-function capitalize(str) {
-  if (!str) return '';
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function formatarPreco(valor) {
-  const n = Number(valor);
-  if (valor === '' || valor === null || valor === undefined) return null;
-  if (n === 0) return 'Em aberto';
-  return `R$ ${n.toLocaleString('pt-BR')}`;
-}
-
-function formatarLinha(c) {
-  const partes = [];
-  // IMÓVEL REGIÃO (sem +, só espaço)
-  const imovelRegiao = [c.imovel, c.localizacao].filter(Boolean).join(' ');
-  if (imovelRegiao) partes.push(capitalize(imovelRegiao));
-  // OBSERVAÇÕES EXTERNAS
-  if (c.detalhes_externos) partes.push(capitalize(c.detalhes_externos.trim()));
-  // PREÇO
-  const preco = formatarPreco(c.valor);
-  if (preco) partes.push(preco);
-  return `- ${partes.join('. ')}`;
-}
-
-function gerarTexto(ativas, porModalidade) {
-  if (ativas.length === 0) return '';
-  let out = 'Preciso de: (enviar somente imóveis nos perfis relacionados)\n\n';
-  const ordem = ['Compra', 'Venda', 'Locação'];
-  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
-  mods.forEach(mod => {
-    const icon = mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄';
-    out += `${icon} *${capitalize(mod)}:*\n`;
-    porModalidade[mod].forEach(c => { out += formatarLinha(c) + '\n'; });
-    out += '\n';
-  });
-  return out.trim();
-}
-
-export default function ResumoDemandasTab({ data, darkMode }) {
-  const [copiado, setCopiado] = useState(false);
-  const [editando, setEditando] = useState(false);
-  const [textoEditado, setTextoEditado] = useState('');
-
-  // Só aparecem se: solicitar_parceria=true, ativo, não corretor
-  // E etapas marcadas: só pesquisa, OU tratativa+pesquisa (sem mais nenhuma)
-  const ativas = useMemo(() => data.filter(c => {
-    if (!c.ativo || c.ativo !== 'S') return false;
-    if (c.is_corretor) return false;
-    if (!c.solicitar_parceria) return false;
-    const outrasEtapas = ['agendamento','visita','proposta','contrato','financiamento','recebimento','recebido'];
-    const temOutra = outrasEtapas.some(e => c[e]);
-    if (temOutra) return false;
-    // Só pesquisa, ou tratativa+pesquisa
-    return c.pesquisa === true;
-  }), [data]);
-
-  const porModalidade = useMemo(() => {
-    const grupos = {};
-    ativas.forEach(c => {
-      const mod = c.modalidade || 'Outros';
-      if (!grupos[mod]) grupos[mod] = [];
-      grupos[mod].push(c);
-    });
-    return grupos;
-  }, [ativas]);
-
-  const textoGerado = useMemo(() => gerarTexto(ativas, porModalidade), [ativas, porModalidade]);
-
-  useEffect(() => {
-    setTextoEditado(textoGerado);
-    setEditando(false);
-  }, [textoGerado]);
-
-  const textoFinal = textoEditado || textoGerado;
-
-  function copiar() {
-    navigator.clipboard.writeText(textoFinal).then(() => {
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    });
-  }
-
-  function abrirWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(textoFinal)}`, '_blank');
-  }
-
-  function resetar() {
-    setTextoEditado(textoGerado);
-    setEditando(false);
-  }
-
-  const card = darkMode ? '#16213e' : '#ffffff';
-  const border = darkMode ? '#0f3460' : '#e2e8f0';
-  const textColor = darkMode ? '#e2e8f0' : '#1a202c';
-  const textMuted = darkMode ? '#94a3b8' : '#64748b';
-
-  return (
-    <div style={{ maxWidth: 760, color: textColor }}>
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📋 Demandas</h2>
-        <p style={{ margin: '6px 0 0', color: textMuted, fontSize: 14 }}>
-          Tratativas com parceria solicitada e etapa pesquisa marcada.
-          {' '}<strong>{ativas.length}</strong> demanda{ativas.length !== 1 ? 's' : ''} no total.
-        </p>
-      </div>
-
-      {ativas.length === 0 ? (
-        <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 40, textAlign: 'center', color: textMuted }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🤝</div>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Nenhuma demanda encontrada</div>
-          <div style={{ fontSize: 13 }}>Marque "Solicitar Parceria" e a etapa "Pesquisa" em uma tratativa para ela aparecer aqui.</div>
-        </div>
-      ) : (
-        <>
-          <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>
-                Mensagem {editando && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 400 }}>— editando</span>}
-              </span>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {editando && (
-                  <button onClick={resetar}
-                    style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    ↺ Resetar
-                  </button>
-                )}
-                <button onClick={() => setEditando(e => !e)}
-                  style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${editando ? '#f59e0b' : '#d1d5db'}`, background: editando ? '#fffbeb' : '#fff', color: editando ? '#b45309' : '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  {editando ? '✓ Concluir' : '✏️ Editar'}
-                </button>
-                <button onClick={copiar}
-                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}>
-                  {copiado ? '✓ Copiado!' : '📋 Copiar'}
-                </button>
-                <button onClick={abrirWhatsApp}
-                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#25d366', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  💬 WhatsApp
-                </button>
-              </div>
-            </div>
-
-            {editando ? (
-              <textarea
-                value={textoFinal}
-                onChange={e => setTextoEditado(e.target.value)}
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  minHeight: 220, padding: '12px 14px',
-                  fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8,
-                  border: '2px solid #f59e0b', borderRadius: 8,
-                  background: darkMode ? '#0f1117' : '#fffbeb',
-                  color: textColor, resize: 'vertical', outline: 'none',
-                }}
-              />
-            ) : (
-              <pre style={{
-                fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8,
-                whiteSpace: 'pre-wrap', color: textColor, margin: 0,
-                padding: '12px 14px', background: darkMode ? '#0f1117' : '#f8fafc',
-                borderRadius: 8, border: `1px solid ${border}`,
-              }}>
-                {textoFinal}
-              </pre>
-            )}
-
-            <div style={{ marginTop: 10, fontSize: 11, color: textMuted }}>
-              Formato: <strong>Imóvel Região. Observações externas. Preço</strong>
-            </div>
-          </div>
-
-          {/* Cards por modalidade */}
-          {Object.entries(porModalidade).map(([mod, clientes]) => (
-            <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>
-                  {mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄'} {mod}
-                </span>
-                <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '3px 10px', borderRadius: 20 }}>
-                  {clientes.length} demanda{clientes.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {clientes.map(c => (
-                  <div key={c.id} style={{ background: darkMode ? '#0f1117' : '#f8fafc', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.nome}</div>
-                    <div style={{ color: textMuted, lineHeight: 1.7, fontSize: 12 }}>
-                      {[c.imovel, c.localizacao].filter(Boolean).join(' ')}
-                      {c.detalhes_externos && <span> · {c.detalhes_externos}</span>}
-                      {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
-                        <span style={{ color: Number(c.valor) === 0 ? '#9ca3af' : '#059669', fontWeight: 600 }}>
-                          {' · '}{Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
+3:04:35 AM: build-image version: ac6eb13fbf000e5c09ad677efd8b7c3c2d0142b6 (noble-new-builds)
+3:04:35 AM: buildbot version: de14d13d022c18f089944497bd804e269fc4f82f
+3:04:35 AM: Building with cache
+3:04:35 AM: Starting to prepare the repo for build
+3:04:35 AM: Preparing Git Reference refs/heads/main
+3:04:37 AM: Installing dependencies
+3:04:37 AM: mise ~/.config/mise/config.toml tools: python@3.14.3
+3:04:37 AM: mise ~/.config/mise/config.toml tools: ruby@3.4.8
+3:04:37 AM: mise ~/.config/mise/config.toml tools: go@1.26.2
+3:04:37 AM: v22.22.3 is already installed.
+3:04:38 AM: Now using node v22.22.3 (npm v10.9.8)
+3:04:38 AM: Enabling Node.js Corepack
+3:04:38 AM: No npm workspaces detected
+3:04:38 AM: Installing npm packages using npm version 10.9.8
+3:04:40 AM: up to date in 1s
+3:04:40 AM: npm packages installed
+3:04:40 AM: Successfully installed dependencies
+3:04:40 AM: Detected 1 framework(s)
+3:04:40 AM: "create-react-app" at version "5.0.1"
+3:04:40 AM: Starting build script
+3:04:43 AM: Section completed: initializing
+3:04:45 AM: ​
+3:04:45 AM: Netlify Build                                                 
+3:04:45 AM: ────────────────────────────────────────────────────────────────
+3:04:45 AM: ​
+3:04:45 AM: ❯ Version
+3:04:45 AM:   @netlify/build 35.13.4
+3:04:45 AM: ​
+3:04:45 AM: ❯ Flags
+3:04:45 AM:   accountId: 6a04edb18fba391270884cff
+3:04:45 AM:   baseRelDir: true
+3:04:45 AM:   buildId: 6a0aabe6ca989f0008b45e01
+3:04:45 AM:   deployId: 6a0aabe6ca989f0008b45e03
+3:04:45 AM: ​
+3:04:45 AM: ❯ Current directory
+3:04:45 AM:   /opt/build/repo
+3:04:45 AM: ​
+3:04:45 AM: ❯ Config file
+3:04:45 AM:   /opt/build/repo/netlify.toml
+3:04:45 AM: ​
+3:04:45 AM: ❯ Context
+3:04:45 AM:   production
+3:04:45 AM: ​
+3:04:45 AM: build.command from netlify.toml                               
+3:04:45 AM: ────────────────────────────────────────────────────────────────
+3:04:45 AM: ​
+3:04:45 AM: $ npm run build
+3:04:45 AM: > crm-imobiliario@1.0.0 build
+3:04:45 AM: > react-scripts build
+3:04:47 AM: Creating an optimized production build...
+3:04:56 AM: Failed to compile.
+3:04:56 AM: 
+3:04:56 AM: Attempted import error: 'ETAPAS_FUNIL' is not exported from '../constants' (imported as 'ETAPAS_FUNIL').
+3:04:56 AM: ​
+3:04:56 AM: "build.command" failed                                        
+3:04:56 AM: ────────────────────────────────────────────────────────────────
+3:04:56 AM: ​
+3:04:56 AM:   Error message
+3:04:56 AM:   Command failed with exit code 1: npm run build (https://ntl.fyi/exit-code-1)
+3:04:56 AM: ​
+3:04:56 AM:   Error location
+3:04:56 AM:   In build.command from netlify.toml:
+3:04:56 AM:   npm run build
+3:04:56 AM: ​
+3:04:56 AM:   Resolved config
+3:04:56 AM:   build:
+3:04:56 AM:     command: npm run build
+3:04:56 AM:     commandOrigin: config
+3:04:56 AM:     environment:
+3:04:56 AM:       - REACT_APP_SUPABASE_ANON_KEY
+3:04:56 AM:       - REACT_APP_SUPABASE_URL
+3:04:56 AM:     publish: /opt/build/repo/build
+3:04:56 AM:     publishOrigin: config
+3:04:56 AM:   redirects:
+3:04:56 AM:     - from: /*
+      status: 200
+      to: /index.html
+  redirectsOrigin: config
+3:04:56 AM: Build failed due to a user error: Build script returned non-zero exit code: 2
+3:04:57 AM: Failed during stage 'building site': Build script returned non-zero exit code: 2 (https://ntl.fyi/exit-code-2)
+3:04:57 AM: Failing build: Failed to build site
+3:04:57 AM: Finished processing build request in 21.996s
