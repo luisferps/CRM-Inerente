@@ -17,17 +17,16 @@ const ETAPA_COLORS = {
   contrato:     { bg: '#b0cff0', border: '#4a87c4', dot: '#0f5799', text: '#073d6e' },
   financiamento:{ bg: '#a0c4ec', border: '#3575b8', dot: '#0a4880', text: '#052e55' },
   recebimento:  { bg: '#92bbe8', border: '#2060b0', dot: '#063570', text: '#042650' },
-  recebido:     { bg: '#dcfce7', border: '#4ade80', dot: '#16a34a', text: '#14532d' },
 };
 
 const ETAPA_ICONS = {
   tratativa: '💬', pesquisa: '🔍', agendamento: '📅', visita: '🏠',
   proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '🕐',
-  recebido: '✅',
 };
 
 export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
-  const ativos = data.filter(c => c.ativo === 'S');
+  // Funil só para Compra e Locação, ativas, não recebidas
+  const ativos = data.filter(c => c.ativo === 'S' && c.modalidade !== 'Venda' && !c.recebido);
 
   const clientesPorEtapa = {};
   ETAPAS_FUNIL.forEach(e => { clientesPorEtapa[e] = []; });
@@ -77,8 +76,7 @@ export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
                       <div style={{ textAlign: 'center', color: '#d1d5db', fontSize: 28, marginTop: 40 }}>—</div>
                     )}
                     {clientes.map(c => (
-                      <div key={c.id}
-                        onClick={() => onOpenModal(c)}
+                      <div key={c.id} onClick={() => onOpenModal(c)}
                         onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
                         onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'}
                         style={{ background: '#fff', border: `1px solid ${colors.border}`, borderLeft: `3px solid ${colors.dot}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', cursor: 'pointer' }}>
@@ -90,8 +88,8 @@ export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
                             {c.nome.split(' ').slice(0, 2).join(' ')}
                           </div>
                         </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3 }}>{c.tipo || '—'} · {c.imovel || '—'}</div>
-                        {c.modalidade && <div style={{ fontSize: 10, color: colors.text, fontWeight: 600, marginBottom: 3 }}>{c.modalidade === 'Venda' ? '🏠' : '🔑'} {c.modalidade}</div>}
+                        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3 }}>{c.imovel || '—'}</div>
+                        {c.modalidade && <div style={{ fontSize: 10, color: colors.text, fontWeight: 600, marginBottom: 3 }}>{c.modalidade === 'Locação' ? '🔑' : '🛒'} {c.modalidade}</div>}
                         {c.valor && <div style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>R$ {Number(c.valor).toLocaleString('pt-BR')}</div>}
                         {c.proxima_acao && (
                           <div style={{ marginTop: 5, fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 4, padding: '3px 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -116,8 +114,7 @@ export default function FunilTab({ data, onToggleFunil, onOpenModal }) {
           <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Sem etapa definida</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {semEtapa.map(c => (
-              <div key={c.id}
-                onClick={() => onOpenModal(c)}
+              <div key={c.id} onClick={() => onOpenModal(c)}
                 style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 12px', fontSize: 12, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                 <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#9ca3af' }}>
                   {c.nome.charAt(0).toUpperCase()}
