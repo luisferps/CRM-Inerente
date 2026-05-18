@@ -44,13 +44,18 @@ export default function ResumoDemandasTab({ data, darkMode }) {
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
 
-  // Filtro: ativo, não corretor, (solicitar_parceria OU pesquisa marcada), e pesquisa obrigatória
-  const ativas = useMemo(() => data.filter(c =>
-    c.ativo === 'S' &&
-    !c.is_corretor &&
-    c.pesquisa === true &&
-    (c.solicitar_parceria === true || c.pesquisa === true)
-  ), [data]);
+  // Só aparecem se: solicitar_parceria=true, ativo, não corretor
+  // E etapas marcadas: só pesquisa, OU tratativa+pesquisa (sem mais nenhuma)
+  const ativas = useMemo(() => data.filter(c => {
+    if (!c.ativo || c.ativo !== 'S') return false;
+    if (c.is_corretor) return false;
+    if (!c.solicitar_parceria) return false;
+    const outrasEtapas = ['agendamento','visita','proposta','contrato','financiamento','recebimento','recebido'];
+    const temOutra = outrasEtapas.some(e => c[e]);
+    if (temOutra) return false;
+    // Só pesquisa, ou tratativa+pesquisa
+    return c.pesquisa === true;
+  }), [data]);
 
   const porModalidade = useMemo(() => {
     const grupos = {};
