@@ -18,13 +18,9 @@ function filtrarPorPeriodo(data, periodo) {
   return data.filter(c => new Date(c.created_at) >= inicio && new Date(c.created_at) <= hoje);
 }
 
-// Gráfico de pizza SVG simples
 function PizzaChart({ dados, titulo }) {
   const total = dados.reduce((s, d) => s + d.valor, 0);
-  if (total === 0) return (
-    <div style={{ textAlign: 'center', color: '#9ca3af', padding: 20, fontSize: 13 }}>Sem dados</div>
-  );
-
+  if (total === 0) return <div style={{ textAlign: 'center', color: '#9ca3af', padding: 20, fontSize: 13 }}>Sem dados</div>;
   const cores = ['#2563eb','#059669','#7c3aed','#d97706','#dc2626','#0891b2','#65a30d','#db2777','#ea580c','#0284c7'];
   let angulo = 0;
   const fatias = dados.map((d, i) => {
@@ -38,16 +34,13 @@ function PizzaChart({ dados, titulo }) {
     const large = pct > 0.5 ? 1 : 0;
     return { ...d, x1, y1, x2, y2, large, cor: cores[i % cores.length], pct };
   });
-
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: '#374151' }}>{titulo}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
         <svg viewBox="0 0 100 100" style={{ width: 120, height: 120, flexShrink: 0 }}>
           {fatias.map((f, i) => (
-            <path key={i}
-              d={`M 50 50 L ${f.x1} ${f.y1} A 40 40 0 ${f.large} 1 ${f.x2} ${f.y2} Z`}
-              fill={f.cor} stroke="#fff" strokeWidth="1" />
+            <path key={i} d={`M 50 50 L ${f.x1} ${f.y1} A 40 40 0 ${f.large} 1 ${f.x2} ${f.y2} Z`} fill={f.cor} stroke="#fff" strokeWidth="1" />
           ))}
         </svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -61,6 +54,55 @@ function PizzaChart({ dados, titulo }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function GraficoEvolucao({ data }) {
+  // Agrupa todas as tratativas por mês, independente do filtro de período
+  const dadosMeses = useMemo(() => {
+    const porMes = {};
+    data.forEach(c => {
+      if (!c.created_at) return;
+      const d = new Date(c.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      if (!porMes[key]) porMes[key] = { mes: label, total: 0, compras: 0, locacoes: 0 };
+      porMes[key].total += 1;
+      if (c.modalidade === 'Compra') porMes[key].compras += 1;
+      if (c.modalidade === 'Locação') porMes[key].locacoes += 1;
+    });
+    return Object.entries(porMes).sort(([a],[b]) => a.localeCompare(b)).slice(-12).map(([,v]) => v);
+  }, [data]);
+
+  if (dadosMeses.length < 2) return null;
+
+  const maxVal = Math.max(...dadosMeses.map(d => d.total), 1);
+  const W = 520, H = 160, padL = 28, padB = 28, padT = 10, padR = 10;
+  const w = W - padL - padR;
+  const h = H - padB - padT;
+  const x = i => padL + (i / (dadosMeses.length - 1)) * w;
+  const y = v => padT + h - (v / maxVal) * h;
+  const pontos = dadosMeses.map((d, i) => `${x(i)},${y(d.total)}`).join(' ');
+  const area = `${padL},${padT+h} ${pontos} ${x(dadosMeses.length-1)},${padT+h}`;
+
+  return (
+    <div className="dash-section" style={{ marginBottom: 16 }}>
+      <div className="dash-section-title">📈 Tratativas Novas por Mês</div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+        {[0,0.25,0.5,0.75,1].map(p => (
+          <line key={p} x1={padL} y1={padT+h*(1-p)} x2={W-padR} y2={padT+h*(1-p)} stroke="#f3f4f6" strokeWidth="1" />
+        ))}
+        <polygon points={area} fill="#2563eb" opacity="0.08" />
+        <polyline points={pontos} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinejoin="round" />
+        {dadosMeses.map((d, i) => (
+          <g key={i}>
+            <circle cx={x(i)} cy={y(d.total)} r="4" fill="#2563eb" stroke="#fff" strokeWidth="2" />
+            {d.total > 0 && <text x={x(i)} y={y(d.total)-8} textAnchor="middle" fontSize="10" fill="#2563eb" fontWeight="700">{d.total}</text>}
+            <text x={x(i)} y={H-8} textAnchor="middle" fontSize="9" fill="#9ca3af">{d.mes}</text>
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }
@@ -146,6 +188,9 @@ export default function DashboardTab({ data }) {
           </div>
         ))}
       </div>
+
+      {/* Gráfico de evolução mensal */}
+      <GraficoEvolucao data={data} />
 
       {/* Gráficos de pizza */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
