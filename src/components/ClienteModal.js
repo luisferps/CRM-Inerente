@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
 
 const hoje = new Date().toISOString().slice(0, 10);
 
 const emptyForm = {
-  // cliente
-  nome: '', telefone: '', email: '', tipo: '', entrada: hoje,
-  // negociacao
+  nome: '', telefone: '', email: '', entrada: hoje,
+  origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
-  origem: '', corretor: '', corretor_id: null,
+  corretor: '', corretor_id: null,
   imovel: '', modalidade: '',
   valor: '', detalhes: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
@@ -18,12 +17,10 @@ const emptyForm = {
   proposta: false, contrato: false, financiamento: false, recebimento: false, recebido: false,
 };
 
-function isInternacional(value) {
-  return value.trim().startsWith('+');
-}
+function isInternacional(value) { return (value || '').trim().startsWith('+'); }
 
-function formatPhone(value, internacional) {
-  if (internacional) return value;
+function formatPhone(value, intl) {
+  if (intl) return value;
   const digits = value.replace(/\D/g, '').slice(0, 11);
   if (digits.length <= 2) return digits;
   if (digits.length <= 6) return `(${digits.slice(0,2)}) ${digits.slice(2)}`;
@@ -31,11 +28,10 @@ function formatPhone(value, internacional) {
   return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
 }
 
-function validarTelefone(value, internacional) {
+function validarTelefone(value, intl) {
   if (!value || !value.trim()) return false;
-  if (internacional) return value.trim().length >= 8;
-  const digits = value.replace(/\D/g, '');
-  return digits.length === 11;
+  if (intl) return value.trim().length >= 8;
+  return value.replace(/\D/g, '').length === 11;
 }
 
 function SelectComAdd({ label, value, onChange, options, setOptions, chave, required, errStyle }) {
@@ -50,7 +46,7 @@ function SelectComAdd({ label, value, onChange, options, setOptions, chave, requ
     setSaving(true);
     const novaLista = [...options, v];
     const { error } = await supabase.from('configuracoes').upsert({ chave, valor: novaLista }, { onConflict: 'chave' });
-    if (error) alert('Erro ao salvar: ' + error.message);
+    if (error) alert('Erro: ' + error.message);
     else { setOptions(novaLista); onChange(v); }
     setSaving(false); setAdding(false); setNovoValor('');
   }
@@ -61,16 +57,14 @@ function SelectComAdd({ label, value, onChange, options, setOptions, chave, requ
       {adding ? (
         <div style={{ display: 'flex', gap: 6 }}>
           <input autoFocus value={novoValor} onChange={e => setNovoValor(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNovoValor(''); } }}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNovoValor(''); }}}
             placeholder="Nova opção..." style={{ flex: 1 }} />
           <button type="button" onClick={handleAdd} disabled={saving}
             style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             {saving ? '...' : '✓'}
           </button>
           <button type="button" onClick={() => { setAdding(false); setNovoValor(''); }}
-            style={{ padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 13, cursor: 'pointer' }}>
-            ✕
-          </button>
+            style={{ padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 13, cursor: 'pointer' }}>✕</button>
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 6 }}>
@@ -78,10 +72,8 @@ function SelectComAdd({ label, value, onChange, options, setOptions, chave, requ
             <option value="">Selecionar</option>
             {options.map(o => <option key={o}>{o}</option>)}
           </select>
-          <button type="button" onClick={() => setAdding(true)} title="Adicionar nova opção"
-            style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#2563eb', fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>
-            +
-          </button>
+          <button type="button" onClick={() => setAdding(true)}
+            style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#2563eb', fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>+</button>
         </div>
       )}
     </div>
@@ -93,47 +85,37 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [origens, setOrigens] = useState([]);
-  const [tiposLead, setTiposLead] = useState([]);
   const [imoveis, setImoveis] = useState([]);
   const [valorDisplay, setValorDisplay] = useState('');
   const [internacional, setInternacional] = useState(false);
 
-  // Detecta o modo: novo, editar, nova negociação de cliente existente
   const isNew = modal === 'new';
   const isEdit = modal && modal.negociacao_id;
   const isNovaNeg = modal && modal.novaNegociacao;
 
   useEffect(() => {
-    async function loadDados() {
-      const { data: config } = await supabase.from('configuracoes').select('chave, valor');
-      if (config) {
-        config.forEach(row => {
-          if (row.chave === 'origens') setOrigens(row.valor);
-          if (row.chave === 'tipos_lead') setTiposLead(row.valor);
-          if (row.chave === 'imoveis') setImoveis(row.valor);
-        });
-      }
-    }
-    loadDados();
+    supabase.from('configuracoes').select('chave, valor').then(({ data: config }) => {
+      if (config) config.forEach(row => {
+        if (row.chave === 'origens') setOrigens(row.valor);
+        if (row.chave === 'imoveis') setImoveis(row.valor);
+      });
+    });
   }, []);
 
   useEffect(() => {
     if (isEdit) {
-      // Editar negociação existente
       setForm({ ...emptyForm, ...modal });
       setValorDisplay(modal.valor ? Number(modal.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
       setInternacional(isInternacional(modal.telefone || ''));
       localStorage.removeItem('crm_rascunho');
     } else if (isNovaNeg) {
-      // Nova negociação para cliente existente — preenche dados do cliente, negociação em branco
       const c = modal.cliente;
-      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, tipo: c.tipo, entrada: c.entrada, cliente_real_id: c.id };
+      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: c.origem || '', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
       if (perfil) { initial.corretor = perfil.nome; initial.corretor_id = perfil.id; }
       setForm(initial);
       setInternacional(isInternacional(c.telefone || ''));
       setValorDisplay('');
     } else {
-      // Novo cliente + negociação
       const rascunho = localStorage.getItem('crm_rascunho');
       if (rascunho) {
         try {
@@ -167,46 +149,27 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     set('valor', number);
   }
 
-  function handleTelefoneChange(e) {
-    const formatted = formatPhone(e.target.value, internacional);
-    set('telefone', formatted);
-  }
-
-  function toggleInternacional() {
-    const next = !internacional;
-    setInternacional(next);
-    set('telefone', '');
-  }
-
   function validate() {
     const errs = {};
     if (!form.nome.trim()) errs.nome = true;
     if (!validarTelefone(form.telefone, internacional)) errs.telefone = true;
     if (!form.imovel) errs.imovel = true;
-    if (!form.tipo) errs.tipo = true;
     if (!form.modalidade) errs.modalidade = true;
     if (!form.localizacao.trim()) errs.localizacao = true;
     if (!form.detalhes.trim()) errs.detalhes = true;
-    const temEtapa = ETAPAS_FUNIL.some(e => form[e]);
-    if (!temEtapa) errs.funil = true;
+    if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
     return errs;
   }
 
   async function handleSave() {
     const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      alert('Preencha todos os campos obrigatórios marcados em vermelho.');
-      return;
-    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
     setSaving(true);
     await onSave(form);
     setSaving(false);
   }
 
-  const isInativo = form.ativo === 'N';
   const errStyle = (key) => errors[key] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
-
   const titulo = isNovaNeg ? `Nova Negociação — ${modal.cliente?.nome}` : isEdit ? 'Editar' : 'Novo Cliente';
 
   return (
@@ -218,57 +181,31 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
         </div>
         <div className="modal-body">
 
-          {/* ── DADOS DO CLIENTE ── */}
-          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 14, marginBottom: 4 }}>
+          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados do Cliente</span>
           </div>
 
           <div>
             <label className="form-label">Nome *</label>
-            <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo"
-              style={errStyle('nome')} disabled={isNovaNeg} />
-          </div>
-
-          <div>
-            <label className="form-label">Tipo de Lead *</label>
-            <SelectComAdd
-              label=""
-              value={form.tipo}
-              onChange={v => { set('tipo', v); if (errors.tipo) setErrors(e => ({ ...e, tipo: false })); }}
-              options={tiposLead}
-              setOptions={setTiposLead}
-              chave="tipos_lead"
-              required
-              errStyle={errStyle('tipo')}
-            />
+            <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo" style={errStyle('nome')} disabled={isNovaNeg} />
           </div>
 
           <div>
             <label className="form-label">
               Telefone *
               <label style={{ marginLeft: 12, fontSize: 11, fontWeight: 400, color: '#6b7280', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <input type="checkbox" checked={internacional} onChange={toggleInternacional} style={{ width: 'auto', margin: 0 }} />
+                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); }} style={{ width: 'auto', margin: 0 }} />
                 Internacional
               </label>
             </label>
-            <input
-              value={form.telefone}
-              onChange={handleTelefoneChange}
-              placeholder={internacional ? '+1 555 000 0000' : '(62) 9 9999-9999'}
-              style={errStyle('telefone')}
-              disabled={isNovaNeg}
-            />
-            {errors.telefone && (
-              <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>
-                {internacional ? 'Digite um número válido.' : 'Nacional: (XX) X XXXX-XXXX — 11 dígitos.'}
-              </span>
-            )}
+            <input value={form.telefone} onChange={e => set('telefone', formatPhone(e.target.value, internacional))}
+              placeholder={internacional ? '+1 555 000 0000' : '(62) 9 9999-9999'} style={errStyle('telefone')} disabled={isNovaNeg} />
+            {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>{internacional ? 'Digite um número válido.' : 'Nacional: (XX) X XXXX-XXXX — 11 dígitos.'}</span>}
           </div>
 
           <div>
             <label className="form-label">Email</label>
-            <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
-              placeholder="email@exemplo.com" disabled={isNovaNeg} />
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" disabled={isNovaNeg} />
           </div>
 
           <div>
@@ -276,14 +213,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} />
           </div>
 
+          <SelectComAdd label="Origem" value={form.origem} onChange={v => set('origem', v)} options={origens} setOptions={setOrigens} chave="origens" />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 20 }}>
+            <input type="checkbox" id="is_corretor" checked={form.is_corretor || false} onChange={e => set('is_corretor', e.target.checked)}
+              style={{ width: 16, height: 16, cursor: 'pointer', margin: 0 }} disabled={isNovaNeg} />
+            <label htmlFor="is_corretor" style={{ fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>Este cliente é corretor</label>
+          </div>
+
+          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginTop: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Negociação</span>
+          </div>
+
           <div>
             <label className="form-label">Corretor</label>
             <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
-          </div>
-
-          {/* ── DADOS DA NEGOCIAÇÃO ── */}
-          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 14, marginBottom: 4, marginTop: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Negociação</span>
           </div>
 
           <div>
@@ -301,31 +245,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             </div>
           </div>
 
-          {isInativo && (
+          {form.ativo === 'N' && (
             <div className="field-full">
               <label className="form-label">Motivo da Desistência</label>
               <input value={form.motivo_desistencia} onChange={e => set('motivo_desistencia', e.target.value)} placeholder="Por que o cliente desistiu?" />
             </div>
           )}
 
-          <SelectComAdd
-            label="Origem"
-            value={form.origem}
-            onChange={v => set('origem', v)}
-            options={origens}
-            setOptions={setOrigens}
-            chave="origens"
-          />
-
           <div className="field-full">
             <label className="form-label">Modalidade *</label>
             <div style={{ display: 'flex', gap: 8 }}>
               {['Compra','Venda','Locação'].map((m, i) => {
-                const colors = [
-                  { bg: '#dcfce7', border: '#059669', text: '#065f46' },
-                  { bg: '#dbeafe', border: '#2563eb', text: '#1d4ed8' },
-                  { bg: '#ede9fe', border: '#7c3aed', text: '#5b21b6' },
-                ];
+                const colors = [{ bg: '#dcfce7', border: '#059669', text: '#065f46' },{ bg: '#dbeafe', border: '#2563eb', text: '#1d4ed8' },{ bg: '#ede9fe', border: '#7c3aed', text: '#5b21b6' }];
                 const c = colors[i];
                 return (
                   <button key={m} type="button" onClick={() => set('modalidade', m)}
@@ -341,16 +272,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             </div>
           </div>
 
-          <SelectComAdd
-            label="Tipo de Imóvel"
-            value={form.imovel}
+          <SelectComAdd label="Tipo de Imóvel" value={form.imovel}
             onChange={v => { set('imovel', v); if (errors.imovel) setErrors(e => ({ ...e, imovel: false })); }}
-            options={imoveis}
-            setOptions={setImoveis}
-            chave="imoveis"
-            required
-            errStyle={errStyle('imovel')}
-          />
+            options={imoveis} setOptions={setImoveis} chave="imoveis" required errStyle={errStyle('imovel')} />
 
           <div>
             <label className="form-label">Valor (R$)</label>
@@ -392,7 +316,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
               Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
             </label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, padding: errors.funil ? '8px' : '0', borderRadius: 7, border: errors.funil ? '1px solid #dc2626' : 'none' }}>
-              {ETAPAS_FUNIL.map(e => (
+              {ETAPAS_FUNIL_COMPLETO.map(e => (
                 <button key={e} type="button" onClick={() => set(e, !form[e])}
                   style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     border: `1px solid ${form[e] ? '#059669' : '#d1d5db'}`,
@@ -407,9 +331,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
 
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
         </div>
       </div>
     </div>
