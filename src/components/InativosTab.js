@@ -14,6 +14,50 @@ const modColors = {
   Locação: { bg: '#ede9fe', color: '#7e22ce' },
 };
 
+function GraficoLinha({ dados }) {
+  if (!dados || dados.length === 0) return (
+    <div style={{ textAlign: 'center', color: '#9ca3af', padding: 20, fontSize: 13 }}>Sem dados suficientes para o gráfico.</div>
+  );
+
+  const maxVal = Math.max(...dados.map(d => d.total), 1);
+  const W = 500, H = 160, padL = 30, padB = 30, padT = 10, padR = 10;
+  const w = W - padL - padR;
+  const h = H - padB - padT;
+
+  function x(i) { return padL + (i / (dados.length - 1 || 1)) * w; }
+  function y(v) { return padT + h - (v / maxVal) * h; }
+
+  const pontos = dados.map((d, i) => `${x(i)},${y(d.total)}`).join(' ');
+  const area = `${padL},${padT + h} ${pontos} ${x(dados.length-1)},${padT + h}`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+      {/* Grid */}
+      {[0, 0.25, 0.5, 0.75, 1].map(p => (
+        <line key={p} x1={padL} y1={padT + h * (1-p)} x2={W - padR} y2={padT + h * (1-p)}
+          stroke="#f3f4f6" strokeWidth="1" />
+      ))}
+      {/* Área */}
+      <polygon points={area} fill="#2563eb" opacity="0.08" />
+      {/* Linha */}
+      <polyline points={pontos} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinejoin="round" />
+      {/* Pontos */}
+      {dados.map((d, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(d.total)} r="4" fill="#2563eb" stroke="#fff" strokeWidth="2" />
+          {d.total > 0 && (
+            <text x={x(i)} y={y(d.total) - 8} textAnchor="middle" fontSize="10" fill="#2563eb" fontWeight="700">{d.total}</text>
+          )}
+        </g>
+      ))}
+      {/* Labels X */}
+      {dados.map((d, i) => (
+        <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="9" fill="#9ca3af">{d.mes}</text>
+      ))}
+    </svg>
+  );
+}
+
 export default function InativosTab({ data, onOpenModal, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [search, setSearch] = useState('');
@@ -31,6 +75,20 @@ export default function InativosTab({ data, onOpenModal, onDelete }) {
     );
   }, [data, search, filterModalidade, filterCorretor]);
 
+  // Dados para gráfico de linha - negócios fechados por mês (contrato = true)
+  const dadosGrafico = useMemo(() => {
+    const todos = [...data]; // inclui finalizados e ativos com contrato
+    const porMes = {};
+    todos.filter(c => c.contrato).forEach(c => {
+      const d = new Date(c.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      if (!porMes[key]) porMes[key] = { mes: label, total: 0 };
+      porMes[key].total += 1;
+    });
+    return Object.entries(porMes).sort(([a],[b]) => a.localeCompare(b)).slice(-12).map(([,v]) => v);
+  }, [data]);
+
   async function handleDelete(id) {
     await onDelete(id);
     setConfirmDelete(null);
@@ -39,12 +97,20 @@ export default function InativosTab({ data, onOpenModal, onDelete }) {
   return (
     <>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Negociações Finalizadas</h2>
-        <p style={{ fontSize: 13, color: '#6b7280' }}>Todas as negociações encerradas por desistência.</p>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Tratativas Finalizadas</h2>
+        <p style={{ fontSize: 13, color: '#6b7280' }}>Todas as tratativas encerradas por desistência.</p>
       </div>
 
+      {/* Gráfico de linha */}
+      {dadosGrafico.length > 0 && (
+        <div className="dash-section" style={{ marginBottom: 20 }}>
+          <div className="dash-section-title">📈 Negócios Fechados por Mês</div>
+          <GraficoLinha dados={dadosGrafico} />
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <input placeholder="🔍  Buscar por nome, telefone ou motivo..."
+        <input placeholder="🔍 Buscar por nome, telefone ou motivo..."
           value={search} onChange={e => setSearch(e.target.value)}
           style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
         <select value={filterModalidade} onChange={e => setFilterModalidade(e.target.value)}
@@ -70,7 +136,7 @@ export default function InativosTab({ data, onOpenModal, onDelete }) {
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma negociação finalizada.</td></tr>
+              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma tratativa finalizada.</td></tr>
             )}
             {filtered.map(c => {
               const mc = modColors[c.modalidade] || { bg: '#f3f4f6', color: '#4b5563' };
@@ -79,9 +145,7 @@ export default function InativosTab({ data, onOpenModal, onDelete }) {
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{c.nome}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.telefone || '—'}</td>
                   <td style={{ padding: '12px 16px' }}>
-                    {c.modalidade
-                      ? <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: mc.bg, color: mc.color }}>{c.modalidade}</span>
-                      : '—'}
+                    {c.modalidade ? <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: mc.bg, color: mc.color }}>{c.modalidade}</span> : '—'}
                   </td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
                   <td style={{ padding: '12px 16px', color: '#dc2626', fontSize: 12 }}>{c.motivo_desistencia || '—'}</td>
