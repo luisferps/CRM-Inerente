@@ -32,6 +32,7 @@ function splitForm(form) {
     valor: form.valor ? Number(form.valor) : null,
     localizacao: form.localizacao,
     detalhes: form.detalhes,
+    detalhes_externos: form.detalhes_externos || null,
     proxima_acao: form.proxima_acao,
     imoveis_visitados: form.imoveis_visitados,
     ultimo_contato: form.ultimo_contato || null,
@@ -282,7 +283,7 @@ export default function App() {
       <main className="main">
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
-            {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} />}
+            {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
             {tab === 'tratativas' && <CRMTab
               data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S') : data.filter(c => c.ativo === 'S')}
               onOpenModal={podeEditar ? setModal : null}
@@ -315,6 +316,27 @@ export default function App() {
           onClose={() => { localStorage.removeItem('crm_rascunho'); setModal(null); }}
           perfil={perfil}
         />
+      )}
+
+      {/* Botão flutuante global — Nova Tratativa */}
+      {podeEditar && modal === null && (
+        <button
+          onClick={() => setModal('new')}
+          title="Nova Tratativa"
+          style={{
+            position: 'fixed', bottom: 28, right: 28, zIndex: 999,
+            width: 56, height: 56, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+            color: '#fff', border: 'none', fontSize: 26, fontWeight: 700,
+            cursor: 'pointer', boxShadow: '0 4px 20px rgba(37,99,235,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(37,99,235,0.65)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(37,99,235,0.5)'; }}
+        >
+          +
+        </button>
       )}
     </div>
   );
