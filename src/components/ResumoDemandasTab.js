@@ -14,15 +14,12 @@ function formatarPreco(valor) {
 
 function formatarLinha(c) {
   const partes = [];
-  // IMÓVEL REGIÃO (sem +, só espaço)
   const imovelRegiao = [c.imovel, c.localizacao].filter(Boolean).join(' ');
   if (imovelRegiao) partes.push(capitalize(imovelRegiao));
-  // OBSERVAÇÕES EXTERNAS
   if (c.detalhes_externos) partes.push(capitalize(c.detalhes_externos.trim()));
-  // PREÇO
   const preco = formatarPreco(c.valor);
   if (preco) partes.push(preco);
-  return `- ${partes.join('. ')}`;
+  return `- ${partes.join(' ')}`;
 }
 
 function gerarTexto(ativas, porModalidade) {
@@ -44,17 +41,13 @@ export default function ResumoDemandasTab({ data, darkMode }) {
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
 
-  // Só aparecem se: solicitar_parceria=true, ativo, não corretor
-  // E etapas marcadas: só pesquisa, OU tratativa+pesquisa (sem mais nenhuma)
   const ativas = useMemo(() => data.filter(c => {
-    if (!c.ativo || c.ativo !== 'S') return false;
+    if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
     if (!c.solicitar_parceria) return false;
-    const outrasEtapas = ['agendamento','visita','proposta','contrato','financiamento','recebimento','recebido'];
-    const temOutra = outrasEtapas.some(e => c[e]);
-    if (temOutra) return false;
-    // Só pesquisa, ou tratativa+pesquisa
-    return c.pesquisa === true;
+    const etapasAvancadas = ['proposta','contrato','financiamento','recebimento','recebido'];
+    if (etapasAvancadas.some(e => c[e])) return false;
+    return true;
   }), [data]);
 
   const porModalidade = useMemo(() => {
@@ -102,7 +95,7 @@ export default function ResumoDemandasTab({ data, darkMode }) {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📋 Demandas</h2>
         <p style={{ margin: '6px 0 0', color: textMuted, fontSize: 14 }}>
-          Tratativas com parceria solicitada e etapa pesquisa marcada.
+          Tratativas ativas com parceria solicitada, sem proposta ou etapas posteriores marcadas.
           {' '}<strong>{ativas.length}</strong> demanda{ativas.length !== 1 ? 's' : ''} no total.
         </p>
       </div>
