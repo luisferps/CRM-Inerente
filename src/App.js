@@ -191,11 +191,12 @@ export default function App() {
     await load();
   }
 
-  async function handleToggleFunil(negId, etapa, val) {
+  async function handleToggleFunil(negId, etapaOuUpdates, val) {
     if (!podeEditar) return;
-    const { error: err } = await supabase.from('negociacoes').update({ [etapa]: val }).eq('id', negId);
+    const updates = typeof etapaOuUpdates === 'object' ? etapaOuUpdates : { [etapaOuUpdates]: val };
+    const { error: err } = await supabase.from('negociacoes').update(updates).eq('id', negId);
     if (err) return alert('Erro: ' + err.message);
-    setNegociacoes(n => n.map(neg => neg.id === negId ? { ...neg, [etapa]: val } : neg));
+    setNegociacoes(n => n.map(neg => neg.id === negId ? { ...neg, ...updates } : neg));
   }
 
   async function handleLogout() {
