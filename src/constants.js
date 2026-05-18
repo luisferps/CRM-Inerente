@@ -6,13 +6,11 @@ export const DEFAULT_ORIGENS = [
 export const DEFAULT_IMOVEIS = ["Apartamento","Casa","Apt./Casa","Lote","Terreno","Comercial","Galpão"];
 export const MODALIDADES = ["Compra","Venda","Locação"];
 
-// Funil principal: sem "recebido" e sem Venda
 export const ETAPAS_FUNIL = [
   "tratativa","pesquisa","agendamento","visita",
   "proposta","contrato","financiamento","recebimento"
 ];
 
-// Todas as etapas incluindo recebido
 export const ETAPAS_FUNIL_COMPLETO = [
   "tratativa","pesquisa","agendamento","visita",
   "proposta","contrato","financiamento","recebimento","recebido"
