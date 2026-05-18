@@ -3,11 +3,7 @@ import { useState, useMemo } from 'react';
 export default function ResumoDemandasTab({ data, darkMode }) {
   const [copiado, setCopiado] = useState(false);
 
-  // Exclui clientes marcados como corretor e negociações inativas
-  const ativas = useMemo(() =>
-    data.filter(c => c.ativo === 'S' && !c.is_corretor),
-    [data]
-  );
+  const ativas = useMemo(() => data.filter(c => c.ativo === 'S' && !c.is_corretor), [data]);
 
   const porModalidade = useMemo(() => {
     const grupos = {};
@@ -57,14 +53,14 @@ export default function ResumoDemandasTab({ data, darkMode }) {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📋 Resumo de Demandas</h2>
         <p style={{ margin: '6px 0 0', color: textMuted, fontSize: 14 }}>
-          Negociações ativas agrupadas por modalidade — excluindo corretores.
-          {' '}<strong>{ativas.length}</strong> negociação{ativas.length !== 1 ? 'ões' : ''} no total.
+          Tratativas ativas agrupadas por modalidade — excluindo corretores.
+          {' '}<strong>{ativas.length}</strong> tratativa{ativas.length !== 1 ? 's' : ''} no total.
         </p>
       </div>
 
       {ativas.length === 0 ? (
         <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 40, textAlign: 'center', color: textMuted }}>
-          Nenhuma negociação ativa encontrada.
+          Nenhuma tratativa ativa encontrada.
         </div>
       ) : (
         <>
@@ -76,9 +72,7 @@ export default function ResumoDemandasTab({ data, darkMode }) {
                 {copiado ? '✓ Copiado!' : '📋 Copiar Texto'}
               </button>
             </div>
-            <pre style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: textColor, margin: 0 }}>
-              {texto}
-            </pre>
+            <pre style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: textColor, margin: 0 }}>{texto}</pre>
           </div>
 
           {Object.entries(porModalidade).map(([mod, clientes]) => (
@@ -88,7 +82,7 @@ export default function ResumoDemandasTab({ data, darkMode }) {
                   {mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄'} {mod}
                 </span>
                 <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '3px 10px', borderRadius: 20 }}>
-                  {clientes.length} negociação{clientes.length !== 1 ? 'ões' : ''}
+                  {clientes.length} tratativa{clientes.length !== 1 ? 's' : ''}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
