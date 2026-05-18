@@ -240,14 +240,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             <label className="form-label">
               Telefone *
               <label style={{ marginLeft: 12, fontSize: 11, fontWeight: 400, color: '#6b7280', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); setClienteEncontrado(null); }} style={{ width: 'auto', margin: 0 }} disabled={isNovaNeg || isEdit} />
+                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); setClienteEncontrado(null); }} style={{ width: 'auto', margin: 0 }} disabled={isEdit} />
                 Internacional
               </label>
             </label>
             <div style={{ position: 'relative' }}>
               <input value={form.telefone} onChange={handleTelChange}
                 placeholder={internacional ? '+1 555 000 0000' : '(62) 9 9999-9999'}
-                style={errStyle('telefone')} disabled={isNovaNeg || isEdit} />
+                style={errStyle('telefone')} disabled={isEdit} />
               {buscando && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#9ca3af' }}>🔍</span>}
             </div>
             {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>{internacional ? 'Digite um número válido.' : 'Nacional: (XX) X XXXX-XXXX — 11 dígitos.'}</span>}
