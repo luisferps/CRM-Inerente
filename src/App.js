@@ -3,6 +3,7 @@ import './index.css';
 import { supabase } from './supabaseClient';
 import CRMTab from './components/CRMTab';
 import FunilTab from './components/FunilTab';
+import VendasTab from './components/VendasTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
 import InativosTab from './components/InativosTab';
@@ -13,14 +14,16 @@ import PerfilTab from './components/PerfilTab';
 import BackupTab from './components/BackupTab';
 import ImportacaoTab from './components/ImportacaoTab';
 import ResumoDemandasTab from './components/ResumoDemandasTab';
+import RecebidosTab from './components/RecebidosTab';
 
 function splitForm(form) {
   const clienteData = {
     nome: form.nome,
     telefone: form.telefone,
     email: form.email,
-    tipo: form.tipo,
     entrada: form.entrada || new Date().toISOString().slice(0, 10),
+    origem: form.origem || null,
+    is_corretor: form.is_corretor || false,
   };
   const negociacaoData = {
     modalidade: form.modalidade,
@@ -34,7 +37,6 @@ function splitForm(form) {
     prox_contato: form.prox_contato || null,
     final_contato: form.final_contato || null,
     prorrogacao: form.prorrogacao || null,
-    origem: form.origem,
     ativo: form.ativo,
     motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
     tratativa: form.tratativa || false,
@@ -120,8 +122,9 @@ export default function App() {
         nome: cliente.nome || '',
         telefone: cliente.telefone || '',
         email: cliente.email || '',
-        tipo: cliente.tipo || '',
         entrada: cliente.entrada || '',
+        origem: cliente.origem || '',
+        is_corretor: cliente.is_corretor || false,
       };
     });
   }, [clientes, negociacoes]);
@@ -138,7 +141,15 @@ export default function App() {
       ]);
       if (e1 || e2) return alert('Erro ao salvar: ' + (e1 || e2).message);
     } else {
-      if (perfil?.role === 'corretor') { negociacaoData.corretor_id = perfil.id; negociacaoData.corretor = perfil.nome; }
+      if (perfil?.role === 'corretor') {
+        negociacaoData.corretor_id = perfil.id;
+        negociacaoData.corretor = perfil.nome;
+        negociacaoData.corretor_original_id = perfil.id;
+        negociacaoData.corretor_original = perfil.nome;
+      } else {
+        negociacaoData.corretor_original_id = negociacaoData.corretor_id;
+        negociacaoData.corretor_original = negociacaoData.corretor;
+      }
       const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clienteData).select().single();
       if (e1) return alert('Erro ao inserir cliente: ' + e1.message);
       const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: novoCliente.id });
@@ -176,8 +187,9 @@ export default function App() {
 
   const stats = useMemo(() => ({
     total: data.filter(c => c.ativo === 'S').length,
-    vendas: data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda').length,
+    compras: data.filter(c => c.ativo === 'S' && c.modalidade === 'Compra').length,
     locacoes: data.filter(c => c.ativo === 'S' && c.modalidade === 'Locação').length,
+    vendas: data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda').length,
     contratos: data.filter(c => c.contrato).length,
   }), [data]);
 
@@ -188,8 +200,8 @@ export default function App() {
   if (!session || !perfil) return <LoginScreen />;
 
   const tabs = isGerente
-    ? [['crm','Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['resumo','📋 Demandas'],['corretores','Corretores'],['importacao','📥 Importar'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
-    : [['crm','Meus Clientes'],['funil','Funil'],['dash','Dashboard'],['inativos','Inativos'],['resumo','📋 Demandas'],['importacao','📥 Importar'],['perfil','👤 Perfil']];
+    ? [['crm','Clientes'],['funil','Funil'],['vendas','🏠 Vendas'],['dash','Dashboard'],['recebidos','💰 Recebidos'],['inativos','Finalizadas'],['resumo','📋 Demandas'],['corretores','Corretores'],['importacao','📥 Importar'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
+    : [['crm','Meus Clientes'],['funil','Funil'],['vendas','🏠 Vendas'],['dash','Dashboard'],['recebidos','💰 Recebidos'],['inativos','Finalizadas'],['resumo','📋 Demandas'],['importacao','📥 Importar'],['perfil','👤 Perfil']];
 
   return (
     <div className="app-shell">
@@ -215,9 +227,10 @@ export default function App() {
 
       <div className="stats-bar">
         <div className="stat-item"><span className="stat-label">Ativos</span><span className="stat-value stat-blue">{stats.total}</span></div>
-        <div className="stat-item"><span className="stat-label">Vendas</span><span className="stat-value stat-green">{stats.vendas}</span></div>
+        <div className="stat-item"><span className="stat-label">Compras</span><span className="stat-value stat-green">{stats.compras}</span></div>
         <div className="stat-item"><span className="stat-label">Locações</span><span className="stat-value stat-purple">{stats.locacoes}</span></div>
-        <div className="stat-item"><span className="stat-label">Contratos</span><span className="stat-value stat-orange">{stats.contratos}</span></div>
+        <div className="stat-item"><span className="stat-label">Vendas</span><span className="stat-value stat-orange">{stats.vendas}</span></div>
+        <div className="stat-item"><span className="stat-label">Contratos</span><span className="stat-value stat-green">{stats.contratos}</span></div>
       </div>
 
       {error && <div className="error-banner">⚠️ Erro de conexão: {error}</div>}
@@ -227,7 +240,9 @@ export default function App() {
           <>
             {tab === 'crm' && <CRMTab data={data.filter(c => c.ativo === 'S')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} onNovaNegociacao={handleNovaNegociacao} isGerente={isGerente} />}
             {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onOpenModal={setModal} />}
+            {tab === 'vendas' && <VendasTab data={data} onOpenModal={setModal} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
+            {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={setModal} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
             {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} />}
             {tab === 'corretores' && isGerente && <CorretoresTab />}
