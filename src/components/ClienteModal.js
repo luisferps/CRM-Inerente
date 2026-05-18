@@ -5,11 +5,12 @@ import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
 const hoje = new Date().toISOString().slice(0, 10);
 
 const emptyForm = {
-  nome: '', telefone: '', email: '', entrada: hoje,
+  nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
   corretor: '', corretor_id: null,
   imovel: '', modalidade: '',
+  origem_tratativa: '',
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
@@ -224,7 +225,6 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     }
     if (!form.localizacao.trim()) errs.localizacao = true;
     if (form.valor === '' || form.valor === null || form.valor === undefined) errs.valor = true;
-    if (!(form.detalhes_externos || '').trim()) errs.detalhes_externos = true;
     return errs;
   }
 
@@ -282,6 +282,17 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           </div>
 
           <div>
+            <label className="form-label">Telefone 2 <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— reserva</span></label>
+            <input
+              value={form.telefone2 || ''}
+              onChange={e => set('telefone2', e.target.value.replace(/\D/g,'').slice(0,11))}
+              placeholder="62999999999"
+              inputMode="numeric"
+              disabled={clienteLocked}
+            />
+          </div>
+
+          <div>
             <label className="form-label">Nome *</label>
             <input value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo" style={errStyle('nome')} disabled={clienteLocked} />
           </div>
@@ -315,6 +326,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             <label className="form-label">Corretor</label>
             <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
           </div>
+
+          <SelectComAdd label="Origem da Tratativa" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
+            options={origens} setOptions={setOrigens} chave="origens"
+            isGerente={isGerente} perfil={perfil} />
 
           <div>
             <label className="form-label">Status</label>
@@ -394,12 +409,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           </div>
 
           <div className="field-full">
-            <label className="form-label" style={errors.detalhes_externos ? { color: '#dc2626' } : {}}>
-              Observações Externas * <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
+            <label className="form-label">
+              Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
             </label>
             <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
               placeholder="Informações para enviar a parceiros ou clientes..."
-              style={{ ...errStyle('detalhes_externos'), background: '#f0fdf4', borderColor: errors.detalhes_externos ? '#dc2626' : '#bbf7d0' }} />
+              style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
           </div>
 
           <div>
