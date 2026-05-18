@@ -7,7 +7,7 @@ import VendasTab from './components/VendasTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
 import InativosTab from './components/InativosTab';
-import CorretoresTab from './components/CorretoresTab';
+import UsuariosTab from './components/UsuariosTab';
 import LoginScreen from './components/LoginScreen';
 import ClienteModal from './components/ClienteModal';
 import PerfilTab from './components/PerfilTab';
@@ -15,6 +15,7 @@ import BackupTab from './components/BackupTab';
 import ImportacaoTab from './components/ImportacaoTab';
 import ResumoDemandasTab from './components/ResumoDemandasTab';
 import RecebidosTab from './components/RecebidosTab';
+import ClientesTab from './components/ClientesTab';
 
 function splitForm(form) {
   const clienteData = {
@@ -55,7 +56,7 @@ function splitForm(form) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState('crm');
+  const [tab, setTab] = useState('tratativas');
   const [clientes, setClientes] = useState([]);
   const [negociacoes, setNegociacoes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +66,7 @@ export default function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [modal, setModal] = useState(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('crm_dark') === 'true');
+  const [filtroClienteId, setFiltroClienteId] = useState(null);
   const sessionRef = useRef(null);
 
   useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
@@ -129,7 +131,14 @@ export default function App() {
     });
   }, [clientes, negociacoes]);
 
+  // Permissões baseadas nas funções
+  const isGerente = perfil?.is_gerente;
+  const isCorretor = perfil?.is_corretor;
+  const isEscritorio = perfil?.is_escritorio;
+  const podeEditar = isGerente || isCorretor; // escritório só visualiza
+
   async function handleSave(form) {
+    if (!podeEditar) return alert('Sem permissão para editar.');
     const { clienteData, negociacaoData } = splitForm(form);
     const editNegId = form.negociacao_id || null;
     const editClienteId = form.cliente_real_id || null;
@@ -141,7 +150,7 @@ export default function App() {
       ]);
       if (e1 || e2) return alert('Erro ao salvar: ' + (e1 || e2).message);
     } else {
-      if (perfil?.role === 'corretor') {
+      if (!isGerente) {
         negociacaoData.corretor_id = perfil.id;
         negociacaoData.corretor = perfil.nome;
         negociacaoData.corretor_original_id = perfil.id;
@@ -150,10 +159,17 @@ export default function App() {
         negociacaoData.corretor_original_id = negociacaoData.corretor_id;
         negociacaoData.corretor_original = negociacaoData.corretor;
       }
-      const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clienteData).select().single();
-      if (e1) return alert('Erro ao inserir cliente: ' + e1.message);
-      const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: novoCliente.id });
-      if (e2) return alert('Erro ao inserir negociação: ' + e2.message);
+      // Verifica se cliente já existe
+      if (editClienteId) {
+        // Cliente já existe, só cria negociação
+        const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: editClienteId });
+        if (e2) return alert('Erro ao inserir tratativa: ' + e2.message);
+      } else {
+        const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clienteData).select().single();
+        if (e1) return alert('Erro ao inserir cliente: ' + e1.message);
+        const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: novoCliente.id });
+        if (e2) return alert('Erro ao inserir tratativa: ' + e2.message);
+      }
     }
     localStorage.removeItem('crm_rascunho');
     setModal(null);
@@ -167,12 +183,14 @@ export default function App() {
   }
 
   async function handleDelete(negId) {
+    if (!podeEditar) return;
     const { error: err } = await supabase.from('negociacoes').delete().eq('id', negId);
     if (err) return alert('Erro ao excluir: ' + err.message);
     await load();
   }
 
   async function handleToggleFunil(negId, etapa, val) {
+    if (!podeEditar) return;
     const { error: err } = await supabase.from('negociacoes').update({ [etapa]: val }).eq('id', negId);
     if (err) return alert('Erro: ' + err.message);
     setNegociacoes(n => n.map(neg => neg.id === negId ? { ...neg, [etapa]: val } : neg));
@@ -183,7 +201,10 @@ export default function App() {
     setClientes([]); setNegociacoes([]); setPerfil(null);
   }
 
-  const isGerente = perfil?.role === 'gerente';
+  function handleVerTratativas(clienteId) {
+    setFiltroClienteId(clienteId);
+    setTab('tratativas');
+  }
 
   const stats = useMemo(() => ({
     total: data.filter(c => c.ativo === 'S').length,
@@ -199,9 +220,32 @@ export default function App() {
 
   if (!session || !perfil) return <LoginScreen />;
 
-  const tabs = isGerente
-    ? [['crm','Clientes'],['funil','Funil'],['vendas','🏠 Vendas'],['dash','Dashboard'],['recebidos','💰 Recebidos'],['inativos','Finalizadas'],['resumo','📋 Demandas'],['corretores','Corretores'],['importacao','📥 Importar'],['config','⚙️ Config'],['backup','💾 Backup'],['perfil','👤 Perfil']]
-    : [['crm','Meus Clientes'],['funil','Funil'],['vendas','🏠 Vendas'],['dash','Dashboard'],['recebidos','💰 Recebidos'],['inativos','Finalizadas'],['resumo','📋 Demandas'],['importacao','📥 Importar'],['perfil','👤 Perfil']];
+  // Abas por função
+  const todasAbas = [
+    ['clientes', 'Clientes'],
+    ['tratativas', 'Tratativas'],
+    ['funil', 'Funil'],
+    ['vendas', '🏠 Vendas'],
+    ['dash', 'Dashboard'],
+    ['recebidos', '💰 Recebidos'],
+    ['inativos', 'Finalizadas'],
+    ['resumo', '📋 Demandas'],
+    ['usuarios', '👥 Usuários', 'gerente'],
+    ['importacao', '📥 Importar', 'gerente_corretor'],
+    ['config', '⚙️ Config'],
+    ['backup', '💾 Backup', 'gerente'],
+    ['perfil', '👤 Perfil'],
+  ];
+
+  const tabs = todasAbas.filter(([, , acesso]) => {
+    if (!acesso) return true;
+    if (acesso === 'gerente') return isGerente;
+    if (acesso === 'gerente_corretor') return isGerente || isCorretor;
+    return true;
+  });
+
+  const funcaoLabel = isGerente ? 'Gerente' : isCorretor ? 'Corretor' : isEscritorio ? 'Escritório' : '';
+  const funcaoCor = isGerente ? '#2563eb' : isCorretor ? '#059669' : '#7c3aed';
 
   return (
     <div className="app-shell">
@@ -209,12 +253,12 @@ export default function App() {
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
           {tabs.map(([t, l]) => (
-            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
+            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); setFiltroClienteId(null); }}>{l}</button>
           ))}
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 12, color: '#6b7280' }}>
-            {perfil.nome} · <span style={{ color: isGerente ? '#2563eb' : '#059669', fontWeight: 600 }}>{isGerente ? 'Gerente' : 'Corretor'}</span>
+            {perfil.nome} · <span style={{ color: funcaoCor, fontWeight: 600 }}>{funcaoLabel}</span>
           </span>
           <button onClick={toggleDark} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 14, color: '#6b7280', cursor: 'pointer' }}>
             {darkMode ? '☀️' : '🌙'}
@@ -226,7 +270,7 @@ export default function App() {
       </header>
 
       <div className="stats-bar">
-        <div className="stat-item"><span className="stat-label">Ativos</span><span className="stat-value stat-blue">{stats.total}</span></div>
+        <div className="stat-item"><span className="stat-label">Tratativas</span><span className="stat-value stat-blue">{stats.total}</span></div>
         <div className="stat-item"><span className="stat-label">Compras</span><span className="stat-value stat-green">{stats.compras}</span></div>
         <div className="stat-item"><span className="stat-label">Locações</span><span className="stat-value stat-purple">{stats.locacoes}</span></div>
         <div className="stat-item"><span className="stat-label">Vendas</span><span className="stat-value stat-orange">{stats.vendas}</span></div>
@@ -238,23 +282,33 @@ export default function App() {
       <main className="main">
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
-            {tab === 'crm' && <CRMTab data={data.filter(c => c.ativo === 'S')} onOpenModal={setModal} onDelete={handleDelete} onToggleFunil={handleToggleFunil} onNovaNegociacao={handleNovaNegociacao} isGerente={isGerente} />}
-            {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onOpenModal={setModal} />}
-            {tab === 'vendas' && <VendasTab data={data} onOpenModal={setModal} onToggleFunil={handleToggleFunil} />}
+            {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} />}
+            {tab === 'tratativas' && <CRMTab
+              data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S') : data.filter(c => c.ativo === 'S')}
+              onOpenModal={podeEditar ? setModal : null}
+              onDelete={podeEditar ? handleDelete : null}
+              onToggleFunil={handleToggleFunil}
+              onNovaNegociacao={podeEditar ? handleNovaNegociacao : null}
+              isGerente={isGerente}
+              filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
+              onLimparFiltro={() => setFiltroClienteId(null)}
+            />}
+            {tab === 'funil' && <FunilTab data={data} onToggleFunil={handleToggleFunil} onOpenModal={podeEditar ? setModal : null} />}
+            {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
-            {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={setModal} />}
-            {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={setModal} onDelete={handleDelete} />}
+            {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} />}
+            {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
             {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} />}
-            {tab === 'corretores' && isGerente && <CorretoresTab />}
-            {tab === 'importacao' && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
-            {tab === 'config' && isGerente && <ConfigTab />}
+            {tab === 'usuarios' && isGerente && <UsuariosTab />}
+            {tab === 'importacao' && (isGerente || isCorretor) && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
+            {tab === 'config' && <ConfigTab perfil={perfil} />}
             {tab === 'backup' && isGerente && <BackupTab />}
             {tab === 'perfil' && <PerfilTab perfil={perfil} onUpdate={setPerfil} />}
           </>
         )}
       </main>
 
-      {modal !== null && (
+      {modal !== null && podeEditar && (
         <ClienteModal
           modal={modal}
           onSave={handleSave}
