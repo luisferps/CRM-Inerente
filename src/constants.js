@@ -23,7 +23,7 @@ export const ETAPAS_LABEL = {
   visita: "Visita",
   proposta: "Proposta",
   contrato: "Contrato",
-  financiamento: "Financiamento",
+  financiamento: "Registro",
   recebimento: "À Receber",
   recebido: "Recebido",
 };
