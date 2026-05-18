@@ -66,6 +66,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [filterCorretor, setFilterCorretor] = useState([]);
   const [filterFunil, setFilterFunil] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('todos'); // 'todos' | 'clientes' | 'corretores'
+  const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
   const [sortCol, setSortCol] = useState('');
