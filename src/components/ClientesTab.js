@@ -33,7 +33,24 @@ export default function ClientesTab({ clientes, negociacoes, onVerTratativas, on
     );
   }, [clientesComNeg, search]);
 
-  function abrirEdit(c) {
+  function exportarCSV() {
+    const cols = ['nome','telefone','telefone2','email','origem','is_corretor','totalNeg','ativas','finalizadas'];
+    const headers = ['Nome','Telefone','Telefone 2','Email','Aquisição','É Corretor','Total Tratativas','Ativas','Finalizadas'];
+    const bom = '\uFEFF';
+    const rows = filtered.map(c => cols.map(k => {
+      const v = c[k];
+      if (v === null || v === undefined) return '';
+      const s = String(v === true ? 'Sim' : v === false ? 'Não' : v).replace(/"/g,'""');
+      return s.includes(';') || s.includes('\n') || s.includes('"') ? `"${s}"` : s;
+    }).join(';'));
+    const csv = bom + [headers.join(';'), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+    a.href = url; a.download = `clientes_${hoje}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
     setEditForm({ nome: c.nome, telefone: c.telefone || '', email: c.email || '', origem: c.origem || '', is_corretor: c.is_corretor || false });
     setEditModal(c);
   }
@@ -55,9 +72,15 @@ export default function ClientesTab({ clientes, negociacoes, onVerTratativas, on
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Clientes</h2>
-        <p style={{ fontSize: 13, color: '#6b7280' }}>Base de clientes cadastrados no sistema.</p>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Clientes</h2>
+          <p style={{ fontSize: 13, color: '#6b7280' }}>Base de clientes cadastrados no sistema.</p>
+        </div>
+        <button onClick={exportarCSV}
+          style={{ padding: '8px 16px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          📥 Exportar CSV
+        </button>
       </div>
 
       <div style={{ marginBottom: 16 }}>
