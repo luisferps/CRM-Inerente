@@ -258,21 +258,15 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           {onOpenModal && <button className="btn btn-ghost btn-sm" onClick={() => onOpenModal(c)}>Editar</button>}
-                          {onToggleFunil && !c.recebido && (
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Marcar "${c.nome}" como Recebido e finalizar a tratativa?`)) {
-                                  onToggleFunil(c.id, { recebido: true, ativo: 'N' });
-                                }
-                              }}
-                              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#059669', fontSize: 12, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                              ✓ Recebido
-                            </button>
-                          )}
                           {onDelete && <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>}
                           {c.telefone && (
                             <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
                               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 6, background: '#25d366', textDecoration: 'none', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                              WA
+                            </a>
+                          )}
+                        </div>
+                      </td> 13, fontWeight: 700 }}>
                               WA
                             </a>
                           )}
