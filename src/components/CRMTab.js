@@ -128,7 +128,10 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
     });
   }, []);
 
-  const modalidadesUnicas = useMemo(() => [...new Set(data.map(c => c.modalidade).filter(Boolean))].sort(), [data]);
+  const imoveisUnicos = useMemo(() => [...new Set(data.map(c => c.imovel).filter(Boolean))].sort(), [data]);
+  const localizacoesUnicas = useMemo(() => [...new Set(data.map(c => c.localizacao).filter(Boolean))].sort(), [data]);
+  const [filterImovel, setFilterImovel] = useState([]);
+  const [filterLocalizacao, setFilterLocalizacao] = useState([]);
   const corretoresUnicos = useMemo(() => [...new Set(data.map(c => c.corretor).filter(Boolean))].sort(), [data]);
   const etapasUnicas = useMemo(() => ETAPAS_FUNIL.filter(e => data.some(c => c[e])).map(e => ETAPAS_LABEL[e]), [data]);
 
@@ -143,8 +146,10 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
       (!filterOrigem || c.origem === filterOrigem) &&
       (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
+      (filterImovel.length === 0 || filterImovel.includes(c.imovel)) &&
       (filtroTipo === 'todos' || (filtroTipo === 'corretores' ? c.is_corretor : !c.is_corretor)) &&
       (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
+      (filterLocalizacao.length === 0 || filterLocalizacao.includes(c.localizacao)) &&
       (filterFunil.length === 0 || filterFunil.some(f => { const e = getEtapaAtual(c); return e && ETAPAS_LABEL[e] === f; }))
     );
     if (sortCol) {
@@ -154,7 +159,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterModalidade, filtroTipo, filterCorretor, filterFunil, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -209,7 +214,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
               <thead>
                 <tr>
                   <SortTh col="nome" label="Nome" />
-                  <SortTh col="imovel" label="Imóvel" />
+                  <SortTh col="imovel" label="Imóvel">
+                    <DropdownFilter options={imoveisUnicos} value={filterImovel} onChange={setFilterImovel} />
+                  </SortTh>
                   <SortTh col="modalidade" label="Modalidade">
                     <DropdownFilter options={modalidadesUnicas} value={filterModalidade} onChange={setFilterModalidade} />
                   </SortTh>
@@ -217,7 +224,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                   <SortTh col="corretor" label="Corretor">
                     <DropdownFilter options={corretoresUnicos} value={filterCorretor} onChange={setFilterCorretor} />
                   </SortTh>
-                  <SortTh col="localizacao" label="Localização" />
+                  <SortTh col="localizacao" label="Localização">
+                    <DropdownFilter options={localizacoesUnicas} value={filterLocalizacao} onChange={setFilterLocalizacao} />
+                  </SortTh>
                   <SortTh col="funil" label="Funil">
                     <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
