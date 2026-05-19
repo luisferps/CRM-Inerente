@@ -402,12 +402,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             </div>
           )}
 
-          {!isVenda && (
-            <SelectComAdd label="Tipo de Imóvel" value={form.imovel}
-              onChange={v => { set('imovel', v); if (errors.imovel) setErrors(e => ({ ...e, imovel: false })); }}
-              options={imoveis} setOptions={setImoveis} chave="imoveis" required errStyle={errStyle('imovel')}
-              isGerente={isGerente} perfil={perfil} />
-          )}
+          <SelectComAdd label="Tipo de Imóvel" value={form.imovel}
+            onChange={v => { set('imovel', v); if (errors.imovel) setErrors(e => ({ ...e, imovel: false })); }}
+            options={imoveis} setOptions={setImoveis} chave="imoveis" required={!isVenda} errStyle={!isVenda ? errStyle('imovel') : {}}
+            isGerente={isGerente} perfil={perfil} />
 
           <div>
             <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
