@@ -21,6 +21,7 @@ function splitForm(form) {
   const clienteData = {
     nome: form.nome,
     telefone: form.telefone,
+    telefone2: form.telefone2 || null,
     email: form.email,
     entrada: form.entrada || new Date().toISOString().slice(0, 10),
     origem: form.origem || null,
@@ -28,6 +29,7 @@ function splitForm(form) {
   };
   const negociacaoData = {
     modalidade: form.modalidade,
+    origem_tratativa: form.origem_tratativa || null,
     imovel: form.imovel,
     valor: form.valor ? Number(form.valor) : null,
     localizacao: form.localizacao,
@@ -287,7 +289,7 @@ export default function App() {
           <>
             {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
             {tab === 'tratativas' && <CRMTab
-              data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S') : data.filter(c => c.ativo === 'S')}
+              data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido) : data.filter(c => c.ativo === 'S' && !c.recebido)}
               onOpenModal={podeEditar ? setModal : null}
               onDelete={podeEditar ? handleDelete : null}
               onToggleFunil={handleToggleFunil}
@@ -296,7 +298,7 @@ export default function App() {
               filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
-            {tab === 'funil' && <FunilTab data={data} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} />}
+            {tab === 'funil' && <FunilTab data={data.filter(c => !c.recebido)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} />}
