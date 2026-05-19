@@ -115,6 +115,8 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [filterModalidade, setFilterModalidade] = useState([]);
   const [filterCorretor, setFilterCorretor] = useState([]);
   const [filterFunil, setFilterFunil] = useState([]);
+  const [filterImovel, setFilterImovel] = useState([]);
+  const [filterLocalizacao, setFilterLocalizacao] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -130,8 +132,6 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
 
   const imoveisUnicos = useMemo(() => [...new Set(data.map(c => c.imovel).filter(Boolean))].sort(), [data]);
   const localizacoesUnicas = useMemo(() => [...new Set(data.map(c => c.localizacao).filter(Boolean))].sort(), [data]);
-  const [filterImovel, setFilterImovel] = useState([]);
-  const [filterLocalizacao, setFilterLocalizacao] = useState([]);
   const corretoresUnicos = useMemo(() => [...new Set(data.map(c => c.corretor).filter(Boolean))].sort(), [data]);
   const etapasUnicas = useMemo(() => ETAPAS_FUNIL.filter(e => data.some(c => c[e])).map(e => ETAPAS_LABEL[e]), [data]);
 
