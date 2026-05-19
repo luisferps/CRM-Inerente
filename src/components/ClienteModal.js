@@ -476,20 +476,22 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             </div>
           )}
 
-          <div className="field-full">
-            <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
-                border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
-                background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
-              <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
-              </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
-              </div>
-            </button>
-          </div>
+          {!isVenda && (
+            <div className="field-full">
+              <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
+                  border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
+                  background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
+                <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
+                </div>
+              </button>
+            </div>
+          )}
 
         </div>
         <div className="modal-footer">
