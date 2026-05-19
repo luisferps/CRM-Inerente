@@ -60,23 +60,14 @@ function DropdownFilter({ options, value, onChange }) {
 }
 
 function FunilInline({ cliente, onToggleFunil, podeEditar }) {
-  const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const etapa = getEtapaAtual(cliente);
 
-  useEffect(() => {
-    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  // Ao clicar numa barra, marca até aquela etapa e desmarca as posteriores
   function handleBarClick(e, etapaClicada) {
     e.stopPropagation();
     if (!podeEditar) return;
     const idxClicado = ETAPAS_FUNIL.indexOf(etapaClicada);
     const idxAtual = etapa ? ETAPAS_FUNIL.indexOf(etapa) : -1;
-    // Se clicar na etapa atual, desmarca ela (volta para anterior)
     const novoIdx = idxClicado === idxAtual ? idxClicado - 1 : idxClicado;
     const updates = {};
     ETAPAS_FUNIL.forEach((e, i) => { updates[e] = i <= novoIdx; });
@@ -85,7 +76,6 @@ function FunilInline({ cliente, onToggleFunil, podeEditar }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-      {/* Barras clicáveis */}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 22, cursor: podeEditar ? 'pointer' : 'default', marginBottom: 2 }}>
         {ETAPAS_FUNIL.map((e, i) => {
           const etapaIdx = etapa ? ETAPAS_FUNIL.indexOf(etapa) : -1;
@@ -103,7 +93,6 @@ function FunilInline({ cliente, onToggleFunil, podeEditar }) {
           );
         })}
       </div>
-      {/* Label da etapa atual */}
       <div style={{ fontSize: 10, color: '#9ca3af' }}>{etapa ? ETAPAS_LABEL[etapa] : <span style={{ color: '#d1d5db' }}>—</span>}</div>
     </div>
   );
@@ -113,10 +102,10 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
   const [filterModalidade, setFilterModalidade] = useState([]);
-  const [filterCorretor, setFilterCorretor] = useState([]);
-  const [filterFunil, setFilterFunil] = useState([]);
   const [filterImovel, setFilterImovel] = useState([]);
   const [filterLocalizacao, setFilterLocalizacao] = useState([]);
+  const [filterCorretor, setFilterCorretor] = useState([]);
+  const [filterFunil, setFilterFunil] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroParcerias, setFiltroParcerias] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -199,7 +188,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
           <option value="">Todas aquisições</option>
           {origens.map(o => <option key={o}>{o}</option>)}
         </select>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[['todos','Todos'],['clientes','Clientes'],['corretores','Corretores']].map(([val, label]) => (
             <button key={val} onClick={() => setFiltroTipo(val)}
               style={{ padding: '7px 14px', borderRadius: 7, border: `1px solid ${filtroTipo === val ? '#2563eb' : '#e5e7eb'}`, background: filtroTipo === val ? '#eff6ff' : '#fff', color: filtroTipo === val ? '#2563eb' : '#6b7280', fontSize: 12, fontWeight: filtroTipo === val ? 700 : 400, cursor: 'pointer' }}>
@@ -271,11 +260,6 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                           {c.telefone && (
                             <a href={`https://wa.me/55${c.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
                               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 6, background: '#25d366', textDecoration: 'none', color: '#fff', fontSize: 13, fontWeight: 700 }}>
-                              WA
-                            </a>
-                          )}
-                        </div>
-                      </td> 13, fontWeight: 700 }}>
                               WA
                             </a>
                           )}
