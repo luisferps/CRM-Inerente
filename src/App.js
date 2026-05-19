@@ -206,6 +206,8 @@ export default function App() {
     if (error) return alert('Erro: ' + error.message);
     await load();
   }
+
+  async function handleLogout() {
     await supabase.auth.signOut();
     setClientes([]); setNegociacoes([]); setPerfil(null);
   }
