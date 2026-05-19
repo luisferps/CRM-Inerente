@@ -86,10 +86,20 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
           </div>
         </div>
       )}
+      {cliente.telefone2 && (
+        <div className="panel-field">
+          <div className="panel-field-label">📞 Telefone 2</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <span className="panel-field-value">{cliente.telefone2}</span>
+            <a href={`https://wa.me/55${cliente.telefone2.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#25d366', color: '#fff', borderRadius: 5, padding: '3px 8px', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>💬 WA</a>
+          </div>
+        </div>
+      )}
 
       <Field label="📧 Email" value={cliente.email} />
       <Field label="📅 Entrada" value={cliente.entrada} />
       <Field label="🏢 Aquisição" value={cliente.origem} />
+      <Field label="📌 Origem da Tratativa" value={cliente.origem_tratativa} />
       <Field label="👤 Corretor" value={cliente.corretor} />
       {cliente.corretor_original && cliente.corretor_original !== cliente.corretor && (
         <Field label="👤 Corretor Original" value={cliente.corretor_original} />
@@ -97,7 +107,6 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
       <Field label="🏗️ Imóvel" value={cliente.imovel} />
       <Field label="💰 Valor" value={cliente.valor ? `R$ ${Number(cliente.valor).toLocaleString('pt-BR')}` : null} />
       <Field label="📍 Localização" value={cliente.localizacao} />
-      <Field label="🗺️ Região" value={cliente.regiao} />
       <Field label="🔒 Observações Internas" value={cliente.detalhes} />
       {cliente.detalhes_externos && (
         <div className="panel-field">
@@ -154,6 +163,16 @@ export default function DetailPanel({ cliente, onEdit, onDelete, onToggleFunil, 
             <button onClick={() => onNovaNegociacao(cliente.cliente_real_id)}
               style={{ flex: 1, padding: '8px', borderRadius: 7, border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               + Tratativa
+            </button>
+          )}
+          {!cliente.recebido && (
+            <button onClick={() => {
+              if (window.confirm(`Marcar "${cliente.nome}" como Recebido e finalizar a tratativa?`)) {
+                onToggleFunil(cliente.id, { recebido: true, ativo: 'N' });
+              }
+            }}
+              style={{ flex: 1, padding: '8px', borderRadius: 7, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#059669', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              ✓ Recebido
             </button>
           )}
           <button onClick={() => setTransferModal(true)}
