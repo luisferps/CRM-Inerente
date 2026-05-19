@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
+import { supabase } from '../supabaseClient';
 
-export default function RecebidosTab({ data, onOpenModal }) {
+export default function RecebidosTab({ data, onOpenModal, onDevolver }) {
   const [search, setSearch] = useState('');
   const [filterModalidade, setFilterModalidade] = useState('');
   const [filterCorretor, setFilterCorretor] = useState('');
@@ -54,7 +55,16 @@ export default function RecebidosTab({ data, onOpenModal }) {
                   <td style={{ padding: '10px 14px', color: '#6b7280' }}>{c.corretor || '—'}</td>
                   <td style={{ padding: '10px 14px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
                   <td style={{ padding: '10px 14px' }}>
-                    {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Editar</button>}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Editar</button>}
+                      {titulo.includes('Recebidos') && onDevolver && (
+                        <button onClick={() => {
+                          if (window.confirm(`Devolver "${c.nome}" para Tratativas?`)) onDevolver(c.id);
+                        }} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#2563eb', fontSize: 12, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          ↩ Devolver
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
