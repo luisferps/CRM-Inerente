@@ -201,7 +201,11 @@ export default function App() {
     setNegociacoes(n => n.map(neg => neg.id === negId ? { ...neg, ...updates } : neg));
   }
 
-  async function handleLogout() {
+  async function handleDevolver(negId) {
+    const { error } = await supabase.from('negociacoes').update({ recebido: false, recebimento: false, ativo: 'S' }).eq('id', negId);
+    if (error) return alert('Erro: ' + error.message);
+    await load();
+  }
     await supabase.auth.signOut();
     setClientes([]); setNegociacoes([]); setPerfil(null);
   }
@@ -301,7 +305,7 @@ export default function App() {
             {tab === 'funil' && <FunilTab data={data.filter(c => !c.recebido)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
-            {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} />}
+            {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
             {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} />}
             {tab === 'usuarios' && isGerente && <UsuariosTab />}
