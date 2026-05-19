@@ -226,6 +226,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                   <SortTh col="funil" label="Funil">
                     <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
+                  <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Parceria</th>
                   <th></th>
                 </tr>
               </thead>
@@ -240,10 +241,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                       onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}>
                       <td>
                         <div className="td-name">{c.nome}</div>
-                        <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
-                          {c.is_corretor && <div style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', display: 'inline-block', padding: '1px 5px', borderRadius: 4 }}>Corretor</div>}
-                          {c.solicitar_parceria && <div style={{ fontSize: 10, color: '#7c3aed', background: '#f5f3ff', display: 'inline-block', padding: '1px 5px', borderRadius: 4 }}>🤝 Parceria</div>}
-                        </div>
+                        {c.is_corretor && <div style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', display: 'inline-block', padding: '1px 5px', borderRadius: 4, marginTop: 2 }}>Corretor</div>}
                       </td>
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
@@ -252,6 +250,11 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                       <td className="td-muted" title={c.localizacao || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.localizacao || '—'}</td>
                       <td onClick={e => e.stopPropagation()}>
                         <FunilInline cliente={c} onToggleFunil={onToggleFunil} podeEditar={!!onOpenModal} />
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        {c.solicitar_parceria
+                          ? <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}>🤝 Sim</span>
+                          : <span style={{ color: '#e5e7eb', fontSize: 12 }}>—</span>}
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
