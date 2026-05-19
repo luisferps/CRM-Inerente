@@ -210,6 +210,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     if (timerNome.current) clearTimeout(timerNome.current);
     timerNome.current = setTimeout(() => buscarDuplicatas(e.target.value), 600);
   }
+
+  function set(key, val) {
     setForm(f => {
       const u = { ...f, [key]: val };
       if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
