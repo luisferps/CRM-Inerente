@@ -130,6 +130,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
     });
   }, []);
 
+  const modalidadesUnicas = useMemo(() => [...new Set(data.map(c => c.modalidade).filter(Boolean))].sort(), [data]);
   const imoveisUnicos = useMemo(() => [...new Set(data.map(c => c.imovel).filter(Boolean))].sort(), [data]);
   const localizacoesUnicas = useMemo(() => [...new Set(data.map(c => c.localizacao).filter(Boolean))].sort(), [data]);
   const corretoresUnicos = useMemo(() => [...new Set(data.map(c => c.corretor).filter(Boolean))].sort(), [data]);
