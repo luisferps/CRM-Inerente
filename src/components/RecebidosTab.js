@@ -6,7 +6,7 @@ export default function RecebidosTab({ data, onOpenModal, onDevolver }) {
   const [filterModalidade, setFilterModalidade] = useState('');
   const [filterCorretor, setFilterCorretor] = useState('');
 
-  const recebidos = useMemo(() => data.filter(c => c.recebido), [data]);
+  const recebidos = useMemo(() => data.filter(c => c.recebido && c.ativo === 'S'), [data]);
   const aReceber = useMemo(() => data.filter(c => c.recebimento && !c.recebido && c.ativo === 'S'), [data]);
   const corretoresUnicos = useMemo(() => [...new Set([...recebidos, ...aReceber].map(c => c.corretor).filter(Boolean))].sort(), [recebidos, aReceber]);
 
