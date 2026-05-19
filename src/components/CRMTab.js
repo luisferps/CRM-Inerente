@@ -108,6 +108,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [filterFunil, setFilterFunil] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroParcerias, setFiltroParcerias] = useState(false);
+  const [filterParceria, setFilterParceria] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
@@ -140,6 +141,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       (filterImovel.length === 0 || filterImovel.includes(c.imovel)) &&
       (filtroTipo === 'todos' || (filtroTipo === 'corretores' ? c.is_corretor : !c.is_corretor)) &&
       (!filtroParcerias || c.solicitar_parceria) &&
+      (filterParceria.length === 0 || (filterParceria.includes('🤝 Sim') ? c.solicitar_parceria : !c.solicitar_parceria)) &&
       (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
       (filterLocalizacao.length === 0 || filterLocalizacao.includes(c.localizacao)) &&
       (filterFunil.length === 0 || filterFunil.some(f => { const e = getEtapaAtual(c); return e && ETAPAS_LABEL[e] === f; }))
@@ -151,7 +153,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filtroParcerias, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filtroParcerias, filterParceria, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -226,7 +228,9 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                   <SortTh col="funil" label="Funil">
                     <DropdownFilter options={etapasUnicas} value={filterFunil} onChange={setFilterFunil} />
                   </SortTh>
-                  <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Parceria</th>
+                  <SortTh col="solicitar_parceria" label="Parceria">
+                    <DropdownFilter options={['🤝 Sim', '— Não']} value={filterParceria} onChange={setFilterParceria} />
+                  </SortTh>
                   <th></th>
                 </tr>
               </thead>
@@ -252,9 +256,19 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                         <FunilInline cliente={c} onToggleFunil={onToggleFunil} podeEditar={!!onOpenModal} />
                       </td>
                       <td onClick={e => e.stopPropagation()}>
-                        {c.solicitar_parceria
-                          ? <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}>🤝 Sim</span>
-                          : <span style={{ color: '#e5e7eb', fontSize: 12 }}>—</span>}
+                        {onOpenModal ? (
+                          <button onClick={() => onToggleFunil(c.id, { solicitar_parceria: !c.solicitar_parceria })}
+                            style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
+                              background: c.solicitar_parceria ? '#f5f3ff' : '#f9fafb',
+                              color: c.solicitar_parceria ? '#7c3aed' : '#9ca3af',
+                              outline: c.solicitar_parceria ? '1px solid #ddd6fe' : '1px solid #e5e7eb' }}>
+                            {c.solicitar_parceria ? '🤝 Sim' : '— Não'}
+                          </button>
+                        ) : (
+                          c.solicitar_parceria
+                            ? <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}>🤝 Sim</span>
+                            : <span style={{ color: '#e5e7eb', fontSize: 12 }}>—</span>
+                        )}
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
