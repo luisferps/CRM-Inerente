@@ -118,6 +118,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [filterImovel, setFilterImovel] = useState([]);
   const [filterLocalizacao, setFilterLocalizacao] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroParcerias, setFiltroParcerias] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
@@ -149,6 +150,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
       (filterImovel.length === 0 || filterImovel.includes(c.imovel)) &&
       (filtroTipo === 'todos' || (filtroTipo === 'corretores' ? c.is_corretor : !c.is_corretor)) &&
+      (!filtroParcerias || c.solicitar_parceria) &&
       (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
       (filterLocalizacao.length === 0 || filterLocalizacao.includes(c.localizacao)) &&
       (filterFunil.length === 0 || filterFunil.some(f => { const e = getEtapaAtual(c); return e && ETAPAS_LABEL[e] === f; }))
@@ -160,7 +162,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
+  }, [data, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filtroParcerias, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -204,6 +206,10 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
               {label}
             </button>
           ))}
+          <button onClick={() => setFiltroParcerias(p => !p)}
+            style={{ padding: '7px 14px', borderRadius: 7, border: `1px solid ${filtroParcerias ? '#7c3aed' : '#e5e7eb'}`, background: filtroParcerias ? '#f5f3ff' : '#fff', color: filtroParcerias ? '#7c3aed' : '#6b7280', fontSize: 12, fontWeight: filtroParcerias ? 700 : 400, cursor: 'pointer' }}>
+            🤝 Parcerias
+          </button>
         </div>
         {onOpenModal && <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Nova Tratativa</button>}
       </div>
@@ -245,7 +251,10 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
                       onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}>
                       <td>
                         <div className="td-name">{c.nome}</div>
-                        {c.is_corretor && <div style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', display: 'inline-block', padding: '1px 5px', borderRadius: 4, marginTop: 2 }}>Corretor</div>}
+                        <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
+                          {c.is_corretor && <div style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', display: 'inline-block', padding: '1px 5px', borderRadius: 4 }}>Corretor</div>}
+                          {c.solicitar_parceria && <div style={{ fontSize: 10, color: '#7c3aed', background: '#f5f3ff', display: 'inline-block', padding: '1px 5px', borderRadius: 4 }}>🤝 Parceria</div>}
+                        </div>
                       </td>
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
