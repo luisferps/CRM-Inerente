@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const WA_EVOLUTION_URL = 'https://evolution-api-production-6f9a.up.railway.app';
@@ -132,32 +132,41 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
     if (mensagemCRM) setDisparoMsg(mensagemCRM);
   }, [mensagemCRM]);
 
+  // Ref para sempre ter agenda atualizada no useEffect
+  const agendaRef = useRef(agenda);
+  useEffect(() => { agendaRef.current = agenda; }, [agenda]);
+
   // Quando mensagemCRM muda, atualiza e salva automaticamente todos os slots com CRM ON
   useEffect(() => {
-    if (!mensagemCRM || !agenda.cats) return;
+    if (!mensagemCRM) return;
     const timer = setTimeout(async () => {
+      const agendaAtual = agendaRef.current;
+      if (!agendaAtual.cats) return;
       let temSlotCRM = false;
-      const novaCats = { ...agenda.cats };
-      Object.entries(novaCats).forEach(([catId, catData]) => {
-        if (!catData.slots) return;
-        const slots = [...catData.slots];
-        slots.forEach((slot, i) => {
+      const novaCats = {};
+      Object.entries(agendaAtual.cats).forEach(([catId, catData]) => {
+        if (!catData.slots) { novaCats[catId] = catData; return; }
+        const slots = catData.slots.map(slot => {
           if (slot.espelhar_crm && slot.ativo !== false) {
-            slots[i] = { ...slot, msg: mensagemCRM };
             temSlotCRM = true;
+            return { ...slot, msg: mensagemCRM };
           }
+          return slot;
         });
         novaCats[catId] = { ...catData, slots };
       });
       if (!temSlotCRM) return;
-      const novaAgenda = { ...agenda, cats: novaCats };
+      const novaAgenda = { ...agendaAtual, cats: novaCats };
       setAgenda(novaAgenda);
-      await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
-      });
-      toast('Mensagem salva nos slots ✓');
+      try {
+        const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+          body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
+        });
+        if (r.ok) toast('Mensagem salva nos slots ✓');
+        else toast('Erro ao salvar', true);
+      } catch { toast('Erro ao salvar', true); }
     }, 1000);
     return () => clearTimeout(timer);
   }, [mensagemCRM]);
