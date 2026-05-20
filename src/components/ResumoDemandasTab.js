@@ -484,6 +484,33 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
                     {acimaDoLimite && <div style={{ fontSize: 11, marginTop: 3 }}>Muitos grupos podem aumentar o risco de suspensão.</div>}
                   </div>
                 )}
+                {catsSelDisparo.size > 0 && disparoMsg.trim() && (
+                  <div style={{ marginBottom: 12, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 14px', background: bg, borderBottom: `1px solid ${border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px' }}>👁 Prévia do disparo</span>
+                      <span style={{ fontSize: 11, color: textMuted }}>{totalGruposDisparo} grupo(s)</span>
+                    </div>
+                    <div style={{ padding: '10px 14px' }}>
+                      {Array.from(catsSelDisparo).map(catId => {
+                        const cat = CATS.find(c => c.id === catId);
+                        const grpCount = (agenda.grupos || []).filter(g => g.cat === catId).length;
+                        if (!cat) return null;
+                        return (
+                          <div key={catId} style={{ marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: cat.cor }} />
+                              <span style={{ fontSize: 11, fontWeight: 600, color: textColor }}>{cat.name}</span>
+                              <span style={{ fontSize: 10, color: textMuted }}>({grpCount}g)</span>
+                            </div>
+                            <pre style={{ fontFamily: 'Inter,sans-serif', fontSize: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: textMuted, margin: 0, padding: '8px 10px', background: darkMode ? '#0f1117' : '#f8fafc', borderRadius: 6, border: `1px solid ${border}`, maxHeight: 120, overflowY: 'auto' }}>
+                              {disparoMsg}
+                            </pre>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <button disabled={disparando} onClick={dispararAgora}
                   style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: disparando ? '#9ca3af' : '#dc2626', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, cursor: disparando ? 'not-allowed' : 'pointer' }}>
                   {disparando ? '⏳ Enviando...' : '⚡ Enviar agora'}
@@ -514,7 +541,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
     </div>
   );
 }
-export default function ResumoDemandasTab({ data, darkMode, perfil }) {
+export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParceria }) {
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
@@ -533,13 +560,14 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
     setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
   }, [elegiveis]);
   async function toggleSelecionado(id) {
+    const novoValor = !selecionados.has(id);
     setSelecionados(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-    const novoValor = !selecionados.has(id);
     await supabase.from('negociacoes').update({ solicitar_parceria: novoValor }).eq('id', id);
+    onToggleParceria?.(id, novoValor);
   }
   const porModalidade = useMemo(() => {
     const grupos = {};
