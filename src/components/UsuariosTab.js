@@ -36,23 +36,18 @@ export default function UsuariosTab() {
     setUsuarios(aprovados);
     setPendentes(pend);
 
-    // Sugestões pendentes
     const { data: sug } = await supabase
-      .from('sugestoes_lista')
-      .select('*')
-      .eq('status', 'pendente')
+      .from('sugestoes_lista').select('*').eq('status', 'pendente')
       .order('created_at', { ascending: false });
     setSugestoes(sug || []);
 
-    // Metas do mês atual para corretores
     const corretores = aprovados.filter(p => p.is_corretor);
     if (corretores.length > 0) {
       const mesAtual = new Date().getMonth() + 1;
       const anoAtual = new Date().getFullYear();
       const ids = corretores.map(c => c.id);
       const { data: metasData } = await supabase
-        .from('metas').select('*').in('corretor_id', ids)
-        .eq('mes', mesAtual).eq('ano', anoAtual);
+        .from('metas').select('*').in('corretor_id', ids).eq('mes', mesAtual).eq('ano', anoAtual);
       const metasMap = {};
       (metasData || []).forEach(m => { metasMap[m.corretor_id] = m; });
       setMetas(metasMap);
@@ -124,6 +119,7 @@ export default function UsuariosTab() {
       is_gerente: form.is_gerente || false,
       is_corretor: form.is_corretor || false,
       is_escritorio: form.is_escritorio || false,
+      whatsapp_instancia: form.whatsapp_instancia || null,
       funcoes, aprovado: true,
     });
     if (error) { alert('Erro: ' + error.message); setSaving(false); return; }
@@ -147,6 +143,7 @@ export default function UsuariosTab() {
       is_corretor: form.is_corretor || false,
       is_escritorio: form.is_escritorio || false,
       role: form.is_gerente ? 'gerente' : 'corretor',
+      whatsapp_instancia: form.whatsapp_instancia || null,
       funcoes,
     }).eq('id', modal.id);
     await load();
@@ -161,7 +158,6 @@ export default function UsuariosTab() {
   }
 
   async function aprovarSugestao(sug) {
-    // Adiciona o valor à lista de configurações
     const { data: config } = await supabase.from('configuracoes').select('valor').eq('chave', sug.chave).single();
     const lista = config?.valor || [];
     if (!lista.includes(sug.valor)) {
@@ -196,9 +192,30 @@ export default function UsuariosTab() {
   const anoAtual = new Date().getFullYear();
   const anos = [anoAtual - 1, anoAtual, anoAtual + 1];
 
+  // Campo de instância reutilizável
+  function CampoInstancia() {
+    return (
+      <div style={{ gridColumn: '1/-1' }}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
+          Instância WhatsApp (WA Scheduler)
+        </label>
+        <input
+          type="text"
+          value={form.whatsapp_instancia || ''}
+          onChange={e => setForm(f => ({ ...f, whatsapp_instancia: e.target.value }))}
+          placeholder="Ex: minha-empresa ou Luis Fernando"
+          style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, boxSizing: 'border-box' }}
+        />
+        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+          Nome exato da instância cadastrada no Evolution Manager
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* Sugestões de lista pendentes */}
+      {/* Sugestões */}
       {sugestoes.length > 0 && (
         <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 16, marginBottom: 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
@@ -221,7 +238,7 @@ export default function UsuariosTab() {
         </div>
       )}
 
-      {/* Pendentes de aprovação */}
+      {/* Pendentes */}
       {pendentes.length > 0 && (
         <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, padding: 16, marginBottom: 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#0369a1', marginBottom: 12 }}>
@@ -252,14 +269,14 @@ export default function UsuariosTab() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                {['Nome','Email','Funções','CRECI','Meta Tratativas','Meta Contratos','Ações'].map(h => (
+                {['Nome','Email','Funções','CRECI','Instância WA','Meta Tratativas','Meta Contratos','Ações'].map(h => (
                   <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {usuarios.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhum usuário cadastrado.</td></tr>
+                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhum usuário cadastrado.</td></tr>
               )}
               {usuarios.map(u => {
                 const meta = metas[u.id];
@@ -278,6 +295,14 @@ export default function UsuariosTab() {
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', color: '#6b7280' }}>{u.creci || '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {u.whatsapp_instancia
+                        ? <span style={{ fontSize: 12, background: '#f0fdf4', color: '#059669', border: '1px solid #bbf7d0', borderRadius: 20, padding: '2px 10px', fontWeight: 600 }}>
+                            💬 {u.whatsapp_instancia}
+                          </span>
+                        : <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                      }
+                    </td>
                     <td style={{ padding: '12px 16px' }}>
                       {u.is_corretor ? <BarraMeta realizado={real.clientes} meta={meta?.meta_clientes} /> : <span style={{ color: '#d1d5db', fontSize: 12 }}>N/A</span>}
                     </td>
@@ -365,6 +390,7 @@ export default function UsuariosTab() {
                     style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, boxSizing: 'border-box' }} />
                 </div>
               ))}
+              <CampoInstancia />
             </div>
             <div style={{ marginTop: 16, marginBottom: 16 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 10 }}>Funções *</label>
@@ -413,6 +439,7 @@ export default function UsuariosTab() {
                     style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, boxSizing: 'border-box' }} />
                 </div>
               ))}
+              <CampoInstancia />
             </div>
             <div style={{ marginTop: 16, marginBottom: 16 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 10 }}>Funções</label>
@@ -448,4 +475,24 @@ export default function UsuariosTab() {
       )}
     </div>
   );
+
+  function CampoInstancia() {
+    return (
+      <div style={{ gridColumn: '1/-1' }}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
+          💬 Instância WhatsApp (WA Scheduler)
+        </label>
+        <input
+          type="text"
+          value={form.whatsapp_instancia || ''}
+          onChange={e => setForm(f => ({ ...f, whatsapp_instancia: e.target.value }))}
+          placeholder="Ex: minha-empresa ou Luis Fernando"
+          style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, boxSizing: 'border-box' }}
+        />
+        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+          Nome exato da instância cadastrada no Evolution Manager
+        </div>
+      </div>
+    );
+  }
 }
