@@ -4,8 +4,9 @@ const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const WA_EVOLUTION_URL = 'https://evolution-api-production-6f9a.up.railway.app';
 const WA_API_KEY = '40d03599cab78737a4c9eaf7c00723dbe1bc93b6b329fce0a80ff43d393e4c47';
 const DAYS_LABEL = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
+const LIMITE_AVISO_GRUPOS = 20;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -25,18 +26,18 @@ function formatarLinha(c) {
   if (preco) partes.push(preco);
   return `- ${partes.join(' ')}`;
 }
-function gerarTextoComSelecionados(selecionados, porModalidade) {
+function gerarTexto(titulo, selecionados, porModalidade) {
   const ids = new Set(selecionados);
   if (ids.size === 0) return '';
-  let out = 'Preciso de: (enviar somente imóveis nos perfis relacionados)\n\n';
-  const ordem = ['Compra', 'Venda', 'Locação'];
-  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
+  let out = titulo + '\n\n';
+  const ordem = ['Compra', 'Locação'];
+  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m) && m !== 'Venda')])];
   let temConteudo = false;
   mods.forEach(mod => {
     const filtrados = (porModalidade[mod] || []).filter(c => ids.has(c.id));
     if (!filtrados.length) return;
     temConteudo = true;
-    const icon = mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄';
+    const icon = mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄';
     out += `${icon} *${capitalize(mod)}:*\n`;
     filtrados.forEach(c => { out += formatarLinha(c) + '\n'; });
     out += '\n';
@@ -44,17 +45,15 @@ function gerarTextoComSelecionados(selecionados, porModalidade) {
   return temConteudo ? out.trim() : '';
 }
 
-// ── Ícone de Parceria ─────────────────────────────────────────────────────────
+// ── Ícone de Parceria (aperto de mãos) ───────────────────────────────────────
 function IconeParceria({ ativo, onClick, size = 18 }) {
   return (
-    <button onClick={onClick} title={ativo ? 'Remover da mensagem' : 'Incluir na mensagem'}
-      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"
-          fill={ativo ? '#2563eb' : 'none'} stroke={ativo ? '#2563eb' : '#d1d5db'} strokeWidth="2" />
-        <circle cx="12" cy="12" r="3"
-          fill={ativo ? '#fff' : 'none'} stroke={ativo ? '#2563eb' : '#d1d5db'} strokeWidth="2" />
-      </svg>
+    <button onClick={onClick}
+      title={ativo ? 'Remover da mensagem' : 'Incluir na mensagem'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderRadius: 4, transition: 'background .1s' }}
+      onMouseEnter={e => e.currentTarget.style.background = ativo ? '#dbeafe' : '#f3f4f6'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+      <span style={{ fontSize: size, lineHeight: 1 }}>{ativo ? '🤝' : '🫱'}</span>
     </button>
   );
 }
@@ -66,11 +65,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const [carregando, setCarregando] = useState(true);
   const [secAtiva, setSecAtiva] = useState('mensagens');
   const [catsAbertas, setCatsAbertas] = useState(new Set());
-
-  // Slots substituídos: Map de "catId-slotIdx" -> msgOriginal
   const [slotsSubstituidos, setSlotsSubstituidos] = useState(new Map());
-
-  // Disparo
   const [disparoMsg, setDisparoMsg] = useState('');
   const [catsSelDisparo, setCatsSelDisparo] = useState(new Set());
   const [logDisparo, setLogDisparo] = useState([]);
@@ -87,8 +82,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const accentBg = darkMode ? 'rgba(37,99,235,0.08)' : '#eff6ff';
 
   function toast(msg, warn = false) {
-    setToastMsg(msg);
-    setToastWarn(warn);
+    setToastMsg(msg); setToastWarn(warn);
     setTimeout(() => setToastMsg(''), 3000);
   }
 
@@ -102,14 +96,32 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
         setAgenda(data);
         setCATS(data.categorias || []);
       }
-    } catch { toast('Erro ao carregar dados do WA Scheduler', true); }
+    } catch { toast('Erro ao carregar dados', true); }
     setCarregando(false);
   }, [instancia]);
 
   useEffect(() => { carregarAgenda(); }, [carregarAgenda]);
 
+  // Atualiza campo de disparo quando mensagem do CRM muda
   useEffect(() => {
     if (mensagemCRM) setDisparoMsg(mensagemCRM);
+  }, [mensagemCRM]);
+
+  // Atualiza slots substituídos quando mensagem do CRM muda
+  useEffect(() => {
+    if (!mensagemCRM || !slotsSubstituidos.size) return;
+    setAgenda(prev => {
+      const novaCats = { ...prev.cats };
+      slotsSubstituidos.forEach((_, key) => {
+        const [catId, slotIdxStr] = key.split('-');
+        const slotIdx = parseInt(slotIdxStr);
+        if (!novaCats[catId]?.slots) return;
+        const slots = [...novaCats[catId].slots];
+        slots[slotIdx] = { ...slots[slotIdx], msg: mensagemCRM };
+        novaCats[catId] = { ...novaCats[catId], slots };
+      });
+      return { ...prev, cats: novaCats };
+    });
   }, [mensagemCRM]);
 
   function toggleCatAberta(catId) {
@@ -123,11 +135,9 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
   function toggleSlot(catId, slotIdx) {
     if (!mensagemCRM) { toast('Nenhuma mensagem gerada ainda', true); return; }
     const key = `${catId}-${slotIdx}`;
-
     setSlotsSubstituidos(prev => {
       const next = new Map(prev);
       if (next.has(key)) {
-        // Restaura mensagem original
         const msgOriginal = next.get(key);
         next.delete(key);
         setAgenda(ag => {
@@ -138,7 +148,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           return { ...ag, cats: novaCats };
         });
       } else {
-        // Substitui pelo texto do CRM
         const msgOriginal = agenda.cats?.[catId]?.slots?.[slotIdx]?.msg || '';
         next.set(key, msgOriginal);
         setAgenda(ag => {
@@ -176,31 +185,53 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
     });
   }
 
+  const totalGruposDisparo = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat)).length;
+  const acimaDoLimite = totalGruposDisparo > LIMITE_AVISO_GRUPOS;
+
   async function dispararAgora() {
     if (!disparoMsg.trim()) { toast('Digite a mensagem', true); return; }
     if (!catsSelDisparo.size) { toast('Selecione uma categoria', true); return; }
     const grupos = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat));
     if (!grupos.length) { toast('Nenhum grupo nas categorias selecionadas', true); return; }
+    if (acimaDoLimite && !window.confirm(`Você está prestes a enviar para ${totalGruposDisparo} grupos de uma vez. Isso pode aumentar o risco de suspensão. Deseja continuar?`)) return;
+
     setDisparando(true);
     setLogDisparo([]);
     let ok = 0, err = 0;
-    for (const g of grupos) {
-      try {
-        const r = await fetch(`${WA_EVOLUTION_URL}/message/sendText/${instancia.replace(/ /g, '%20')}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY },
-          body: JSON.stringify({ number: g.id, text: disparoMsg, delay: 1000 })
-        });
-        if (r.ok) { ok++; setLogDisparo(l => [...l, { ok: true, nome: g.name }]); }
-        else { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name, status: r.status }]); }
-      } catch { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name }]); }
-      await new Promise(r => setTimeout(r, 800));
+
+    // Agrupa por categoria para pausar entre elas
+    const porCat = {};
+    grupos.forEach(g => {
+      if (!porCat[g.cat]) porCat[g.cat] = [];
+      porCat[g.cat].push(g);
+    });
+
+    let primeiraCategoria = true;
+    for (const [catId, gruposCat] of Object.entries(porCat)) {
+      // Pausa entre categorias (10-20 segundos)
+      if (!primeiraCategoria) {
+        setLogDisparo(l => [...l, { info: true, msg: 'Aguardando entre categorias...' }]);
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 10000) + 10000));
+      }
+      primeiraCategoria = false;
+
+      for (const g of gruposCat) {
+        try {
+          const r = await fetch(`${WA_EVOLUTION_URL}/message/sendText/${instancia}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY },
+            body: JSON.stringify({ number: g.id, text: disparoMsg, delay: 1000 })
+          });
+          if (r.ok) { ok++; setLogDisparo(l => [...l, { ok: true, nome: g.name }]); }
+          else { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name, status: r.status }]); }
+        } catch { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name }]); }
+        // Delay aleatório de 3-7 segundos entre grupos
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 4000) + 3000));
+      }
     }
     setDisparando(false);
     toast(`${ok} enviado(s)${err ? ` | ${err} erro(s)` : ''}`);
   }
-
-  const totalGruposDisparo = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat)).length;
 
   const navBtnStyle = (ativa) => ({
     flex: 1, padding: '10px 8px', background: 'transparent', border: 'none',
@@ -211,7 +242,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
-
       {/* Header */}
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 28, height: 28, background: '#25d366', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>💬</div>
@@ -238,22 +268,19 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           <div style={{ textAlign: 'center', padding: 30, color: textMuted, fontSize: 13 }}>Carregando...</div>
         ) : (
           <>
-            {/* ── Mensagens ── */}
+            {/* Mensagens */}
             {secAtiva === 'mensagens' && (
               <>
                 <p style={{ fontSize: 12, color: textMuted, marginBottom: 14, lineHeight: 1.6 }}>
                   Clique em um horário para substituir a mensagem agendada pela mensagem gerada automaticamente. Clique novamente para desfazer.
                 </p>
-
                 {CATS.map(cat => {
                   const slots = agenda.cats?.[cat.id]?.slots || [];
                   const grpCount = (agenda.grupos || []).filter(g => g.cat === cat.id).length;
                   const aberta = catsAbertas.has(cat.id);
                   const numSubs = slots.filter((_, i) => slotsSubstituidos.has(`${cat.id}-${i}`)).length;
-
                   return (
                     <div key={cat.id} style={{ marginBottom: 10, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                      {/* Header da categoria */}
                       <div onClick={() => toggleCatAberta(cat.id)}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', userSelect: 'none', background: aberta ? accentBg : bg }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
@@ -266,8 +293,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                         <span style={{ fontSize: 11, color: textMuted }}>{grpCount}g</span>
                         <span style={{ fontSize: 11, color: textMuted, marginLeft: 4 }}>{aberta ? '▲' : '▼'}</span>
                       </div>
-
-                      {/* Slots */}
                       {aberta && (
                         <div style={{ borderTop: `1px solid ${border}` }}>
                           {slots.map((slot, i) => {
@@ -280,12 +305,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                                   <span style={{ fontSize: 11, color: isSub ? '#2563eb' : textMuted, fontWeight: 600 }}>⏰ {slot.time}</span>
                                   <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'wrap' }}>
                                     {DAYS_LABEL.map((d, j) => (
-                                      <span key={j} style={{
-                                        fontSize: 9, padding: '1px 5px', borderRadius: 20,
-                                        background: slot.days?.includes(j) ? (isSub ? '#bfdbfe' : '#f1f5f9') : 'transparent',
-                                        color: slot.days?.includes(j) ? (isSub ? '#1d4ed8' : textMuted) : '#d1d5db',
-                                        fontWeight: slot.days?.includes(j) ? 600 : 400
-                                      }}>{d}</span>
+                                      <span key={j} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 20, background: slot.days?.includes(j) ? (isSub ? '#bfdbfe' : '#f1f5f9') : 'transparent', color: slot.days?.includes(j) ? (isSub ? '#1d4ed8' : textMuted) : '#d1d5db', fontWeight: slot.days?.includes(j) ? 600 : 400 }}>{d}</span>
                                     ))}
                                   </div>
                                   {isSub
@@ -304,7 +324,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                     </div>
                   );
                 })}
-
                 {slotsSubstituidos.size > 0 && (
                   <button onClick={salvarSubstituicoes} disabled={salvando}
                     style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: salvando ? '#9ca3af' : '#2563eb', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer', marginTop: 8 }}>
@@ -314,7 +333,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
               </>
             )}
 
-            {/* ── Disparo ── */}
+            {/* Disparo */}
             {secAtiva === 'disparo' && (
               <>
                 <div style={{ marginBottom: 14 }}>
@@ -323,7 +342,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                     placeholder="A mensagem das demandas aparece aqui automaticamente..."
                     style={{ width: '100%', boxSizing: 'border-box', minHeight: 100, padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.7, border: `1px solid ${border}`, borderRadius: 10, background: bg, color: textColor, resize: 'vertical', outline: 'none' }} />
                 </div>
-
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Categorias</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -344,25 +362,25 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                     })}
                   </div>
                 </div>
-
                 {catsSelDisparo.size > 0 && (
-                  <div style={{ fontSize: 12, color: textMuted, marginBottom: 12, padding: '8px 12px', background: bg, borderRadius: 8, border: `1px solid ${border}` }}>
-                    📤 {totalGruposDisparo} grupo(s) receberão a mensagem
+                  <div style={{ fontSize: 12, marginBottom: 12, padding: '8px 12px', background: acimaDoLimite ? '#fef3c7' : bg, borderRadius: 8, border: `1px solid ${acimaDoLimite ? '#fcd34d' : border}`, color: acimaDoLimite ? '#92400e' : textMuted }}>
+                    {acimaDoLimite ? '⚠️' : '📤'} {totalGruposDisparo} grupo(s) receberão a mensagem
+                    {acimaDoLimite && <div style={{ fontSize: 11, marginTop: 3 }}>Muitos grupos podem aumentar o risco de suspensão.</div>}
                   </div>
                 )}
-
                 <button disabled={disparando} onClick={dispararAgora}
                   style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: disparando ? '#9ca3af' : '#dc2626', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, cursor: disparando ? 'not-allowed' : 'pointer' }}>
                   {disparando ? '⏳ Enviando...' : '⚡ Enviar agora'}
                 </button>
-
                 {logDisparo.length > 0 && (
                   <div style={{ marginTop: 16 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Resultado</div>
                     {logDisparo.map((l, i) => (
-                      <div key={i} style={{ fontSize: 12, padding: '6px 10px', background: bg, borderRadius: 8, borderLeft: `3px solid ${l.ok ? '#059669' : '#dc2626'}`, marginBottom: 5, color: l.ok ? textColor : textMuted }}>
-                        {l.ok ? '✅' : '❌'} {l.nome}{l.status ? ` — erro ${l.status}` : ''}
-                      </div>
+                      l.info
+                        ? <div key={i} style={{ fontSize: 11, padding: '4px 8px', color: textMuted, fontStyle: 'italic', marginBottom: 4 }}>{l.msg}</div>
+                        : <div key={i} style={{ fontSize: 12, padding: '6px 10px', background: bg, borderRadius: 8, borderLeft: `3px solid ${l.ok ? '#059669' : '#dc2626'}`, marginBottom: 5, color: l.ok ? textColor : textMuted }}>
+                            {l.ok ? '✅' : '❌'} {l.nome}{l.status ? ` — erro ${l.status}` : ''}
+                          </div>
                     ))}
                   </div>
                 )}
@@ -387,17 +405,19 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
+  const [titulo, setTitulo] = useState(TITULO_PADRAO);
+  const [editandoTitulo, setEditandoTitulo] = useState(false);
 
-  // Demandas elegíveis: ativas, não corretor, sem etapas avançadas
+  // Demandas elegíveis: ativas, não corretor, sem etapas avançadas, sem Venda
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
+    if (c.modalidade === 'Venda') return false;
     const etapasAvancadas = ['proposta','contrato','financiamento','recebimento','recebido'];
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
   }), [data]);
 
-  // Selecionados: por padrão apenas os que têm solicitar_parceria
   const [selecionados, setSelecionados] = useState(new Set());
 
   useEffect(() => {
@@ -412,20 +432,18 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
     });
   }
 
-  function selecionarTodos() { setSelecionados(new Set(elegiveis.map(c => c.id))); }
-  function deselecionarTodos() { setSelecionados(new Set()); }
-
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
       const mod = c.modalidade || 'Outros';
+      if (mod === 'Venda') return;
       if (!grupos[mod]) grupos[mod] = [];
       grupos[mod].push(c);
     });
     return grupos;
   }, [elegiveis]);
 
-  const textoGerado = useMemo(() => gerarTextoComSelecionados([...selecionados], porModalidade), [selecionados, porModalidade]);
+  const textoGerado = useMemo(() => gerarTexto(titulo, [...selecionados], porModalidade), [titulo, selecionados, porModalidade]);
 
   useEffect(() => {
     if (!editando) setTextoEditado(textoGerado);
@@ -440,13 +458,13 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
 
-  const ordem = ['Compra', 'Venda', 'Locação'];
+  const ordem = ['Compra', 'Locação'];
   const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', color: textColor }}>
 
-      {/* ── Esquerda: Demandas ── */}
+      {/* Esquerda */}
       <div style={{ flex: '0 0 54%', minWidth: 0 }}>
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>📋 Demandas</h2>
@@ -460,26 +478,25 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 40, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🤝</div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Nenhuma demanda encontrada</div>
-            <div style={{ fontSize: 13 }}>Nenhuma tratativa ativa disponível.</div>
           </div>
         ) : (
           <>
-            {/* Ações rápidas */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <button onClick={selecionarTodos} style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={() => setSelecionados(new Set(elegiveis.map(c => c.id)))}
+                style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
                 Selecionar todos
               </button>
-              <button onClick={deselecionarTodos} style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={() => setSelecionados(new Set())}
+                style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
                 Desmarcar todos
               </button>
             </div>
 
-            {/* Lista por modalidade */}
             {mods.map(mod => (
               <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>
-                    {mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄'} {mod}
+                    {mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄'} {mod}
                   </span>
                   <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '2px 8px', borderRadius: 20 }}>
                     {(porModalidade[mod] || []).filter(c => selecionados.has(c.id)).length}/{(porModalidade[mod] || []).length}
@@ -512,6 +529,29 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
 
             {/* Mensagem gerada */}
             <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
+              {/* Título editável */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px' }}>Título da mensagem</span>
+                  <button onClick={() => setEditandoTitulo(e => !e)}
+                    style={{ padding: '2px 8px', borderRadius: 6, border: `1px solid ${editandoTitulo ? '#f59e0b' : '#d1d5db'}`, background: editandoTitulo ? '#fffbeb' : 'transparent', color: editandoTitulo ? '#b45309' : '#9ca3af', fontSize: 10, cursor: 'pointer' }}>
+                    {editandoTitulo ? '✓ Ok' : '✏️ Editar'}
+                  </button>
+                  {titulo !== TITULO_PADRAO && (
+                    <button onClick={() => setTitulo(TITULO_PADRAO)}
+                      style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid #d1d5db', background: 'transparent', color: '#9ca3af', fontSize: 10, cursor: 'pointer' }}>
+                      ↺ Resetar
+                    </button>
+                  )}
+                </div>
+                {editandoTitulo ? (
+                  <input value={titulo} onChange={e => setTitulo(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', border: '2px solid #f59e0b', borderRadius: 8, background: darkMode ? '#0f1117' : '#fffbeb', color: textColor, fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }} />
+                ) : (
+                  <div style={{ fontSize: 12, color: textMuted, fontStyle: 'italic', padding: '4px 0' }}>{titulo}</div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: 13 }}>
                   Mensagem gerada {editando && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 400 }}>— editando</span>}
@@ -548,25 +588,18 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
                   Selecione ao menos uma demanda para gerar a mensagem.
                 </div>
               )}
-
               {instancia && textoFinal && (
-                <div style={{ marginTop: 8, fontSize: 11, color: '#25d366', fontWeight: 600 }}>
-                  ● {instancia}
-                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: '#25d366', fontWeight: 600 }}>● {instancia}</div>
               )}
             </div>
           </>
         )}
       </div>
 
-      {/* ── Direita: WA Scheduler ── */}
+      {/* Direita: WA Scheduler */}
       <div style={{ flex: '0 0 43%', position: 'sticky', top: 0, height: 'calc(100vh - 130px)', minHeight: 500 }}>
         {instancia ? (
-          <WAPainel
-            instancia={instancia}
-            mensagemCRM={textoFinal}
-            darkMode={darkMode}
-          />
+          <WAPainel instancia={instancia} mensagemCRM={textoFinal} darkMode={darkMode} />
         ) : (
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
