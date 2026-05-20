@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { supabase } from '../supabaseClient';
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const WA_EVOLUTION_URL = 'https://evolution-api-production-6f9a.up.railway.app';
 const WA_API_KEY = '40d03599cab78737a4c9eaf7c00723dbe1bc93b6b329fce0a80ff43d393e4c47';
@@ -42,6 +43,38 @@ function gerarTexto(titulo, selecionados, porModalidade) {
   });
   return temConteudo ? out.trim() : '';
 }
+function gerarMensagemCompleta(titulo, demandas) {
+  if (!demandas.length) return '';
+  const porMod = {};
+  demandas.forEach(c => {
+    const mod = c.modalidade || 'Outros';
+    if (mod === 'Venda') return;
+    if (!porMod[mod]) porMod[mod] = [];
+    porMod[mod].push(c);
+  });
+  const ordem = ['Compra', 'Locação'];
+  const mods = [...new Set([...ordem.filter(m => porMod[m]), ...Object.keys(porMod).filter(m => !ordem.includes(m) && m !== 'Venda')])];
+  let out = titulo + '\n\n'; let tem = false;
+  mods.forEach(mod => {
+    const f = porMod[mod] || []; if (!f.length) return; tem = true;
+    const icon = mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄';
+    out += `${icon} *${capitalize(mod)}:*\n`;
+    f.forEach(c => { out += formatarLinha(c) + '\n'; }); out += '\n';
+  });
+  return tem ? out.trim() : '';
+}
+function gerarMensagemSoLocacao(titulo, demandas) {
+  const locacao = demandas.filter(c => c.modalidade === 'Locação');
+  if (!locacao.length) return '';
+  let out = titulo + '\n\n🔑 *Locação:*\n';
+  locacao.forEach(c => { out += formatarLinha(c) + '\n'; });
+  return out.trim();
+}
+function gerarPreviewCategoria(catName, titulo, demandas) {
+  const nome = (catName || '').toLowerCase();
+  if (nome.includes('aluguel')) return gerarMensagemSoLocacao(titulo, demandas);
+  return gerarMensagemCompleta(titulo, demandas);
+}
 function IconeParceria({ ativo, onClick, size = 18 }) {
   return (
     <button onClick={onClick}
@@ -53,7 +86,7 @@ function IconeParceria({ ativo, onClick, size = 18 }) {
     </button>
   );
 }
-function WAPainel({ instancia, mensagemCRM, darkMode }) {
+function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, tituloCRMExterno }) {
   const [agenda, setAgenda] = useState({ cats: {}, grupos: [], categorias: [] });
   const [CATS, setCATS] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -70,6 +103,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const [tituloCRM, setTituloCRM] = useState('Preciso de: (enviar somente imóveis nos perfis relacionados)');
   const [tituloCRMEditando, setTituloCRMEditando] = useState(false);
   const [pendenteSalvar, setPendenteSalvar] = useState(false);
+  const [previasAbertas, setPreviasAbertas] = useState(new Set());
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
@@ -372,6 +406,28 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                                     {slotAtivo ? '● Disparo automático ativo' : '○ Disparo suspenso'}
                                   </div>
                                 )}
+                                {crmAtivo && demandasSelecionadas?.length > 0 && (() => {
+                                  const key = `${cat.id}-${i}`;
+                                  const previewAberta = previasAbertas.has(key);
+                                  const tituloUsar = tituloCRM || tituloCRMExterno || TITULO_PADRAO;
+                                  const preview = gerarPreviewCategoria(cat.name, tituloUsar, demandasSelecionadas);
+                                  return (
+                                    <div style={{ marginTop: 8 }}>
+                                      <button onClick={() => setPreviasAbertas(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(key)) next.delete(key); else next.add(key);
+                                        return next;
+                                      })} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', color: textMuted, cursor: 'pointer' }}>
+                                        {previewAberta ? '▲ Fechar prévia' : '👁 Ver prévia'}
+                                      </button>
+                                      {previewAberta && (
+                                        <pre style={{ marginTop: 8, fontFamily: 'Inter,sans-serif', fontSize: 11, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: textColor, background: bg, borderRadius: 8, border: `1px solid ${border}`, padding: '10px 12px', maxHeight: 200, overflowY: 'auto' }}>
+                                          {preview || <em style={{ color: '#d1d5db' }}>Nenhuma demanda elegível para esta categoria</em>}
+                                        </pre>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                                 {!crmAtivo && slot.msg && (
                                   <div style={{ marginTop: 6, fontSize: 11, color: textMuted, lineHeight: 1.5, maxHeight: 40, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                     {slot.msg}
@@ -476,12 +532,14 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
   useEffect(() => {
     setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
   }, [elegiveis]);
-  function toggleSelecionado(id) {
+  async function toggleSelecionado(id) {
     setSelecionados(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    const novoValor = !selecionados.has(id);
+    await supabase.from('negociacoes').update({ solicitar_parceria: novoValor }).eq('id', id);
   }
   const porModalidade = useMemo(() => {
     const grupos = {};
@@ -637,7 +695,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
       {/* Direita: WA Scheduler */}
       <div style={{ flex: '0 0 43%', position: 'sticky', top: 0, height: 'calc(100vh - 130px)', minHeight: 500 }}>
         {instancia ? (
-          <WAPainel instancia={instancia} mensagemCRM={textoFinal} darkMode={darkMode} />
+          <WAPainel instancia={instancia} mensagemCRM={textoFinal} darkMode={darkMode} demandasSelecionadas={elegiveis.filter(c => selecionados.has(c.id))} tituloCRMExterno={titulo} />
         ) : (
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
