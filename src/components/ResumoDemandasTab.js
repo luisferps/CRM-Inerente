@@ -131,37 +131,60 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   useEffect(() => {
     if (mensagemCRM) setDisparoMsg(mensagemCRM);
   }, [mensagemCRM]);
-  // Atualiza slots substituídos quando mensagem do CRM muda
+
+  // Quando mensagemCRM muda, atualiza e salva automaticamente todos os slots com CRM ON
   useEffect(() => {
-    if (!mensagemCRM || !slotsSubstituidos.size) return;
-    setAgenda(prev => {
-      const novaCats = { ...prev.cats };
-      slotsSubstituidos.forEach((_, key) => {
-        const [catId, slotIdxStr] = key.split('-');
-        const slotIdx = parseInt(slotIdxStr);
-        if (!novaCats[catId]?.slots) return;
-        const slots = [...novaCats[catId].slots];
-        slots[slotIdx] = { ...slots[slotIdx], msg: mensagemCRM };
-        novaCats[catId] = { ...novaCats[catId], slots };
+    if (!mensagemCRM || !agenda.cats) return;
+    const timer = setTimeout(async () => {
+      let temSlotCRM = false;
+      const novaCats = { ...agenda.cats };
+      Object.entries(novaCats).forEach(([catId, catData]) => {
+        if (!catData.slots) return;
+        const slots = [...catData.slots];
+        slots.forEach((slot, i) => {
+          if (slot.espelhar_crm && slot.ativo !== false) {
+            slots[i] = { ...slot, msg: mensagemCRM };
+            temSlotCRM = true;
+          }
+        });
+        novaCats[catId] = { ...catData, slots };
       });
-      return { ...prev, cats: novaCats };
-    });
-  }, [mensagemCRM, slotsSubstituidos]);
+      if (!temSlotCRM) return;
+      const novaAgenda = { ...agenda, cats: novaCats };
+      setAgenda(novaAgenda);
+      await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+        body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
+      });
+      toast('Mensagem salva nos slots ✓');
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [mensagemCRM]);
   // Carrega título CRM da agenda
   useEffect(() => {
     if (agenda.titulo_crm) setTituloCRM(agenda.titulo_crm);
   }, [agenda.titulo_crm]);
 
+  // Salva título automaticamente com debounce de 1.5s
+  useEffect(() => {
+    if (!tituloCRMEditando) return;
+    const timer = setTimeout(async () => {
+      const novaAgenda = { ...agenda, titulo_crm: tituloCRM };
+      setAgenda(novaAgenda);
+      await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+        body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
+      });
+      toast('Título salvo ✓');
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [tituloCRM]);
+
   async function salvarTituloCRM() {
     setTituloCRMEditando(false);
-    const novaAgenda = { ...agenda, titulo_crm: tituloCRM };
-    setAgenda(novaAgenda);
-    await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-      body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
-    });
-    toast('Título salvo!');
+    toast('Título salvo ✓');
   }
 
   function toggleEspelharCRM(catId, slotIdx) {
@@ -170,9 +193,11 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const slots = [...(novaCats[catId]?.slots || [])];
       slots[slotIdx] = { ...slots[slotIdx], espelhar_crm: !slots[slotIdx].espelhar_crm };
       novaCats[catId] = { ...novaCats[catId], slots };
-      return { ...prev, cats: novaCats };
+      const novaAgenda = { ...prev, cats: novaCats };
+      // Salva automaticamente
+      setTimeout(() => salvarAgendaAuto(novaAgenda), 0);
+      return novaAgenda;
     });
-    setPendenteSalvar(true);
   }
 
   function toggleAtivoSlot(catId, slotIdx) {
@@ -182,9 +207,23 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const atual = slots[slotIdx].ativo !== false;
       slots[slotIdx] = { ...slots[slotIdx], ativo: !atual };
       novaCats[catId] = { ...novaCats[catId], slots };
-      return { ...prev, cats: novaCats };
+      const novaAgenda = { ...prev, cats: novaCats };
+      // Salva automaticamente
+      setTimeout(() => salvarAgendaAuto(novaAgenda), 0);
+      return novaAgenda;
     });
-    setPendenteSalvar(true);
+  }
+
+  async function salvarAgendaAuto(agendaAtual) {
+    try {
+      const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+        body: JSON.stringify({ ...agendaAtual, instancia, categorias: CATS })
+      });
+      if (r.ok) toast('Salvo ✓');
+      else toast('Erro ao salvar', true);
+    } catch { toast('Erro ao salvar', true); }
   }
 
   async function salvarConfiguracoes() {
@@ -441,12 +480,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
                     </div>
                   );
                 })}
-                {pendenteSalvar && (
-                  <button onClick={salvarConfiguracoes} disabled={salvando}
-                    style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: salvando ? '#9ca3af' : '#059669', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer', marginTop: 8 }}>
-                    {salvando ? 'Salvando...' : '💾 Salvar configurações'}
-                  </button>
-                )}
               </>
             )}
             {/* Disparo */}
