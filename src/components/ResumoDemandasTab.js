@@ -67,6 +67,9 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const [salvando, setSalvando] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [toastWarn, setToastWarn] = useState(false);
+  const [tituloCRM, setTituloCRM] = useState('Preciso de: (enviar somente imóveis nos perfis relacionados)');
+  const [tituloCRMEditando, setTituloCRMEditando] = useState(false);
+  const [pendenteSalvar, setPendenteSalvar] = useState(false);
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
@@ -110,6 +113,60 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
       return { ...prev, cats: novaCats };
     });
   }, [mensagemCRM, slotsSubstituidos]);
+  // Carrega título CRM da agenda
+  useEffect(() => {
+    if (agenda.titulo_crm) setTituloCRM(agenda.titulo_crm);
+  }, [agenda.titulo_crm]);
+
+  async function salvarTituloCRM() {
+    setTituloCRMEditando(false);
+    const novaAgenda = { ...agenda, titulo_crm: tituloCRM };
+    setAgenda(novaAgenda);
+    await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+      body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
+    });
+    toast('Título salvo!');
+  }
+
+  function toggleEspelharCRM(catId, slotIdx) {
+    setAgenda(prev => {
+      const novaCats = { ...prev.cats };
+      const slots = [...(novaCats[catId]?.slots || [])];
+      slots[slotIdx] = { ...slots[slotIdx], espelhar_crm: !slots[slotIdx].espelhar_crm };
+      novaCats[catId] = { ...novaCats[catId], slots };
+      return { ...prev, cats: novaCats };
+    });
+    setPendenteSalvar(true);
+  }
+
+  function toggleAtivoSlot(catId, slotIdx) {
+    setAgenda(prev => {
+      const novaCats = { ...prev.cats };
+      const slots = [...(novaCats[catId]?.slots || [])];
+      const atual = slots[slotIdx].ativo !== false;
+      slots[slotIdx] = { ...slots[slotIdx], ativo: !atual };
+      novaCats[catId] = { ...novaCats[catId], slots };
+      return { ...prev, cats: novaCats };
+    });
+    setPendenteSalvar(true);
+  }
+
+  async function salvarConfiguracoes() {
+    setSalvando(true);
+    try {
+      const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+        body: JSON.stringify({ ...agenda, instancia, categorias: CATS })
+      });
+      if (r.ok) { toast('Configurações salvas!'); setPendenteSalvar(false); }
+      else toast('Erro ao salvar', true);
+    } catch { toast('Erro ao salvar', true); }
+    setSalvando(false);
+  }
+
   function toggleCatAberta(catId) {
     setCatsAbertas(prev => {
       const next = new Set(prev);
@@ -238,26 +295,43 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           <div style={{ textAlign: 'center', padding: 30, color: textMuted, fontSize: 13 }}>Carregando...</div>
         ) : (
           <>
-            {/* Mensagens */}
+            {/* Mensagens — Configuração CRM Automático */}
             {secAtiva === 'mensagens' && (
               <>
+                {/* Título CRM */}
+                <div style={{ marginBottom: 14, padding: '12px 14px', background: bg, border: `1px solid ${border}`, borderRadius: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px' }}>Título da mensagem CRM</span>
+                    {tituloCRMEditando
+                      ? <button onClick={salvarTituloCRM} style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid #059669', background: '#f0fdf4', color: '#059669', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>💾 Salvar</button>
+                      : <button onClick={() => setTituloCRMEditando(true)} style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid #d1d5db', background: 'transparent', color: '#9ca3af', fontSize: 10, cursor: 'pointer' }}>✏️ Editar</button>
+                    }
+                  </div>
+                  {tituloCRMEditando
+                    ? <textarea value={tituloCRM} onChange={e => setTituloCRM(e.target.value)} rows={2}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '2px solid #059669', borderRadius: 8, background: darkMode ? '#0f1117' : '#f0fdf4', color: textColor, fontSize: 12, resize: 'vertical', outline: 'none', fontFamily: 'Inter, sans-serif' }} />
+                    : <div style={{ fontSize: 12, color: textMuted, fontStyle: 'italic' }}>{tituloCRM}</div>
+                  }
+                </div>
+
                 <p style={{ fontSize: 12, color: textMuted, marginBottom: 14, lineHeight: 1.6 }}>
-                  Marque o checkbox em um horário para espelhar a mensagem do CRM automaticamente. Desmarque para restaurar a mensagem original.
+                  Ative o disparo automático CRM nos slots desejados. O backend buscará as demandas do CRM e enviará automaticamente no horário configurado.
                 </p>
+
                 {CATS.map(cat => {
                   const slots = agenda.cats?.[cat.id]?.slots || [];
                   const grpCount = (agenda.grupos || []).filter(g => g.cat === cat.id).length;
                   const aberta = catsAbertas.has(cat.id);
-                  const numSubs = slots.filter((_, i) => slotsSubstituidos.has(`${cat.id}-${i}`)).length;
+                  const numAtivos = slots.filter(s => s.espelhar_crm && s.ativo !== false).length;
                   return (
                     <div key={cat.id} style={{ marginBottom: 10, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
                       <div onClick={() => toggleCatAberta(cat.id)}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', userSelect: 'none', background: aberta ? accentBg : bg }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, fontSize: 13, color: textColor, flex: 1 }}>{cat.name}</span>
-                        {numSubs > 0 && (
-                          <span style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 20, padding: '1px 7px', fontWeight: 600 }}>
-                            {numSubs} sub.
+                        {numAtivos > 0 && (
+                          <span style={{ fontSize: 10, background: '#f0fdf4', color: '#059669', border: '1px solid #bbf7d0', borderRadius: 20, padding: '1px 7px', fontWeight: 600 }}>
+                            {numAtivos} CRM ativo{numAtivos > 1 ? 's' : ''}
                           </span>
                         )}
                         <span style={{ fontSize: 11, color: textMuted }}>{grpCount}g</span>
@@ -265,38 +339,44 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                       </div>
                       {aberta && (
                         <div style={{ borderTop: `1px solid ${border}` }}>
+                          {slots.length === 0 && (
+                            <div style={{ padding: '12px 14px', fontSize: 12, color: textMuted, fontStyle: 'italic' }}>Nenhum slot configurado</div>
+                          )}
                           {slots.map((slot, i) => {
-                            const key = `${cat.id}-${i}`;
-                            const isSub = slotsSubstituidos.has(key);
+                            const crmAtivo = slot.espelhar_crm === true;
+                            const slotAtivo = slot.ativo !== false;
                             return (
-                              <div key={i}
-                                style={{ padding: '10px 14px', background: isSub ? accentBg : card, borderBottom: i < slots.length - 1 ? `1px solid ${border}` : 'none', transition: 'background .15s' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                                  <span style={{ fontSize: 11, color: isSub ? '#2563eb' : textMuted, fontWeight: 600 }}>⏰ {slot.time}</span>
+                              <div key={i} style={{ padding: '12px 14px', background: crmAtivo ? (slotAtivo ? accentBg : bg) : card, borderBottom: i < slots.length - 1 ? `1px solid ${border}` : 'none' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: 11, color: crmAtivo ? '#2563eb' : textMuted, fontWeight: 600, flexShrink: 0 }}>⏰ {slot.time}</span>
                                   <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'wrap' }}>
                                     {DAYS_LABEL.map((d, j) => (
-                                      <span key={j} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 20, background: slot.days?.includes(j) ? (isSub ? '#bfdbfe' : '#f1f5f9') : 'transparent', color: slot.days?.includes(j) ? (isSub ? '#1d4ed8' : textMuted) : '#d1d5db', fontWeight: slot.days?.includes(j) ? 600 : 400 }}>{d}</span>
+                                      <span key={j} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 20, background: slot.days?.includes(j) ? '#f1f5f9' : 'transparent', color: slot.days?.includes(j) ? textMuted : '#d1d5db', fontWeight: slot.days?.includes(j) ? 600 : 400 }}>{d}</span>
                                     ))}
                                   </div>
-                                  {/* Checkbox espelhar CRM */}
-                                  <label
-                                    style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: mensagemCRM ? 'pointer' : 'not-allowed', flexShrink: 0, userSelect: 'none' }}
-                                    title={mensagemCRM ? (isSub ? 'Desmarcar para restaurar mensagem original' : 'Marcar para espelhar a mensagem do CRM') : 'Gere uma mensagem no CRM primeiro'}>
-                                    <input
-                                      type="checkbox"
-                                      checked={isSub}
-                                      onChange={e => { e.stopPropagation(); toggleSlot(cat.id, i); }}
-                                      disabled={!mensagemCRM}
-                                      style={{ width: 13, height: 13, accentColor: '#2563eb', cursor: mensagemCRM ? 'pointer' : 'not-allowed' }}
-                                    />
-                                    <span style={{ fontSize: 10, color: isSub ? '#2563eb' : textMuted, fontWeight: isSub ? 700 : 400, whiteSpace: 'nowrap' }}>
-                                      {isSub ? 'Espelhando CRM' : 'Espelhar CRM'}
-                                    </span>
-                                  </label>
+                                  {/* Toggle CRM automático */}
+                                  <button onClick={() => toggleEspelharCRM(cat.id, i)}
+                                    style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${crmAtivo ? '#059669' : '#d1d5db'}`, background: crmAtivo ? '#f0fdf4' : 'transparent', color: crmAtivo ? '#059669' : textMuted, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    {crmAtivo ? '✓ CRM ON' : 'CRM OFF'}
+                                  </button>
+                                  {/* Toggle suspender */}
+                                  {crmAtivo && (
+                                    <button onClick={() => toggleAtivoSlot(cat.id, i)}
+                                      style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${slotAtivo ? '#f59e0b' : '#dc2626'}`, background: slotAtivo ? '#fffbeb' : '#fee2e2', color: slotAtivo ? '#b45309' : '#dc2626', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                      {slotAtivo ? '⏸ Suspender' : '▶ Ativar'}
+                                    </button>
+                                  )}
                                 </div>
-                                <div style={{ fontSize: 11, color: isSub ? '#1d4ed8' : textMuted, lineHeight: 1.5, maxHeight: 52, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                                  {slot.msg || <em style={{ color: '#d1d5db' }}>Sem mensagem configurada</em>}
-                                </div>
+                                {crmAtivo && (
+                                  <div style={{ marginTop: 6, fontSize: 11, color: slotAtivo ? '#059669' : '#dc2626', fontWeight: 600 }}>
+                                    {slotAtivo ? '● Disparo automático ativo' : '○ Disparo suspenso'}
+                                  </div>
+                                )}
+                                {!crmAtivo && slot.msg && (
+                                  <div style={{ marginTop: 6, fontSize: 11, color: textMuted, lineHeight: 1.5, maxHeight: 40, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                    {slot.msg}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -305,10 +385,10 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                     </div>
                   );
                 })}
-                {slotsSubstituidos.size > 0 && (
-                  <button onClick={salvarSubstituicoes} disabled={salvando}
-                    style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: salvando ? '#9ca3af' : '#2563eb', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer', marginTop: 8 }}>
-                    {salvando ? 'Salvando...' : `💾 Salvar ${slotsSubstituidos.size} substituição${slotsSubstituidos.size > 1 ? 'ões' : ''}`}
+                {pendenteSalvar && (
+                  <button onClick={salvarConfiguracoes} disabled={salvando}
+                    style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: salvando ? '#9ca3af' : '#059669', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer', marginTop: 8 }}>
+                    {salvando ? 'Salvando...' : '💾 Salvar configurações'}
                   </button>
                 )}
               </>
