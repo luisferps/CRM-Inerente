@@ -25,29 +25,50 @@ function formatarLinha(c) {
   if (preco) partes.push(preco);
   return `- ${partes.join(' ')}`;
 }
-function gerarTexto(ativas, porModalidade) {
-  if (ativas.length === 0) return '';
+function gerarTextoComSelecionados(selecionados, porModalidade) {
+  const ids = new Set(selecionados);
+  if (ids.size === 0) return '';
   let out = 'Preciso de: (enviar somente imóveis nos perfis relacionados)\n\n';
   const ordem = ['Compra', 'Venda', 'Locação'];
   const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
+  let temConteudo = false;
   mods.forEach(mod => {
+    const filtrados = (porModalidade[mod] || []).filter(c => ids.has(c.id));
+    if (!filtrados.length) return;
+    temConteudo = true;
     const icon = mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄';
     out += `${icon} *${capitalize(mod)}:*\n`;
-    porModalidade[mod].forEach(c => { out += formatarLinha(c) + '\n'; });
+    filtrados.forEach(c => { out += formatarLinha(c) + '\n'; });
     out += '\n';
   });
-  return out.trim();
+  return temConteudo ? out.trim() : '';
 }
 
-// ── Painel WA (lado direito) ──────────────────────────────────────────────────
+// ── Ícone de Parceria ─────────────────────────────────────────────────────────
+function IconeParceria({ ativo, onClick, size = 18 }) {
+  return (
+    <button onClick={onClick} title={ativo ? 'Remover da mensagem' : 'Incluir na mensagem'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"
+          fill={ativo ? '#2563eb' : 'none'} stroke={ativo ? '#2563eb' : '#d1d5db'} strokeWidth="2" />
+        <circle cx="12" cy="12" r="3"
+          fill={ativo ? '#fff' : 'none'} stroke={ativo ? '#2563eb' : '#d1d5db'} strokeWidth="2" />
+      </svg>
+    </button>
+  );
+}
+
+// ── WA Painel ────────────────────────────────────────────────────────────────
 function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const [agenda, setAgenda] = useState({ cats: {}, grupos: [], categorias: [] });
   const [CATS, setCATS] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [secAtiva, setSecAtiva] = useState('mensagens');
+  const [catsAbertas, setCatsAbertas] = useState(new Set());
 
-  // Slot substituído: { catId, slotIdx, msgOriginal }
-  const [slotSubstituido, setSlotSubstituido] = useState(null);
+  // Slots substituídos: Map de "catId-slotIdx" -> msgOriginal
+  const [slotsSubstituidos, setSlotsSubstituidos] = useState(new Map());
 
   // Disparo
   const [disparoMsg, setDisparoMsg] = useState('');
@@ -87,44 +108,53 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
 
   useEffect(() => { carregarAgenda(); }, [carregarAgenda]);
 
-  // Quando mensagem do CRM muda, preenche campo de disparo
   useEffect(() => {
     if (mensagemCRM) setDisparoMsg(mensagemCRM);
   }, [mensagemCRM]);
 
-  // Substituir slot por mensagem do CRM
-  function substituirSlot(catId, slotIdx) {
-    if (!mensagemCRM) { toast('Nenhuma mensagem gerada ainda', true); return; }
-
-    setAgenda(prev => {
-      const novaCats = { ...prev.cats };
-
-      // Restaura slot anterior se havia substituição
-      if (slotSubstituido && novaCats[slotSubstituido.catId]?.slots) {
-        const slots = [...novaCats[slotSubstituido.catId].slots];
-        slots[slotSubstituido.slotIdx] = { ...slots[slotSubstituido.slotIdx], msg: slotSubstituido.msgOriginal };
-        novaCats[slotSubstituido.catId] = { ...novaCats[slotSubstituido.catId], slots };
-      }
-
-      // Se clicou no mesmo slot, só restaura (desfaz)
-      if (slotSubstituido?.catId === catId && slotSubstituido?.slotIdx === slotIdx) {
-        setSlotSubstituido(null);
-        return { ...prev, cats: novaCats };
-      }
-
-      // Substitui novo slot
-      const msgOriginal = novaCats[catId]?.slots?.[slotIdx]?.msg || '';
-      const slots = [...(novaCats[catId]?.slots || [])];
-      slots[slotIdx] = { ...slots[slotIdx], msg: mensagemCRM };
-      novaCats[catId] = { ...novaCats[catId], slots };
-      setSlotSubstituido({ catId, slotIdx, msgOriginal });
-
-      return { ...prev, cats: novaCats };
+  function toggleCatAberta(catId) {
+    setCatsAbertas(prev => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId); else next.add(catId);
+      return next;
     });
   }
 
-  async function salvarSubstituicao() {
-    if (!slotSubstituido) { toast('Selecione um slot para substituir', true); return; }
+  function toggleSlot(catId, slotIdx) {
+    if (!mensagemCRM) { toast('Nenhuma mensagem gerada ainda', true); return; }
+    const key = `${catId}-${slotIdx}`;
+
+    setSlotsSubstituidos(prev => {
+      const next = new Map(prev);
+      if (next.has(key)) {
+        // Restaura mensagem original
+        const msgOriginal = next.get(key);
+        next.delete(key);
+        setAgenda(ag => {
+          const novaCats = { ...ag.cats };
+          const slots = [...(novaCats[catId]?.slots || [])];
+          slots[slotIdx] = { ...slots[slotIdx], msg: msgOriginal };
+          novaCats[catId] = { ...novaCats[catId], slots };
+          return { ...ag, cats: novaCats };
+        });
+      } else {
+        // Substitui pelo texto do CRM
+        const msgOriginal = agenda.cats?.[catId]?.slots?.[slotIdx]?.msg || '';
+        next.set(key, msgOriginal);
+        setAgenda(ag => {
+          const novaCats = { ...ag.cats };
+          const slots = [...(novaCats[catId]?.slots || [])];
+          slots[slotIdx] = { ...slots[slotIdx], msg: mensagemCRM };
+          novaCats[catId] = { ...novaCats[catId], slots };
+          return { ...ag, cats: novaCats };
+        });
+      }
+      return next;
+    });
+  }
+
+  async function salvarSubstituicoes() {
+    if (!slotsSubstituidos.size) { toast('Nenhuma substituição feita', true); return; }
     setSalvando(true);
     try {
       const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
@@ -132,7 +162,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
         headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
         body: JSON.stringify({ ...agenda, instancia, categorias: CATS })
       });
-      if (r.ok) toast('Mensagem salva no agendamento!');
+      if (r.ok) toast(`${slotsSubstituidos.size} slot(s) salvo(s)!`);
       else toast('Erro ao salvar', true);
     } catch { toast('Erro ao salvar', true); }
     setSalvando(false);
@@ -189,9 +219,9 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           <div style={{ fontWeight: 700, fontSize: 13, color: textColor }}>WA Scheduler</div>
           <div style={{ fontSize: 10, color: textMuted }}>{instancia}</div>
         </div>
-        {slotSubstituido && (
+        {slotsSubstituidos.size > 0 && (
           <span style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
-            1 slot substituído
+            {slotsSubstituidos.size} slot{slotsSubstituidos.size > 1 ? 's' : ''} substituído{slotsSubstituidos.size > 1 ? 's' : ''}
           </span>
         )}
       </div>
@@ -218,63 +248,67 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                 {CATS.map(cat => {
                   const slots = agenda.cats?.[cat.id]?.slots || [];
                   const grpCount = (agenda.grupos || []).filter(g => g.cat === cat.id).length;
+                  const aberta = catsAbertas.has(cat.id);
+                  const numSubs = slots.filter((_, i) => slotsSubstituidos.has(`${cat.id}-${i}`)).length;
+
                   return (
-                    <div key={cat.id} style={{ marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div key={cat.id} style={{ marginBottom: 10, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                      {/* Header da categoria */}
+                      <div onClick={() => toggleCatAberta(cat.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', userSelect: 'none', background: aberta ? accentBg : bg }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, fontSize: 13, color: textColor, flex: 1 }}>{cat.name}</span>
-                        <span style={{ fontSize: 11, color: textMuted }}>{grpCount} grupo{grpCount !== 1 ? 's' : ''}</span>
+                        {numSubs > 0 && (
+                          <span style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 20, padding: '1px 7px', fontWeight: 600 }}>
+                            {numSubs} sub.
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11, color: textMuted }}>{grpCount}g</span>
+                        <span style={{ fontSize: 11, color: textMuted, marginLeft: 4 }}>{aberta ? '▲' : '▼'}</span>
                       </div>
 
-                      {slots.map((slot, i) => {
-                        const isSub = slotSubstituido?.catId === cat.id && slotSubstituido?.slotIdx === i;
-                        return (
-                          <div key={i}
-                            onClick={() => substituirSlot(cat.id, i)}
-                            style={{
-                              border: `2px solid ${isSub ? '#2563eb' : border}`,
-                              borderRadius: 10, padding: '10px 12px', marginBottom: 8,
-                              background: isSub ? accentBg : bg,
-                              cursor: mensagemCRM ? 'pointer' : 'default',
-                              transition: 'all .15s'
-                            }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                              <span style={{ fontSize: 11, color: isSub ? '#2563eb' : textMuted, fontWeight: 600 }}>
-                                ⏰ {slot.time}
-                              </span>
-                              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', flex: 1 }}>
-                                {DAYS_LABEL.map((d, j) => (
-                                  <span key={j} style={{
-                                    fontSize: 9, padding: '1px 5px', borderRadius: 20,
-                                    background: slot.days?.includes(j) ? (isSub ? '#bfdbfe' : '#f1f5f9') : 'transparent',
-                                    color: slot.days?.includes(j) ? (isSub ? '#1d4ed8' : textMuted) : '#d1d5db',
-                                    fontWeight: slot.days?.includes(j) ? 600 : 400
-                                  }}>{d}</span>
-                                ))}
+                      {/* Slots */}
+                      {aberta && (
+                        <div style={{ borderTop: `1px solid ${border}` }}>
+                          {slots.map((slot, i) => {
+                            const key = `${cat.id}-${i}`;
+                            const isSub = slotsSubstituidos.has(key);
+                            return (
+                              <div key={i} onClick={() => toggleSlot(cat.id, i)}
+                                style={{ padding: '10px 14px', cursor: mensagemCRM ? 'pointer' : 'default', background: isSub ? accentBg : card, borderBottom: i < slots.length - 1 ? `1px solid ${border}` : 'none', transition: 'background .15s' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                                  <span style={{ fontSize: 11, color: isSub ? '#2563eb' : textMuted, fontWeight: 600 }}>⏰ {slot.time}</span>
+                                  <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'wrap' }}>
+                                    {DAYS_LABEL.map((d, j) => (
+                                      <span key={j} style={{
+                                        fontSize: 9, padding: '1px 5px', borderRadius: 20,
+                                        background: slot.days?.includes(j) ? (isSub ? '#bfdbfe' : '#f1f5f9') : 'transparent',
+                                        color: slot.days?.includes(j) ? (isSub ? '#1d4ed8' : textMuted) : '#d1d5db',
+                                        fontWeight: slot.days?.includes(j) ? 600 : 400
+                                      }}>{d}</span>
+                                    ))}
+                                  </div>
+                                  {isSub
+                                    ? <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, flexShrink: 0 }}>✓ Substituído</span>
+                                    : <span style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>Clique para substituir</span>
+                                  }
+                                </div>
+                                <div style={{ fontSize: 11, color: isSub ? '#1d4ed8' : textMuted, lineHeight: 1.5, maxHeight: 52, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                                  {slot.msg || <em style={{ color: '#d1d5db' }}>Sem mensagem configurada</em>}
+                                </div>
                               </div>
-                              {isSub && (
-                                <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, flexShrink: 0 }}>● Substituído</span>
-                              )}
-                            </div>
-                            <div style={{
-                              fontSize: 11, color: isSub ? '#1d4ed8' : textMuted,
-                              lineHeight: 1.5, maxHeight: 48, overflow: 'hidden',
-                              textOverflow: 'ellipsis', display: '-webkit-box',
-                              WebkitLineClamp: 3, WebkitBoxOrient: 'vertical'
-                            }}>
-                              {slot.msg || <em style={{ color: '#d1d5db' }}>Sem mensagem configurada</em>}
-                            </div>
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
 
-                {slotSubstituido && (
-                  <button onClick={salvarSubstituicao} disabled={salvando}
-                    style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: salvando ? '#9ca3af' : '#2563eb', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer', marginTop: 4 }}>
-                    {salvando ? 'Salvando...' : '💾 Salvar substituição no agendamento'}
+                {slotsSubstituidos.size > 0 && (
+                  <button onClick={salvarSubstituicoes} disabled={salvando}
+                    style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: salvando ? '#9ca3af' : '#2563eb', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer', marginTop: 8 }}>
+                    {salvando ? 'Salvando...' : `💾 Salvar ${slotsSubstituidos.size} substituição${slotsSubstituidos.size > 1 ? 'ões' : ''}`}
                   </button>
                 )}
               </>
@@ -318,7 +352,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                 )}
 
                 <button disabled={disparando} onClick={dispararAgora}
-                  style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: disparando ? '#9ca3af' : '#dc2626', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, cursor: disparando ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: disparando ? '#9ca3af' : '#dc2626', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, cursor: disparando ? 'not-allowed' : 'pointer' }}>
                   {disparando ? '⏳ Enviando...' : '⚡ Enviar agora'}
                 </button>
 
@@ -340,13 +374,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
 
       {/* Toast */}
       {toastMsg && (
-        <div style={{
-          position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
-          background: card, border: `1px solid ${toastWarn ? '#f59e0b' : '#059669'}`,
-          borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 600,
-          color: toastWarn ? '#b45309' : '#059669', whiteSpace: 'nowrap', zIndex: 10,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-        }}>
+        <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: card, border: `1px solid ${toastWarn ? '#f59e0b' : '#059669'}`, borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 600, color: toastWarn ? '#b45309' : '#059669', whiteSpace: 'nowrap', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
           {toastMsg}
         </div>
       )}
@@ -360,33 +388,50 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
 
-  const ativas = useMemo(() => data.filter(c => {
+  // Demandas elegíveis: ativas, não corretor, sem etapas avançadas
+  const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
-    if (!c.solicitar_parceria) return false;
     const etapasAvancadas = ['proposta','contrato','financiamento','recebimento','recebido'];
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
   }), [data]);
 
+  // Selecionados: por padrão apenas os que têm solicitar_parceria
+  const [selecionados, setSelecionados] = useState(new Set());
+
+  useEffect(() => {
+    setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
+  }, [elegiveis]);
+
+  function toggleSelecionado(id) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function selecionarTodos() { setSelecionados(new Set(elegiveis.map(c => c.id))); }
+  function deselecionarTodos() { setSelecionados(new Set()); }
+
   const porModalidade = useMemo(() => {
     const grupos = {};
-    ativas.forEach(c => {
+    elegiveis.forEach(c => {
       const mod = c.modalidade || 'Outros';
       if (!grupos[mod]) grupos[mod] = [];
       grupos[mod].push(c);
     });
     return grupos;
-  }, [ativas]);
+  }, [elegiveis]);
 
-  const textoGerado = useMemo(() => gerarTexto(ativas, porModalidade), [ativas, porModalidade]);
+  const textoGerado = useMemo(() => gerarTextoComSelecionados([...selecionados], porModalidade), [selecionados, porModalidade]);
 
   useEffect(() => {
-    setTextoEditado(textoGerado);
-    setEditando(false);
-  }, [textoGerado]);
+    if (!editando) setTextoEditado(textoGerado);
+  }, [textoGerado, editando]);
 
-  const textoFinal = textoEditado || textoGerado;
+  const textoFinal = editando ? textoEditado : textoGerado;
   const instancia = perfil?.whatsapp_instancia || '';
 
   const card = darkMode ? '#16213e' : '#ffffff';
@@ -395,31 +440,81 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
 
+  const ordem = ['Compra', 'Venda', 'Locação'];
+  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
+
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', color: textColor }}>
 
       {/* ── Esquerda: Demandas ── */}
       <div style={{ flex: '0 0 54%', minWidth: 0 }}>
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>📋 Demandas</h2>
           <p style={{ margin: '6px 0 0', color: textMuted, fontSize: 13 }}>
-            Tratativas ativas com parceria solicitada.{' '}
-            <strong>{ativas.length}</strong> demanda{ativas.length !== 1 ? 's' : ''}.
+            Selecione as demandas que entram na mensagem.{' '}
+            <strong>{selecionados.size}</strong> de <strong>{elegiveis.length}</strong> selecionada{elegiveis.length !== 1 ? 's' : ''}.
           </p>
         </div>
 
-        {ativas.length === 0 ? (
+        {elegiveis.length === 0 ? (
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 40, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🤝</div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Nenhuma demanda encontrada</div>
-            <div style={{ fontSize: 13 }}>Marque "Solicitar Parceria" em uma tratativa.</div>
+            <div style={{ fontSize: 13 }}>Nenhuma tratativa ativa disponível.</div>
           </div>
         ) : (
           <>
+            {/* Ações rápidas */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={selecionarTodos} style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                Selecionar todos
+              </button>
+              <button onClick={deselecionarTodos} style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                Desmarcar todos
+              </button>
+            </div>
+
+            {/* Lista por modalidade */}
+            {mods.map(mod => (
+              <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>
+                    {mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄'} {mod}
+                  </span>
+                  <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '2px 8px', borderRadius: 20 }}>
+                    {(porModalidade[mod] || []).filter(c => selecionados.has(c.id)).length}/{(porModalidade[mod] || []).length}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(porModalidade[mod] || []).map(c => {
+                    const sel = selecionados.has(c.id);
+                    return (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: sel ? (darkMode ? 'rgba(37,99,235,0.08)' : '#eff6ff') : bg, border: `1px solid ${sel ? '#bfdbfe' : border}`, borderRadius: 8, padding: '8px 12px', transition: 'all .15s' }}>
+                        <IconeParceria ativo={sel} onClick={() => toggleSelecionado(c.id)} size={18} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 12, color: sel ? (darkMode ? '#93c5fd' : '#1d4ed8') : textColor, marginBottom: 2 }}>{c.nome}</div>
+                          <div style={{ color: textMuted, lineHeight: 1.5, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {[c.imovel, c.localizacao].filter(Boolean).join(' ')}
+                            {c.detalhes_externos && <span> · {c.detalhes_externos}</span>}
+                            {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
+                              <span style={{ color: Number(c.valor) === 0 ? '#9ca3af' : '#059669', fontWeight: 600 }}>
+                                {' · '}{Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Mensagem gerada */}
             <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: 13 }}>
-                  Mensagem {editando && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 400 }}>— editando</span>}
+                  Mensagem gerada {editando && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 400 }}>— editando</span>}
                 </span>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {editando && (
@@ -439,48 +534,27 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
                 </div>
               </div>
 
-              {editando ? (
-                <textarea value={textoFinal} onChange={e => setTextoEditado(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', minHeight: 180, padding: '10px 12px', fontFamily: 'Inter,sans-serif', fontSize: 12, lineHeight: 1.8, border: '2px solid #f59e0b', borderRadius: 8, background: darkMode ? '#0f1117' : '#fffbeb', color: textColor, resize: 'vertical', outline: 'none' }} />
+              {textoFinal ? (
+                editando ? (
+                  <textarea value={textoEditado} onChange={e => setTextoEditado(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', minHeight: 160, padding: '10px 12px', fontFamily: 'Inter,sans-serif', fontSize: 12, lineHeight: 1.8, border: '2px solid #f59e0b', borderRadius: 8, background: darkMode ? '#0f1117' : '#fffbeb', color: textColor, resize: 'vertical', outline: 'none' }} />
+                ) : (
+                  <pre style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: textColor, margin: 0, padding: '10px 12px', background: bg, borderRadius: 8, border: `1px solid ${border}` }}>
+                    {textoFinal}
+                  </pre>
+                )
               ) : (
-                <pre style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: textColor, margin: 0, padding: '10px 12px', background: bg, borderRadius: 8, border: `1px solid ${border}` }}>
-                  {textoFinal}
-                </pre>
+                <div style={{ padding: '20px', textAlign: 'center', color: textMuted, fontSize: 12 }}>
+                  Selecione ao menos uma demanda para gerar a mensagem.
+                </div>
               )}
-              <div style={{ marginTop: 8, fontSize: 11, color: textMuted }}>
-                Formato: <strong>Imóvel Região. Observações. Preço</strong>
-                {instancia && <span style={{ marginLeft: 10, color: '#25d366', fontWeight: 600 }}>● {instancia}</span>}
-              </div>
-            </div>
 
-            {Object.entries(porModalidade).map(([mod, clientes]) => (
-              <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>
-                    {mod === 'Compra' ? '🛒' : mod === 'Venda' ? '🏠' : mod === 'Locação' ? '🔑' : '📄'} {mod}
-                  </span>
-                  <span style={{ fontSize: 11, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '2px 8px', borderRadius: 20 }}>
-                    {clientes.length} demanda{clientes.length !== 1 ? 's' : ''}
-                  </span>
+              {instancia && textoFinal && (
+                <div style={{ marginTop: 8, fontSize: 11, color: '#25d366', fontWeight: 600 }}>
+                  ● {instancia}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {clientes.map(c => (
-                    <div key={c.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 3 }}>{c.nome}</div>
-                      <div style={{ color: textMuted, lineHeight: 1.6, fontSize: 11 }}>
-                        {[c.imovel, c.localizacao].filter(Boolean).join(' ')}
-                        {c.detalhes_externos && <span> · {c.detalhes_externos}</span>}
-                        {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
-                          <span style={{ color: Number(c.valor) === 0 ? '#9ca3af' : '#059669', fontWeight: 600 }}>
-                            {' · '}{Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              )}
+            </div>
           </>
         )}
       </div>
