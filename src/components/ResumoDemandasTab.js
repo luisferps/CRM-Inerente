@@ -109,7 +109,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
       });
       return { ...prev, cats: novaCats };
     });
-  }, [mensagemCRM]);
+  }, [mensagemCRM, slotsSubstituidos]);
   function toggleCatAberta(catId) {
     setCatsAbertas(prev => {
       const next = new Set(prev);
