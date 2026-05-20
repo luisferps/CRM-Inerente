@@ -92,7 +92,7 @@ function ModalDisparo({ texto, instancia, onClose, darkMode }) {
 
       for (const grupo of grupos) {
         try {
-          const r = await fetch(`https://evolution-api-production-6f9a.up.railway.app/message/sendText/${encodeURIComponent(instancia)}`, {
+          const r = await fetch(`https://evolution-api-production-6f9a.up.railway.app/message/sendText/${instancia}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY },
             body: JSON.stringify({ number: grupo.id, text: texto, delay: 1000 })
