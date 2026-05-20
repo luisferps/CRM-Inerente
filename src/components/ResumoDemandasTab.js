@@ -280,14 +280,12 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                                   </div>
                                   {/* Checkbox espelhar CRM */}
                                   <label
-                                    onClick={e => { e.stopPropagation(); toggleSlot(cat.id, i); }}
                                     style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: mensagemCRM ? 'pointer' : 'not-allowed', flexShrink: 0, userSelect: 'none' }}
                                     title={mensagemCRM ? (isSub ? 'Desmarcar para restaurar mensagem original' : 'Marcar para espelhar a mensagem do CRM') : 'Gere uma mensagem no CRM primeiro'}>
                                     <input
                                       type="checkbox"
                                       checked={isSub}
-                                      onChange={() => {}}
-                                      onClick={e => e.stopPropagation()}
+                                      onChange={e => { e.stopPropagation(); toggleSlot(cat.id, i); }}
                                       disabled={!mensagemCRM}
                                       style={{ width: 13, height: 13, accentColor: '#2563eb', cursor: mensagemCRM ? 'pointer' : 'not-allowed' }}
                                     />
