@@ -162,7 +162,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
         const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-          body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
+          body: JSON.stringify({ cats: novaAgenda.cats, titulo_crm: novaAgenda.titulo_crm, instancia })
         });
         if (r.ok) toast('Mensagem salva nos slots ✓');
         else toast('Erro ao salvar', true);
@@ -184,7 +184,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       await fetch(`${WA_AGENT_URL}/scheduler/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ ...novaAgenda, instancia, categorias: CATS })
+        body: JSON.stringify({ cats: novaAgenda.cats, titulo_crm: novaAgenda.titulo_crm, instancia })
       });
       toast('Título salvo ✓');
     }, 1500);
@@ -228,7 +228,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ ...agendaAtual, instancia, categorias: CATS })
+        body: JSON.stringify({ cats: agendaAtual.cats, titulo_crm: agendaAtual.titulo_crm, instancia })
       });
       if (r.ok) toast('Salvo ✓');
       else toast('Erro ao salvar', true);
@@ -241,7 +241,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ ...agenda, instancia, categorias: CATS })
+        body: JSON.stringify({ cats: agenda.cats, titulo_crm: agenda.titulo_crm, instancia })
       });
       if (r.ok) { toast('Configurações salvas!'); setPendenteSalvar(false); }
       else toast('Erro ao salvar', true);
@@ -292,7 +292,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ ...agenda, instancia, categorias: CATS })
+        body: JSON.stringify({ cats: agenda.cats, titulo_crm: agenda.titulo_crm, instancia })
       });
       if (r.ok) toast(`${slotsSubstituidos.size} slot(s) salvo(s)!`);
       else toast('Erro ao salvar', true);
