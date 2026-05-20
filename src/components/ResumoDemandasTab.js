@@ -1,12 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const WA_EVOLUTION_URL = 'https://evolution-api-production-6f9a.up.railway.app';
 const WA_API_KEY = '40d03599cab78737a4c9eaf7c00723dbe1bc93b6b329fce0a80ff43d393e4c47';
 const DAYS_LABEL = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
 const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
 const LIMITE_AVISO_GRUPOS = 20;
-
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -44,8 +42,6 @@ function gerarTexto(titulo, selecionados, porModalidade) {
   });
   return temConteudo ? out.trim() : '';
 }
-
-// ── Ícone de Parceria (aperto de mãos) ───────────────────────────────────────
 function IconeParceria({ ativo, onClick, size = 18 }) {
   return (
     <button onClick={onClick}
@@ -57,8 +53,6 @@ function IconeParceria({ ativo, onClick, size = 18 }) {
     </button>
   );
 }
-
-// ── WA Painel ────────────────────────────────────────────────────────────────
 function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const [agenda, setAgenda] = useState({ cats: {}, grupos: [], categorias: [] });
   const [CATS, setCATS] = useState([]);
@@ -73,19 +67,16 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
   const [salvando, setSalvando] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [toastWarn, setToastWarn] = useState(false);
-
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
   const accentBg = darkMode ? 'rgba(37,99,235,0.08)' : '#eff6ff';
-
   function toast(msg, warn = false) {
     setToastMsg(msg); setToastWarn(warn);
     setTimeout(() => setToastMsg(''), 3000);
   }
-
   const carregarAgenda = useCallback(async () => {
     if (!instancia) return;
     setCarregando(true);
@@ -99,14 +90,10 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
     } catch { toast('Erro ao carregar dados', true); }
     setCarregando(false);
   }, [instancia]);
-
   useEffect(() => { carregarAgenda(); }, [carregarAgenda]);
-
-  // Atualiza campo de disparo quando mensagem do CRM muda
   useEffect(() => {
     if (mensagemCRM) setDisparoMsg(mensagemCRM);
   }, [mensagemCRM]);
-
   // Atualiza slots substituídos quando mensagem do CRM muda
   useEffect(() => {
     if (!mensagemCRM || !slotsSubstituidos.size) return;
@@ -123,7 +110,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
       return { ...prev, cats: novaCats };
     });
   }, [mensagemCRM]);
-
   function toggleCatAberta(catId) {
     setCatsAbertas(prev => {
       const next = new Set(prev);
@@ -131,7 +117,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
       return next;
     });
   }
-
   function toggleSlot(catId, slotIdx) {
     if (!mensagemCRM) { toast('Nenhuma mensagem gerada ainda', true); return; }
     const key = `${catId}-${slotIdx}`;
@@ -161,7 +146,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
       return next;
     });
   }
-
   async function salvarSubstituicoes() {
     if (!slotsSubstituidos.size) { toast('Nenhuma substituição feita', true); return; }
     setSalvando(true);
@@ -176,7 +160,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
     } catch { toast('Erro ao salvar', true); }
     setSalvando(false);
   }
-
   function toggleCatDisparo(id) {
     setCatsSelDisparo(prev => {
       const next = new Set(prev);
@@ -184,37 +167,29 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
       return next;
     });
   }
-
   const totalGruposDisparo = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat)).length;
   const acimaDoLimite = totalGruposDisparo > LIMITE_AVISO_GRUPOS;
-
   async function dispararAgora() {
     if (!disparoMsg.trim()) { toast('Digite a mensagem', true); return; }
     if (!catsSelDisparo.size) { toast('Selecione uma categoria', true); return; }
     const grupos = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat));
     if (!grupos.length) { toast('Nenhum grupo nas categorias selecionadas', true); return; }
     if (acimaDoLimite && !window.confirm(`Você está prestes a enviar para ${totalGruposDisparo} grupos de uma vez. Isso pode aumentar o risco de suspensão. Deseja continuar?`)) return;
-
     setDisparando(true);
     setLogDisparo([]);
     let ok = 0, err = 0;
-
-    // Agrupa por categoria para pausar entre elas
     const porCat = {};
     grupos.forEach(g => {
       if (!porCat[g.cat]) porCat[g.cat] = [];
       porCat[g.cat].push(g);
     });
-
     let primeiraCategoria = true;
     for (const [catId, gruposCat] of Object.entries(porCat)) {
-      // Pausa entre categorias (10-20 segundos)
       if (!primeiraCategoria) {
         setLogDisparo(l => [...l, { info: true, msg: 'Aguardando entre categorias...' }]);
         await new Promise(r => setTimeout(r, Math.floor(Math.random() * 10000) + 10000));
       }
       primeiraCategoria = false;
-
       for (const g of gruposCat) {
         try {
           const r = await fetch(`${WA_EVOLUTION_URL}/message/sendText/${instancia}`, {
@@ -225,21 +200,18 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           if (r.ok) { ok++; setLogDisparo(l => [...l, { ok: true, nome: g.name }]); }
           else { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name, status: r.status }]); }
         } catch { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name }]); }
-        // Delay aleatório de 3-7 segundos entre grupos
         await new Promise(r => setTimeout(r, Math.floor(Math.random() * 4000) + 3000));
       }
     }
     setDisparando(false);
     toast(`${ok} enviado(s)${err ? ` | ${err} erro(s)` : ''}`);
   }
-
   const navBtnStyle = (ativa) => ({
     flex: 1, padding: '10px 8px', background: 'transparent', border: 'none',
     borderBottom: `2px solid ${ativa ? '#2563eb' : 'transparent'}`,
     color: ativa ? '#2563eb' : textMuted, fontFamily: 'Inter, sans-serif',
     fontSize: 12, fontWeight: ativa ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap'
   });
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
       {/* Header */}
@@ -255,13 +227,11 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           </span>
         )}
       </div>
-
       {/* Nav */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${border}` }}>
         <button style={navBtnStyle(secAtiva === 'mensagens')} onClick={() => setSecAtiva('mensagens')}>📋 Mensagens</button>
         <button style={navBtnStyle(secAtiva === 'disparo')} onClick={() => setSecAtiva('disparo')}>⚡ Disparo</button>
       </div>
-
       {/* Conteúdo */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
         {carregando ? (
@@ -272,7 +242,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
             {secAtiva === 'mensagens' && (
               <>
                 <p style={{ fontSize: 12, color: textMuted, marginBottom: 14, lineHeight: 1.6 }}>
-                  Clique em um horário para substituir a mensagem agendada pela mensagem gerada automaticamente. Clique novamente para desfazer.
+                  Marque o checkbox em um horário para espelhar a mensagem do CRM automaticamente. Desmarque para restaurar a mensagem original.
                 </p>
                 {CATS.map(cat => {
                   const slots = agenda.cats?.[cat.id]?.slots || [];
@@ -299,8 +269,8 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                             const key = `${cat.id}-${i}`;
                             const isSub = slotsSubstituidos.has(key);
                             return (
-                              <div key={i} onClick={() => toggleSlot(cat.id, i)}
-                                style={{ padding: '10px 14px', cursor: mensagemCRM ? 'pointer' : 'default', background: isSub ? accentBg : card, borderBottom: i < slots.length - 1 ? `1px solid ${border}` : 'none', transition: 'background .15s' }}>
+                              <div key={i}
+                                style={{ padding: '10px 14px', background: isSub ? accentBg : card, borderBottom: i < slots.length - 1 ? `1px solid ${border}` : 'none', transition: 'background .15s' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                                   <span style={{ fontSize: 11, color: isSub ? '#2563eb' : textMuted, fontWeight: 600 }}>⏰ {slot.time}</span>
                                   <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'wrap' }}>
@@ -308,10 +278,23 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                                       <span key={j} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 20, background: slot.days?.includes(j) ? (isSub ? '#bfdbfe' : '#f1f5f9') : 'transparent', color: slot.days?.includes(j) ? (isSub ? '#1d4ed8' : textMuted) : '#d1d5db', fontWeight: slot.days?.includes(j) ? 600 : 400 }}>{d}</span>
                                     ))}
                                   </div>
-                                  {isSub
-                                    ? <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, flexShrink: 0 }}>✓ Substituído</span>
-                                    : <span style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>Clique para substituir</span>
-                                  }
+                                  {/* Checkbox espelhar CRM */}
+                                  <label
+                                    onClick={e => { e.stopPropagation(); toggleSlot(cat.id, i); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: mensagemCRM ? 'pointer' : 'not-allowed', flexShrink: 0, userSelect: 'none' }}
+                                    title={mensagemCRM ? (isSub ? 'Desmarcar para restaurar mensagem original' : 'Marcar para espelhar a mensagem do CRM') : 'Gere uma mensagem no CRM primeiro'}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSub}
+                                      onChange={() => {}}
+                                      onClick={e => e.stopPropagation()}
+                                      disabled={!mensagemCRM}
+                                      style={{ width: 13, height: 13, accentColor: '#2563eb', cursor: mensagemCRM ? 'pointer' : 'not-allowed' }}
+                                    />
+                                    <span style={{ fontSize: 10, color: isSub ? '#2563eb' : textMuted, fontWeight: isSub ? 700 : 400, whiteSpace: 'nowrap' }}>
+                                      {isSub ? 'Espelhando CRM' : 'Espelhar CRM'}
+                                    </span>
+                                  </label>
                                 </div>
                                 <div style={{ fontSize: 11, color: isSub ? '#1d4ed8' : textMuted, lineHeight: 1.5, maxHeight: 52, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
                                   {slot.msg || <em style={{ color: '#d1d5db' }}>Sem mensagem configurada</em>}
@@ -332,7 +315,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
                 )}
               </>
             )}
-
             {/* Disparo */}
             {secAtiva === 'disparo' && (
               <>
@@ -389,7 +371,6 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
           </>
         )}
       </div>
-
       {/* Toast */}
       {toastMsg && (
         <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: card, border: `1px solid ${toastWarn ? '#f59e0b' : '#059669'}`, borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 600, color: toastWarn ? '#b45309' : '#059669', whiteSpace: 'nowrap', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
@@ -399,16 +380,12 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
     </div>
   );
 }
-
-// ── ResumoDemandasTab ─────────────────────────────────────────────────────────
 export default function ResumoDemandasTab({ data, darkMode, perfil }) {
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
   const [titulo, setTitulo] = useState(TITULO_PADRAO);
   const [editandoTitulo, setEditandoTitulo] = useState(false);
-
-  // Demandas elegíveis: ativas, não corretor, sem etapas avançadas, sem Venda
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
@@ -417,13 +394,10 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
   }), [data]);
-
   const [selecionados, setSelecionados] = useState(new Set());
-
   useEffect(() => {
     setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
   }, [elegiveis]);
-
   function toggleSelecionado(id) {
     setSelecionados(prev => {
       const next = new Set(prev);
@@ -431,7 +405,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
       return next;
     });
   }
-
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
@@ -442,28 +415,21 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
     });
     return grupos;
   }, [elegiveis]);
-
   const textoGerado = useMemo(() => gerarTexto(titulo, [...selecionados], porModalidade), [titulo, selecionados, porModalidade]);
-
   useEffect(() => {
     if (!editando) setTextoEditado(textoGerado);
   }, [textoGerado, editando]);
-
   const textoFinal = editando ? textoEditado : textoGerado;
   const instancia = perfil?.whatsapp_instancia || '';
-
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
-
   const ordem = ['Compra', 'Locação'];
   const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
-
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', color: textColor }}>
-
       {/* Esquerda */}
       <div style={{ flex: '0 0 54%', minWidth: 0 }}>
         <div style={{ marginBottom: 16 }}>
@@ -473,7 +439,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
             <strong>{selecionados.size}</strong> de <strong>{elegiveis.length}</strong> selecionada{elegiveis.length !== 1 ? 's' : ''}.
           </p>
         </div>
-
         {elegiveis.length === 0 ? (
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 40, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🤝</div>
@@ -491,7 +456,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
                 Desmarcar todos
               </button>
             </div>
-
             {mods.map(mod => (
               <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -526,7 +490,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
                 </div>
               </div>
             ))}
-
             {/* Mensagem gerada */}
             <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
               {/* Título editável */}
@@ -551,7 +514,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
                   <div style={{ fontSize: 12, color: textMuted, fontStyle: 'italic', padding: '4px 0' }}>{titulo}</div>
                 )}
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: 13 }}>
                   Mensagem gerada {editando && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 400 }}>— editando</span>}
@@ -573,7 +535,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
                   </button>
                 </div>
               </div>
-
               {textoFinal ? (
                 editando ? (
                   <textarea value={textoEditado} onChange={e => setTextoEditado(e.target.value)}
@@ -595,7 +556,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil }) {
           </>
         )}
       </div>
-
       {/* Direita: WA Scheduler */}
       <div style={{ flex: '0 0 43%', position: 'sticky', top: 0, height: 'calc(100vh - 130px)', minHeight: 500 }}>
         {instancia ? (
