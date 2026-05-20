@@ -556,14 +556,19 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
     return true;
   }), [data]);
   const [selecionados, setSelecionados] = useState(new Set());
+  const inicializado = useState(false);
   useEffect(() => {
-    setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
+    if (!inicializado[0]) {
+      setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
+      inicializado[1](true);
+    }
   }, [elegiveis]);
   async function toggleSelecionado(id) {
-    const novoValor = !selecionados.has(id);
+    const estaAtivo = selecionados.has(id);
+    const novoValor = !estaAtivo;
     setSelecionados(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (estaAtivo) next.delete(id); else next.add(id);
       return next;
     });
     await supabase.from('negociacoes').update({ solicitar_parceria: novoValor }).eq('id', id);
