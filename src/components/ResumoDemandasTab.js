@@ -186,7 +186,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode }) {
     let ok = 0, err = 0;
     for (const g of grupos) {
       try {
-        const r = await fetch(`${WA_EVOLUTION_URL}/message/sendText/${instancia}`, {
+        const r = await fetch(`${WA_EVOLUTION_URL}/message/sendText/${instancia.replace(/ /g, '%20')}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY },
           body: JSON.stringify({ number: g.id, text: disparoMsg, delay: 1000 })
