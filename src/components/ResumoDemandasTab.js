@@ -75,6 +75,22 @@ function gerarPreviewCategoria(catName, titulo, demandas) {
   if (nome.includes('aluguel') || nome.includes('locacao')) return gerarMensagemSoLocacao(titulo, demandas);
   return gerarMensagemCompleta(titulo, demandas);
 }
+// ── Gera a mensagem CORRETA para uma categoria, usando o mapeamento ──────────
+// Espelha exatamente a mesma lógica da prévia e do backend (index.js).
+function gerarMensagemDaCategoria(catId, catName, titulo, demandas, mapeamento) {
+  if (!demandas || !demandas.length) return '';
+  const modCompra = (mapeamento?.['Compra'] || []).includes(catId);
+  const modLocacao = (mapeamento?.['Locação'] || []).includes(catId);
+  if (modCompra && modLocacao) {
+    return gerarMensagemCompleta(titulo, demandas);
+  } else if (modLocacao) {
+    return gerarMensagemSoLocacao(titulo, demandas);
+  } else if (modCompra) {
+    return gerarMensagemCompleta(titulo, demandas.filter(d => d.modalidade === 'Compra'));
+  }
+  // Sem mapeamento — fallback por nome da categoria
+  return gerarPreviewCategoria(catName, titulo, demandas);
+}
 function IconeParceria({ ativo, onClick, size = 18 }) {
   return (
     <button onClick={onClick}
@@ -134,30 +150,56 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
     if (mensagemCRM) setDisparoMsg(mensagemCRM);
   }, [mensagemCRM]);
 
-  // Ref para sempre ter agenda atualizada no useEffect
+  // Refs para sempre ter valores atualizados dentro dos useEffect/timers
   const agendaRef = useRef(agenda);
   useEffect(() => { agendaRef.current = agenda; }, [agenda]);
+  const demandasRef = useRef(demandasSelecionadas);
+  useEffect(() => { demandasRef.current = demandasSelecionadas; }, [demandasSelecionadas]);
+  const mapeamentoRef = useRef(mapeamentoModal);
+  useEffect(() => { mapeamentoRef.current = mapeamentoModal; }, [mapeamentoModal]);
+  const tituloRef = useRef(tituloCRM);
+  useEffect(() => { tituloRef.current = tituloCRM; }, [tituloCRM]);
 
-  // Quando mensagemCRM muda, atualiza e salva automaticamente todos os slots com CRM ON
+  // Gera o objeto cats com a mensagem CORRETA por categoria (respeitando o mapeamento).
+  // Cada slot com CRM ON recebe a mensagem da SUA categoria, não a mensagem completa.
+  function gerarCatsComMensagemCorreta(catsBase) {
+    const titulo = tituloRef.current || tituloCRMExterno || TITULO_PADRAO;
+    const demandas = demandasRef.current || [];
+    const mapeamento = mapeamentoRef.current || {};
+    const cats = catsBase || {};
+    const novaCats = {};
+    Object.entries(cats).forEach(([catId, catData]) => {
+      if (!catData?.slots) { novaCats[catId] = catData; return; }
+      const catInfo = (agendaRef.current.categorias || []).find(c => c.id === catId);
+      const catName = catInfo?.name || catId;
+      const msgCategoria = gerarMensagemDaCategoria(catId, catName, titulo, demandas, mapeamento);
+      const slots = catData.slots.map(slot => {
+        if (slot.espelhar_crm && slot.ativo !== false && msgCategoria) {
+          return { ...slot, msg: msgCategoria };
+        }
+        return slot;
+      });
+      novaCats[catId] = { ...catData, slots };
+    });
+    return novaCats;
+  }
+
+  // Quando a mensagem/demandas mudam, atualiza e salva os slots com CRM ON
+  // usando a mensagem CORRETA de cada categoria (não a mensagem completa).
   useEffect(() => {
     if (!mensagemCRM) return;
     const timer = setTimeout(async () => {
       const agendaAtual = agendaRef.current;
       if (!agendaAtual.cats) return;
+      // Verifica se existe ao menos um slot com CRM ON
       let temSlotCRM = false;
-      const novaCats = {};
-      Object.entries(agendaAtual.cats).forEach(([catId, catData]) => {
-        if (!catData.slots) { novaCats[catId] = catData; return; }
-        const slots = catData.slots.map(slot => {
-          if (slot.espelhar_crm && slot.ativo !== false) {
-            temSlotCRM = true;
-            return { ...slot, msg: mensagemCRM };
-          }
-          return slot;
+      Object.values(agendaAtual.cats).forEach(catData => {
+        (catData.slots || []).forEach(slot => {
+          if (slot.espelhar_crm && slot.ativo !== false) temSlotCRM = true;
         });
-        novaCats[catId] = { ...catData, slots };
       });
       if (!temSlotCRM) return;
+      const novaCats = gerarCatsComMensagemCorreta(agendaAtual.cats);
       const novaAgenda = { ...agendaAtual, cats: novaCats };
       setAgenda(novaAgenda);
       try {
@@ -171,7 +213,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       } catch { toast('Erro ao salvar', true); }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [mensagemCRM]);
+  }, [mensagemCRM, demandasSelecionadas, mapeamentoModal]);
   // Carrega título CRM e mapeamento da agenda
   useEffect(() => {
     if (agenda.titulo_crm) setTituloCRM(agenda.titulo_crm);
@@ -190,7 +232,11 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   }
 
   async function salvarMapeamento(novoMap) {
-    const novaAgenda = { ...agendaRef.current, mapeamento_modalidade: novoMap };
+    // Ao mudar o mapeamento, regenera as mensagens dos slots com a regra nova
+    mapeamentoRef.current = novoMap;
+    const catsCorrigidas = gerarCatsComMensagemCorreta(agendaRef.current.cats);
+    const novaAgenda = { ...agendaRef.current, cats: catsCorrigidas, mapeamento_modalidade: novoMap };
+    setAgenda(novaAgenda);
     try {
       await fetch(`${WA_AGENT_URL}/scheduler/update`, {
         method: 'POST',
@@ -205,7 +251,9 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   useEffect(() => {
     if (!tituloCRMEditando) return;
     const timer = setTimeout(async () => {
-      const novaAgenda = { ...agenda, titulo_crm: tituloCRM };
+      // Ao mudar o título, regenera as mensagens dos slots com o título novo
+      const catsCorrigidas = gerarCatsComMensagemCorreta(agendaRef.current.cats);
+      const novaAgenda = { ...agendaRef.current, cats: catsCorrigidas, titulo_crm: tituloCRM };
       setAgenda(novaAgenda);
       await fetch(`${WA_AGENT_URL}/scheduler/update`, {
         method: 'POST',
@@ -228,8 +276,11 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const slots = [...(novaCats[catId]?.slots || [])];
       slots[slotIdx] = { ...slots[slotIdx], espelhar_crm: !slots[slotIdx].espelhar_crm };
       novaCats[catId] = { ...novaCats[catId], slots };
-      const novaAgenda = { ...prev, cats: novaCats };
-      // Salva automaticamente
+      let novaAgenda = { ...prev, cats: novaCats };
+      // Regenera as mensagens corretas e salva
+      agendaRef.current = novaAgenda;
+      const catsCorrigidas = gerarCatsComMensagemCorreta(novaAgenda.cats);
+      novaAgenda = { ...novaAgenda, cats: catsCorrigidas };
       setTimeout(() => salvarAgendaAuto(novaAgenda), 0);
       return novaAgenda;
     });
@@ -242,8 +293,11 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const atual = slots[slotIdx].ativo !== false;
       slots[slotIdx] = { ...slots[slotIdx], ativo: !atual };
       novaCats[catId] = { ...novaCats[catId], slots };
-      const novaAgenda = { ...prev, cats: novaCats };
-      // Salva automaticamente
+      let novaAgenda = { ...prev, cats: novaCats };
+      // Regenera as mensagens corretas e salva
+      agendaRef.current = novaAgenda;
+      const catsCorrigidas = gerarCatsComMensagemCorreta(novaAgenda.cats);
+      novaAgenda = { ...novaAgenda, cats: catsCorrigidas };
       setTimeout(() => salvarAgendaAuto(novaAgenda), 0);
       return novaAgenda;
     });
