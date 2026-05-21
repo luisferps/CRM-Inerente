@@ -160,6 +160,37 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   const tituloRef = useRef(tituloCRM);
   useEffect(() => { tituloRef.current = tituloCRM; }, [tituloCRM]);
 
+  // ── Fila de saves SERIALIZADA ──────────────────────────────────────────────
+  // Garante que nunca dois saves rodem ao mesmo tempo (evita briga de gravação no
+  // banco). Cada save espera o anterior terminar e SEMPRE regenera a mensagem
+  // correta no instante do envio, usando o estado mais recente dos refs.
+  const filaSave = useRef(Promise.resolve());
+  function enfileirarSave(extra = {}) {
+    filaSave.current = filaSave.current.then(async () => {
+      // Regenera as cats corretas no momento exato do envio (estado mais novo).
+      const catsCorrigidas = gerarCatsComMensagemCorreta(agendaRef.current.cats);
+      const novaAgenda = { ...agendaRef.current, cats: catsCorrigidas, ...extra };
+      agendaRef.current = novaAgenda;
+      setAgenda(novaAgenda);
+      const body = {
+        cats: novaAgenda.cats,
+        titulo_crm: novaAgenda.titulo_crm,
+        instancia,
+        ...(novaAgenda.mapeamento_modalidade !== undefined && { mapeamento_modalidade: novaAgenda.mapeamento_modalidade }),
+      };
+      try {
+        const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+          body: JSON.stringify(body)
+        });
+        if (r.ok) toast('Salvo ✓');
+        else toast('Erro ao salvar', true);
+      } catch { toast('Erro ao salvar', true); }
+    }).catch(() => {});
+    return filaSave.current;
+  }
+
   // Gera o objeto cats com a mensagem CORRETA por categoria (respeitando o mapeamento).
   // Cada slot com CRM ON recebe a mensagem da SUA categoria, não a mensagem completa.
   function gerarCatsComMensagemCorreta(catsBase) {
@@ -188,7 +219,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   // usando a mensagem CORRETA de cada categoria (não a mensagem completa).
   useEffect(() => {
     if (!mensagemCRM) return;
-    const timer = setTimeout(async () => {
+    const timer = setTimeout(() => {
       const agendaAtual = agendaRef.current;
       if (!agendaAtual.cats) return;
       // Verifica se existe ao menos um slot com CRM ON
@@ -199,18 +230,7 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
         });
       });
       if (!temSlotCRM) return;
-      const novaCats = gerarCatsComMensagemCorreta(agendaAtual.cats);
-      const novaAgenda = { ...agendaAtual, cats: novaCats };
-      setAgenda(novaAgenda);
-      try {
-        const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-          body: JSON.stringify({ cats: novaAgenda.cats, titulo_crm: novaAgenda.titulo_crm, instancia })
-        });
-        if (r.ok) toast('Mensagem salva nos slots ✓');
-        else toast('Erro ao salvar', true);
-      } catch { toast('Erro ao salvar', true); }
+      enfileirarSave();
     }, 1000);
     return () => clearTimeout(timer);
   }, [mensagemCRM, demandasSelecionadas, mapeamentoModal]);
@@ -232,34 +252,19 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   }
 
   async function salvarMapeamento(novoMap) {
-    // Ao mudar o mapeamento, regenera as mensagens dos slots com a regra nova
+    // Atualiza o ref do mapeamento e enfileira o save (regenera mensagens com a regra nova)
     mapeamentoRef.current = novoMap;
-    const catsCorrigidas = gerarCatsComMensagemCorreta(agendaRef.current.cats);
-    const novaAgenda = { ...agendaRef.current, cats: catsCorrigidas, mapeamento_modalidade: novoMap };
-    setAgenda(novaAgenda);
-    try {
-      await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ cats: novaAgenda.cats, titulo_crm: novaAgenda.titulo_crm, mapeamento_modalidade: novoMap, instancia })
-      });
-      toast('Mapeamento salvo ✓');
-    } catch { toast('Erro ao salvar', true); }
+    await enfileirarSave({ mapeamento_modalidade: novoMap });
+    toast('Mapeamento salvo ✓');
   }
 
   // Salva título automaticamente com debounce de 1.5s
   useEffect(() => {
     if (!tituloCRMEditando) return;
-    const timer = setTimeout(async () => {
-      // Ao mudar o título, regenera as mensagens dos slots com o título novo
-      const catsCorrigidas = gerarCatsComMensagemCorreta(agendaRef.current.cats);
-      const novaAgenda = { ...agendaRef.current, cats: catsCorrigidas, titulo_crm: tituloCRM };
-      setAgenda(novaAgenda);
-      await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ cats: novaAgenda.cats, titulo_crm: novaAgenda.titulo_crm, instancia })
-      });
+    const timer = setTimeout(() => {
+      // Atualiza o ref do título e enfileira o save (regenera mensagens com o título novo)
+      tituloRef.current = tituloCRM;
+      enfileirarSave({ titulo_crm: tituloCRM });
       toast('Título salvo ✓');
     }, 1500);
     return () => clearTimeout(timer);
@@ -276,12 +281,10 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const slots = [...(novaCats[catId]?.slots || [])];
       slots[slotIdx] = { ...slots[slotIdx], espelhar_crm: !slots[slotIdx].espelhar_crm };
       novaCats[catId] = { ...novaCats[catId], slots };
-      let novaAgenda = { ...prev, cats: novaCats };
-      // Regenera as mensagens corretas e salva
+      const novaAgenda = { ...prev, cats: novaCats };
+      // Atualiza o ref e enfileira o save (a fila regenera as mensagens corretas)
       agendaRef.current = novaAgenda;
-      const catsCorrigidas = gerarCatsComMensagemCorreta(novaAgenda.cats);
-      novaAgenda = { ...novaAgenda, cats: catsCorrigidas };
-      setTimeout(() => salvarAgendaAuto(novaAgenda), 0);
+      enfileirarSave();
       return novaAgenda;
     });
   }
@@ -293,26 +296,12 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
       const atual = slots[slotIdx].ativo !== false;
       slots[slotIdx] = { ...slots[slotIdx], ativo: !atual };
       novaCats[catId] = { ...novaCats[catId], slots };
-      let novaAgenda = { ...prev, cats: novaCats };
-      // Regenera as mensagens corretas e salva
+      const novaAgenda = { ...prev, cats: novaCats };
+      // Atualiza o ref e enfileira o save (a fila regenera as mensagens corretas)
       agendaRef.current = novaAgenda;
-      const catsCorrigidas = gerarCatsComMensagemCorreta(novaAgenda.cats);
-      novaAgenda = { ...novaAgenda, cats: catsCorrigidas };
-      setTimeout(() => salvarAgendaAuto(novaAgenda), 0);
+      enfileirarSave();
       return novaAgenda;
     });
-  }
-
-  async function salvarAgendaAuto(agendaAtual) {
-    try {
-      const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ cats: agendaAtual.cats, titulo_crm: agendaAtual.titulo_crm, instancia })
-      });
-      if (r.ok) toast('Salvo ✓');
-      else toast('Erro ao salvar', true);
-    } catch { toast('Erro ao salvar', true); }
   }
 
   async function salvarConfiguracoes() {
