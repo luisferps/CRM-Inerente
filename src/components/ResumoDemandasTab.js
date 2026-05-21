@@ -71,8 +71,8 @@ function gerarMensagemSoLocacao(titulo, demandas) {
   return out.trim();
 }
 function gerarPreviewCategoria(catName, titulo, demandas) {
-  const nome = (catName || '').toLowerCase();
-  if (nome.includes('aluguel')) return gerarMensagemSoLocacao(titulo, demandas);
+  const nome = (catName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (nome.includes('aluguel') || nome.includes('locacao')) return gerarMensagemSoLocacao(titulo, demandas);
   return gerarMensagemCompleta(titulo, demandas);
 }
 function IconeParceria({ ativo, onClick, size = 18 }) {
