@@ -104,6 +104,8 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
   const [tituloCRMEditando, setTituloCRMEditando] = useState(false);
   const [pendenteSalvar, setPendenteSalvar] = useState(false);
   const [previasAbertas, setPreviasAbertas] = useState(new Set());
+  // Mapeamento modalidade → categorias: { 'Compra': ['cat-xxx', ...], 'Locação': ['cat-yyy', ...] }
+  const [mapeamentoModal, setMapeamentoModal] = useState({});
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
@@ -170,10 +172,34 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
     }, 1000);
     return () => clearTimeout(timer);
   }, [mensagemCRM]);
-  // Carrega título CRM da agenda
+  // Carrega título CRM e mapeamento da agenda
   useEffect(() => {
     if (agenda.titulo_crm) setTituloCRM(agenda.titulo_crm);
-  }, [agenda.titulo_crm]);
+    if (agenda.mapeamento_modalidade) setMapeamentoModal(agenda.mapeamento_modalidade);
+  }, [agenda.titulo_crm, agenda.mapeamento_modalidade]);
+
+  function toggleCatModalidade(modalidade, catId) {
+    setMapeamentoModal(prev => {
+      const atual = prev[modalidade] || [];
+      const novo = atual.includes(catId) ? atual.filter(c => c !== catId) : [...atual, catId];
+      const novoMap = { ...prev, [modalidade]: novo };
+      // Salva automaticamente
+      setTimeout(() => salvarMapeamento(novoMap), 0);
+      return novoMap;
+    });
+  }
+
+  async function salvarMapeamento(novoMap) {
+    const novaAgenda = { ...agendaRef.current, mapeamento_modalidade: novoMap };
+    try {
+      await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
+        body: JSON.stringify({ cats: novaAgenda.cats, titulo_crm: novaAgenda.titulo_crm, mapeamento_modalidade: novoMap, instancia })
+      });
+      toast('Mapeamento salvo ✓');
+    } catch { toast('Erro ao salvar', true); }
+  }
 
   // Salva título automaticamente com debounce de 1.5s
   useEffect(() => {
@@ -396,6 +422,36 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
                   }
                 </div>
 
+                {/* Mapeamento Modalidade → Categorias */}
+                <div style={{ marginBottom: 14, padding: '12px 14px', background: bg, border: `1px solid ${border}`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>
+                    Mapeamento de categorias
+                  </div>
+                  <p style={{ fontSize: 11, color: textMuted, marginBottom: 12, lineHeight: 1.5 }}>
+                    Defina quais categorias recebem cada parte da mensagem.
+                  </p>
+                  {['Compra', 'Locação'].map(mod => (
+                    <div key={mod} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: textColor, marginBottom: 6 }}>
+                        {mod === 'Compra' ? '🛒' : '🔑'} {mod}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {CATS.filter(c => c.id !== 'sem-categoria').map(cat => {
+                          const sel = (mapeamentoModal[mod] || []).includes(cat.id);
+                          return (
+                            <button key={cat.id} onClick={() => toggleCatModalidade(mod, cat.id)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, border: `1px solid ${sel ? '#059669' : border}`, background: sel ? '#f0fdf4' : 'transparent', color: sel ? '#059669' : textMuted, fontSize: 11, fontWeight: sel ? 600 : 400, cursor: 'pointer' }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
+                              {cat.name}
+                              {sel && <span style={{ fontSize: 10 }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <p style={{ fontSize: 12, color: textMuted, marginBottom: 14, lineHeight: 1.6 }}>
                   Ative o disparo automático CRM nos slots desejados. O backend buscará as demandas do CRM e enviará automaticamente no horário configurado.
                 </p>
@@ -458,7 +514,18 @@ function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, titu
                                   const key = `${cat.id}-${i}`;
                                   const previewAberta = previasAbertas.has(key);
                                   const tituloUsar = tituloCRM || tituloCRMExterno || TITULO_PADRAO;
-                                  const preview = gerarPreviewCategoria(cat.name, tituloUsar, demandasSelecionadas);
+                                  const modCompra = (mapeamentoModal['Compra'] || []).includes(cat.id);
+                                  const modLocacao = (mapeamentoModal['Locação'] || []).includes(cat.id);
+                                  let preview = '';
+                                  if (modCompra && modLocacao) {
+                                    preview = gerarMensagemCompleta(tituloUsar, demandasSelecionadas);
+                                  } else if (modLocacao) {
+                                    preview = gerarMensagemSoLocacao(tituloUsar, demandasSelecionadas);
+                                  } else if (modCompra) {
+                                    preview = gerarMensagemCompleta(tituloUsar, demandasSelecionadas.filter(d => d.modalidade === 'Compra'));
+                                  } else {
+                                    preview = gerarPreviewCategoria(cat.name, tituloUsar, demandasSelecionadas);
+                                  }
                                   return (
                                     <div style={{ marginTop: 8 }}>
                                       <button onClick={() => setPreviasAbertas(prev => {
