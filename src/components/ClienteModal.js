@@ -107,6 +107,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const isVenda = form.modalidade === 'Venda';
 
   useEffect(() => {
+    function handleEsc(e) {
+      if (e.key === 'Escape') { localStorage.removeItem('crm_rascunho'); onClose(); }
+    }
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  useEffect(() => {
     supabase.from('configuracoes').select('chave, valor').then(({ data }) => {
       if (data) data.forEach(row => {
         if (row.chave === 'origens') setOrigens(row.valor);
@@ -250,12 +258,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     setSaving(false);
   }
 
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') { localStorage.removeItem('crm_rascunho'); onClose(); }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const errStyle = k => errors[k] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
   const clienteLocked = (isNovaNeg || !!clienteEncontrado) && !isEdit;
   const titulo = isNovaNeg ? `Nova Tratativa — ${modal.cliente?.nome}` : isEdit ? 'Editar Tratativa' : 'Nova Tratativa';
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{titulo}</span>
