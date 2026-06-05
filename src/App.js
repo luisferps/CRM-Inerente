@@ -71,7 +71,7 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('crm_dark') === 'true');
   const [filtroClienteId, setFiltroClienteId] = useState(null);
-  const [abaFunil, setAbaFunil] = useState('compra');
+  const [abaFunil, setAbaFunil] = useState(() => localStorage.getItem('crm_funil_aba') || 'compra');
   const sessionRef = useRef(null);
 
   useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
@@ -213,12 +213,12 @@ export default function App() {
     setClientes([]); setNegociacoes([]); setPerfil(null);
   }
 
-  const [abaFunil, setAbaFunil] = useState(() => localStorage.getItem('crm_funil_aba') || 'compra');
-
   function handleSetAbaFunil(aba) {
     setAbaFunil(aba);
     localStorage.setItem('crm_funil_aba', aba);
   }
+
+  function handleVerTratativas(clienteId) {
     setFiltroClienteId(clienteId);
     setTab('tratativas');
   }
