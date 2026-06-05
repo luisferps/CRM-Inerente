@@ -71,6 +71,7 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('crm_dark') === 'true');
   const [filtroClienteId, setFiltroClienteId] = useState(null);
+  const [abaFunil, setAbaFunil] = useState('compra');
   const sessionRef = useRef(null);
 
   useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
@@ -212,7 +213,12 @@ export default function App() {
     setClientes([]); setNegociacoes([]); setPerfil(null);
   }
 
-  function handleVerTratativas(clienteId) {
+  const [abaFunil, setAbaFunil] = useState(() => localStorage.getItem('crm_funil_aba') || 'compra');
+
+  function handleSetAbaFunil(aba) {
+    setAbaFunil(aba);
+    localStorage.setItem('crm_funil_aba', aba);
+  }
     setFiltroClienteId(clienteId);
     setTab('tratativas');
   }
@@ -304,12 +310,12 @@ export default function App() {
               filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
-            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} />}
+            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
-            {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} perfil={perfil} />}
+            {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} />}
             {tab === 'usuarios' && isGerente && <UsuariosTab />}
             {tab === 'importacao' && (isGerente || isCorretor) && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
             {tab === 'config' && <ConfigTab perfil={perfil} />}
