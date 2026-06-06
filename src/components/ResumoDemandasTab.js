@@ -12,7 +12,7 @@ function formatarPreco(valor) {
   const n = Number(valor);
   if (valor === '' || valor === null || valor === undefined) return null;
   if (n === 0) return 'Em aberto';
-  return `R$ ${n.toLocaleString('pt-BR')}`;
+  return `Valor até R$ ${n.toLocaleString('pt-BR')}`;
 }
 function formatarLinha(c) {
   const partes = [];
