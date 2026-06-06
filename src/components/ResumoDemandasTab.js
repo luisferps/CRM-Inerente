@@ -89,7 +89,7 @@ function WAPainelDisparos({ instancia, darkMode, refreshKey }) {
     if (!instancia) return;
     setLoadingHistorico(true);
     try {
-      const r = await fetch(`${WA_AGENT_URL}/scheduler/historico?instancia=${encodeURIComponent(instancia)}`);
+      const r = await fetch(`${WA_AGENT_URL}/scheduler/historico?instancia=${encodeURIComponent(instancia)}&tipo=crm`);
       if (!r.ok) throw new Error('Erro ' + r.status);
       const data = await r.json();
       setHistorico(data.historico || []);
