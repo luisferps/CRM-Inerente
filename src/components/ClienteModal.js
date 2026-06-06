@@ -99,7 +99,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [clienteEncontrado, setClienteEncontrado] = useState(null);
   const [origemBloqueada, setOrigemBloqueada] = useState(false);
   const [duplicatas, setDuplicatas] = useState([]);
+  const [motivos, setMotivos] = useState([]);
+  const [motivoAberto, setMotivoAberto] = useState(false);
   const timerNome = useRef(null);
+
+  // Buscar motivos já usados no banco
+  useEffect(() => {
+    supabase.from('negociacoes').select('motivo_desistencia').neq('motivo_desistencia', '').not('motivo_desistencia', 'is', null)
+      .then(({ data }) => {
+        const unicos = [...new Set((data || []).map(d => d.motivo_desistencia).filter(Boolean))].sort();
+        setMotivos(unicos);
+      });
+  }, []);
 
   const isEdit = modal && modal.negociacao_id;
   const isNovaNeg = modal && modal.novaNegociacao;
