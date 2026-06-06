@@ -16,12 +16,13 @@ function formatarPreco(valor) {
 }
 function formatarLinha(c) {
   const partes = [];
-  const imovelRegiao = [c.imovel, c.localizacao].filter(Boolean).join(' ');
-  if (imovelRegiao) partes.push(capitalize(imovelRegiao));
+  if (c.imovel) partes.push(capitalize(c.imovel));
+  if (c.localizacao) partes.push(capitalize(c.localizacao));
   if (c.detalhes_externos) partes.push(capitalize(c.detalhes_externos.trim()));
   const preco = formatarPreco(c.valor);
   if (preco) partes.push(preco);
-  return `- ${partes.join(' ')}`;
+  const texto = partes.map(p => p.replace(/\.\s*$/, '')).join('. ');
+  return `- ${texto}.`;
 }
 function gerarTexto(titulo, selecionados, porModalidade) {
   const ids = new Set(selecionados);
@@ -54,22 +55,18 @@ function IconeParceria({ ativo, onClick, size = 18 }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Painel direito — Disparos WA (Agendadas + Histórico)
-// ═══════════════════════════════════════════════════════════════════════════
-function WAPainelDisparos({ instancia, darkMode }) {
+function WAPainelDisparos({ instancia, darkMode, refreshKey }) {
   const [preview, setPreview] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [erro, setErro] = useState('');
-  const [aba, setAba] = useState('agendadas'); // 'agendadas' | 'historico'
+  const [aba, setAba] = useState('agendadas');
 
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
-  const bg = darkMode ? '#0f1117' : '#f8fafc';
   const accentBg = darkMode ? 'rgba(37,99,235,0.08)' : '#eff6ff';
 
   const carregarPreview = useCallback(async () => {
@@ -82,7 +79,7 @@ function WAPainelDisparos({ instancia, darkMode }) {
       const data = await r.json();
       setPreview(data);
     } catch (err) {
-      setErro('Erro carregando agendadas: ' + err.message);
+      setErro('Erro carregando: ' + err.message);
     } finally {
       setLoadingPreview(false);
     }
@@ -106,7 +103,7 @@ function WAPainelDisparos({ instancia, darkMode }) {
   useEffect(() => {
     carregarPreview();
     carregarHistorico();
-  }, [carregarPreview, carregarHistorico]);
+  }, [carregarPreview, carregarHistorico, refreshKey]);
 
   const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const formatarDias = (days) => {
@@ -114,7 +111,6 @@ function WAPainelDisparos({ instancia, darkMode }) {
     if (days.length === 7) return 'Todos os dias';
     return days.map(d => DAYS[d]).join(', ');
   };
-
   const formatarData = (d) => {
     if (!d) return '';
     const dt = new Date(d);
@@ -130,7 +126,6 @@ function WAPainelDisparos({ instancia, darkMode }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 28, height: 28, background: '#25d366', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>💬</div>
         <div style={{ flex: 1 }}>
@@ -143,13 +138,11 @@ function WAPainelDisparos({ instancia, darkMode }) {
         </button>
       </div>
 
-      {/* Nav */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${border}` }}>
         <button style={navBtnStyle(aba === 'agendadas')} onClick={() => setAba('agendadas')}>📅 Agendadas</button>
         <button style={navBtnStyle(aba === 'historico')} onClick={() => setAba('historico')}>📜 Histórico</button>
       </div>
 
-      {/* Conteúdo */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
         {erro && (
           <div style={{ background: '#fee', border: '1px solid #fcc', color: '#c00', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: 12 }}>
@@ -188,12 +181,7 @@ function WAPainelDisparos({ instancia, darkMode }) {
 
                 {preview.agrupado && preview.agrupado.length > 0 ? (
                   preview.agrupado.map((bloco, i) => (
-                    <CardMensagem
-                      key={i}
-                      mensagem={bloco.mensagem}
-                      grupos={bloco.grupos}
-                      darkMode={darkMode}
-                    />
+                    <CardMensagem key={i} mensagem={bloco.mensagem} grupos={bloco.grupos} darkMode={darkMode} />
                   ))
                 ) : (
                   <div style={{ textAlign: 'center', padding: 20, color: textMuted, fontSize: 12, fontStyle: 'italic' }}>
@@ -216,14 +204,9 @@ function WAPainelDisparos({ instancia, darkMode }) {
               </div>
             )}
             {!loadingHistorico && historico.map(h => (
-              <CardMensagem
-                key={h.id}
-                mensagem={h.mensagem}
+              <CardMensagem key={h.id} mensagem={h.mensagem}
                 grupos={(h.grupos || []).map(g => ({ id: g.id, nome: g.nome, status: g.status }))}
-                data={formatarData(h.quando)}
-                mostrarStatus
-                darkMode={darkMode}
-              />
+                data={formatarData(h.quando)} mostrarStatus darkMode={darkMode} />
             ))}
           </>
         )}
@@ -239,7 +222,6 @@ function CardMensagem({ mensagem, grupos, data, mostrarStatus, darkMode }) {
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#6b7280';
   const bg = darkMode ? '#0f1117' : '#f9fafb';
-
   return (
     <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -264,15 +246,12 @@ function CardMensagem({ mensagem, grupos, data, mostrarStatus, darkMode }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {grupos.map((g, i) => (
                 <span key={i} style={{
-                  fontSize: 10,
-                  padding: '2px 8px',
-                  borderRadius: 12,
+                  fontSize: 10, padding: '2px 8px', borderRadius: 12,
                   background: g.status === 'erro' ? '#fee' : (g.status === 'ok' ? '#eef9ee' : (darkMode ? '#0f3460' : '#eff6ff')),
                   color: g.status === 'erro' ? '#c00' : (g.status === 'ok' ? '#2a7' : '#2563eb'),
                   border: '1px solid ' + (g.status === 'erro' ? '#fcc' : (g.status === 'ok' ? '#bce8bc' : (darkMode ? '#1e3a5c' : '#bfdbfe')))
                 }}>
-                  {g.nome}
-                  {mostrarStatus && g.status && ` · ${g.status === 'ok' ? '✓' : '✗'}`}
+                  {g.nome}{mostrarStatus && g.status && ` · ${g.status === 'ok' ? '✓' : '✗'}`}
                 </span>
               ))}
             </div>
@@ -283,24 +262,66 @@ function CardMensagem({ mensagem, grupos, data, mostrarStatus, darkMode }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ResumoDemandasTab — componente principal
-// ═══════════════════════════════════════════════════════════════════════════
 export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParceria }) {
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
   const [titulo, setTitulo] = useState(TITULO_PADRAO);
-
-// Carrega título do banco ao abrir
-useEffect(() => {
-  if (!perfil?.whatsapp_instancia) return;
-  fetch(`${WA_AGENT_URL}/scheduler/agenda?instancia=${encodeURIComponent(perfil.whatsapp_instancia)}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(d => { if (d?.titulo_crm) setTitulo(d.titulo_crm); })
-    .catch(() => {});
-}, [perfil?.whatsapp_instancia]);
   const [editandoTitulo, setEditandoTitulo] = useState(false);
+  const [tituloCarregado, setTituloCarregado] = useState(false);
+  const [salvandoTitulo, setSalvandoTitulo] = useState(false);
+  const [refreshDireita, setRefreshDireita] = useState(0);
+
+  const instancia = perfil?.whatsapp_instancia || '';
+
+  // Carrega título do banco ao abrir
+  useEffect(() => {
+    if (!instancia) { setTituloCarregado(true); return; }
+    fetch(`${WA_AGENT_URL}/scheduler/agenda?instancia=${encodeURIComponent(instancia)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && d.titulo_crm) setTitulo(d.titulo_crm);
+        setTituloCarregado(true);
+      })
+      .catch(() => setTituloCarregado(true));
+  }, [instancia]);
+
+  // Salva título no banco com debounce de 1.5s.
+  // Estratégia: lê tudo, altera só o titulo_crm, regrava (preserva grupos/horarios/etc).
+  useEffect(() => {
+    if (!tituloCarregado) return;
+    if (!instancia) return;
+    const timer = setTimeout(async () => {
+      setSalvandoTitulo(true);
+      try {
+        const rGet = await fetch(`${WA_AGENT_URL}/scheduler/agenda?instancia=${encodeURIComponent(instancia)}`);
+        if (!rGet.ok) throw new Error('GET ' + rGet.status);
+        const agenda = await rGet.json();
+        const payload = {
+          instancia,
+          titulo_crm: titulo,
+          horarios: agenda.horarios,
+          grupos: agenda.grupos,
+          regioes: agenda.regioes,
+          cats: agenda.cats,
+          categorias: agenda.categorias,
+          mapeamento_modalidade: agenda.mapeamento_modalidade
+        };
+        Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+        const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-instancia': instancia },
+          body: JSON.stringify(payload)
+        });
+        if (r.ok) setRefreshDireita(k => k + 1);
+      } catch (e) {
+        console.warn('Erro salvando título:', e.message);
+      } finally {
+        setSalvandoTitulo(false);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [titulo, instancia, tituloCarregado]);
 
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
@@ -351,7 +372,6 @@ useEffect(() => {
   }, [textoGerado, editando]);
 
   const textoFinal = editando ? textoEditado : textoGerado;
-  const instancia = perfil?.whatsapp_instancia || '';
 
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
@@ -364,7 +384,6 @@ useEffect(() => {
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', color: textColor }}>
-      {/* Esquerda — Demandas */}
       <div style={{ flex: '0 0 54%', minWidth: 0 }}>
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>📋 Demandas</h2>
@@ -413,7 +432,7 @@ useEffect(() => {
                             {c.detalhes_externos && <span> · {c.detalhes_externos}</span>}
                             {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
                               <span style={{ color: Number(c.valor) === 0 ? '#9ca3af' : '#059669', fontWeight: 600 }}>
-                                {' · '}{Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
+                                {' · '}{Number(c.valor) === 0 ? 'Em aberto' : `Paga até R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
                               </span>
                             )}
                           </div>
@@ -424,7 +443,6 @@ useEffect(() => {
                 </div>
               </div>
             ))}
-            {/* Mensagem gerada */}
             <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -439,6 +457,7 @@ useEffect(() => {
                       ↺ Resetar
                     </button>
                   )}
+                  {salvandoTitulo && <span style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic' }}>salvando…</span>}
                 </div>
                 {editandoTitulo ? (
                   <input value={titulo} onChange={e => setTitulo(e.target.value)}
@@ -489,10 +508,9 @@ useEffect(() => {
           </>
         )}
       </div>
-      {/* Direita: Disparos WA */}
       <div style={{ flex: '0 0 43%', position: 'sticky', top: 0, height: 'calc(100vh - 130px)', minHeight: 500 }}>
         {instancia ? (
-          <WAPainelDisparos instancia={instancia} darkMode={darkMode} />
+          <WAPainelDisparos instancia={instancia} darkMode={darkMode} refreshKey={refreshDireita} />
         ) : (
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
