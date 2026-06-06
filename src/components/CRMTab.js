@@ -98,7 +98,7 @@ function FunilInline({ cliente, onToggleFunil, podeEditar }) {
   );
 }
 
-export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, filtroClienteNome, onLimparFiltro }) {
+export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, filtroClienteNome, onLimparFiltro }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
   const [filterModalidade, setFilterModalidade] = useState([]);
@@ -109,6 +109,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroParcerias, setFiltroParcerias] = useState(false);
   const [filterParceria, setFilterParceria] = useState([]);
+  const [buscarEmTodas, setBuscarEmTodas] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [origens, setOrigens] = useState([]);
@@ -134,8 +135,20 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    let result = data.filter(c =>
-      (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.email || '').toLowerCase().includes(q)) &&
+    const fonte = buscarEmTodas ? todosData : data;
+    let result = fonte.filter(c =>
+      (!q ||
+        c.nome.toLowerCase().includes(q) ||
+        (c.telefone || '').includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (buscarEmTodas && (
+          (c.imovel || '').toLowerCase().includes(q) ||
+          (c.localizacao || '').toLowerCase().includes(q) ||
+          (c.detalhes || '').toLowerCase().includes(q) ||
+          (c.detalhes_externos || '').toLowerCase().includes(q) ||
+          (c.valor ? String(c.valor) : '').includes(q)
+        ))
+      ) &&
       (!filterOrigem || c.origem === filterOrigem) &&
       (filterModalidade.length === 0 || filterModalidade.includes(c.modalidade)) &&
       (filterImovel.length === 0 || filterImovel.includes(c.imovel)) &&
@@ -153,7 +166,7 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
       });
     }
     return result;
-  }, [data, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filtroParcerias, filterParceria, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
+  }, [data, todosData, buscarEmTodas, search, filterOrigem, filterModalidade, filterImovel, filtroTipo, filtroParcerias, filterParceria, filterCorretor, filterLocalizacao, filterFunil, sortCol, sortDir]);
 
   const selected = data.find(c => c.id === selectedId) || null;
 
@@ -203,6 +216,11 @@ export default function CRMTab({ data, onOpenModal, onDelete, onToggleFunil, onN
           </button>
         </div>
         {onOpenModal && <button className="btn btn-primary" onClick={() => onOpenModal('new')}>+ Nova Tratativa</button>}
+        <button onClick={() => { setBuscarEmTodas(b => !b); }}
+          title="Buscar também em tratativas finalizadas"
+          style={{ padding: '7px 14px', borderRadius: 7, border: `1px solid ${buscarEmTodas ? '#f59e0b' : '#e5e7eb'}`, background: buscarEmTodas ? '#fffbeb' : '#fff', color: buscarEmTodas ? '#b45309' : '#6b7280', fontSize: 12, fontWeight: buscarEmTodas ? 700 : 400, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          🔎 {buscarEmTodas ? 'Buscando em todas' : 'Incluir finalizadas'}
+        </button>
       </div>
 
       <div className="layout-with-panel">
