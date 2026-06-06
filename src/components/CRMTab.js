@@ -161,6 +161,11 @@ export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggl
     );
     if (sortCol) {
       result = [...result].sort((a, b) => {
+        if (sortCol === 'valor') {
+          const va = Number(a.valor) || 0;
+          const vb = Number(b.valor) || 0;
+          return sortDir === 'asc' ? va - vb : vb - va;
+        }
         const getVal = c => sortCol === 'funil' ? ETAPAS_FUNIL.indexOf(getEtapaAtual(c)).toString() : (c[sortCol] || '').toString().toLowerCase();
         return sortDir === 'asc' ? getVal(a).localeCompare(getVal(b), 'pt-BR') : getVal(b).localeCompare(getVal(a), 'pt-BR');
       });
