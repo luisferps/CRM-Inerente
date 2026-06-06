@@ -291,6 +291,15 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
   const [titulo, setTitulo] = useState(TITULO_PADRAO);
+
+// Carrega título do banco ao abrir
+useEffect(() => {
+  if (!perfil?.whatsapp_instancia) return;
+  fetch(`${WA_AGENT_URL}/scheduler/agenda?instancia=${encodeURIComponent(perfil.whatsapp_instancia)}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if (d?.titulo_crm) setTitulo(d.titulo_crm); })
+    .catch(() => {});
+}, [perfil?.whatsapp_instancia]);
   const [editandoTitulo, setEditandoTitulo] = useState(false);
 
   const elegiveis = useMemo(() => data.filter(c => {
