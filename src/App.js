@@ -302,6 +302,7 @@ export default function App() {
             {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
             {tab === 'tratativas' && <CRMTab
               data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido) : data.filter(c => c.ativo === 'S' && !c.recebido)}
+              todosData={data}
               onOpenModal={podeEditar ? setModal : null}
               onDelete={podeEditar ? handleDelete : null}
               onToggleFunil={handleToggleFunil}
