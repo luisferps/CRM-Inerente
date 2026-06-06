@@ -60,7 +60,7 @@ function splitForm(form) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState('tratativas');
+  const [tab, setTab] = useState(() => localStorage.getItem('crm_tab') || 'tratativas');
   const [clientes, setClientes] = useState([]);
   const [negociacoes, setNegociacoes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -270,7 +270,7 @@ export default function App() {
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
           {tabs.map(([t, l]) => (
-            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); setFiltroClienteId(null); }}>{l}</button>
+            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); localStorage.setItem('crm_tab', t); setFiltroClienteId(null); }}>{l}</button>
           ))}
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
