@@ -1,11 +1,9 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
-const WA_EVOLUTION_URL = 'https://evolution-api-production-6f9a.up.railway.app';
-const WA_API_KEY = '40d03599cab78737a4c9eaf7c00723dbe1bc93b6b329fce0a80ff43d393e4c47';
-const DAYS_LABEL = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
 const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
-const LIMITE_AVISO_GRUPOS = 20;
+
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -43,54 +41,7 @@ function gerarTexto(titulo, selecionados, porModalidade) {
   });
   return temConteudo ? out.trim() : '';
 }
-function gerarMensagemCompleta(titulo, demandas) {
-  if (!demandas.length) return '';
-  const porMod = {};
-  demandas.forEach(c => {
-    const mod = c.modalidade || 'Outros';
-    if (mod === 'Venda') return;
-    if (!porMod[mod]) porMod[mod] = [];
-    porMod[mod].push(c);
-  });
-  const ordem = ['Compra', 'Locação'];
-  const mods = [...new Set([...ordem.filter(m => porMod[m]), ...Object.keys(porMod).filter(m => !ordem.includes(m) && m !== 'Venda')])];
-  let out = titulo + '\n\n'; let tem = false;
-  mods.forEach(mod => {
-    const f = porMod[mod] || []; if (!f.length) return; tem = true;
-    const icon = mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄';
-    out += `${icon} *${capitalize(mod)}:*\n`;
-    f.forEach(c => { out += formatarLinha(c) + '\n'; }); out += '\n';
-  });
-  return tem ? out.trim() : '';
-}
-function gerarMensagemSoLocacao(titulo, demandas) {
-  const locacao = demandas.filter(c => c.modalidade === 'Locação');
-  if (!locacao.length) return '';
-  let out = titulo + '\n\n🔑 *Locação:*\n';
-  locacao.forEach(c => { out += formatarLinha(c) + '\n'; });
-  return out.trim();
-}
-function gerarPreviewCategoria(catName, titulo, demandas) {
-  const nome = (catName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (nome.includes('aluguel') || nome.includes('locacao')) return gerarMensagemSoLocacao(titulo, demandas);
-  return gerarMensagemCompleta(titulo, demandas);
-}
-// ── Gera a mensagem CORRETA para uma categoria, usando o mapeamento ──────────
-// Espelha exatamente a mesma lógica da prévia e do backend (index.js).
-function gerarMensagemDaCategoria(catId, catName, titulo, demandas, mapeamento) {
-  if (!demandas || !demandas.length) return '';
-  const modCompra = (mapeamento?.['Compra'] || []).includes(catId);
-  const modLocacao = (mapeamento?.['Locação'] || []).includes(catId);
-  if (modCompra && modLocacao) {
-    return gerarMensagemCompleta(titulo, demandas);
-  } else if (modLocacao) {
-    return gerarMensagemSoLocacao(titulo, demandas);
-  } else if (modCompra) {
-    return gerarMensagemCompleta(titulo, demandas.filter(d => d.modalidade === 'Compra'));
-  }
-  // Sem mapeamento — fallback por nome da categoria
-  return gerarPreviewCategoria(catName, titulo, demandas);
-}
+
 function IconeParceria({ ativo, onClick, size = 18 }) {
   return (
     <button onClick={onClick}
@@ -102,603 +53,246 @@ function IconeParceria({ ativo, onClick, size = 18 }) {
     </button>
   );
 }
-function WAPainel({ instancia, mensagemCRM, darkMode, demandasSelecionadas, tituloCRMExterno }) {
-  const [agenda, setAgenda] = useState({ cats: {}, grupos: [], categorias: [] });
-  const [CATS, setCATS] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [secAtiva, setSecAtiva] = useState('mensagens');
-  const [catsAbertas, setCatsAbertas] = useState(new Set());
-  const [slotsSubstituidos, setSlotsSubstituidos] = useState(new Map());
-  const [disparoMsg, setDisparoMsg] = useState('');
-  const [catsSelDisparo, setCatsSelDisparo] = useState(new Set());
-  const [logDisparo, setLogDisparo] = useState([]);
-  const [disparando, setDisparando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
-  const [toastWarn, setToastWarn] = useState(false);
-  const [tituloCRM, setTituloCRM] = useState('Preciso de: (enviar somente imóveis nos perfis relacionados)');
-  const [tituloCRMEditando, setTituloCRMEditando] = useState(false);
-  const [pendenteSalvar, setPendenteSalvar] = useState(false);
-  const [previasAbertas, setPreviasAbertas] = useState(new Set());
-  // Mapeamento modalidade → categorias: { 'Compra': ['cat-xxx', ...], 'Locação': ['cat-yyy', ...] }
-  const [mapeamentoModal, setMapeamentoModal] = useState({});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Painel direito — Disparos WA (Agendadas + Histórico)
+// ═══════════════════════════════════════════════════════════════════════════
+function WAPainelDisparos({ instancia, darkMode }) {
+  const [preview, setPreview] = useState(null);
+  const [historico, setHistorico] = useState([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [erro, setErro] = useState('');
+  const [aba, setAba] = useState('agendadas'); // 'agendadas' | 'historico'
+
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
   const accentBg = darkMode ? 'rgba(37,99,235,0.08)' : '#eff6ff';
-  function toast(msg, warn = false) {
-    setToastMsg(msg); setToastWarn(warn);
-    setTimeout(() => setToastMsg(''), 3000);
-  }
-  const carregarAgenda = useCallback(async () => {
+
+  const carregarPreview = useCallback(async () => {
     if (!instancia) return;
-    setCarregando(true);
+    setLoadingPreview(true);
+    setErro('');
     try {
-      const res = await fetch(`${WA_AGENT_URL}/scheduler/agenda?instancia=${encodeURIComponent(instancia)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAgenda(data);
-        setCATS(data.categorias || []);
-      }
-    } catch { toast('Erro ao carregar dados', true); }
-    setCarregando(false);
-  }, [instancia]);
-  useEffect(() => { carregarAgenda(); }, [carregarAgenda]);
-  useEffect(() => {
-    if (mensagemCRM) setDisparoMsg(mensagemCRM);
-  }, [mensagemCRM]);
-
-  // Refs para sempre ter valores atualizados dentro dos useEffect/timers
-  const agendaRef = useRef(agenda);
-  useEffect(() => { agendaRef.current = agenda; }, [agenda]);
-  const demandasRef = useRef(demandasSelecionadas);
-  useEffect(() => { demandasRef.current = demandasSelecionadas; }, [demandasSelecionadas]);
-  const mapeamentoRef = useRef(mapeamentoModal);
-  useEffect(() => { mapeamentoRef.current = mapeamentoModal; }, [mapeamentoModal]);
-  const tituloRef = useRef(tituloCRM);
-  useEffect(() => { tituloRef.current = tituloCRM; }, [tituloCRM]);
-
-  // ── Fila de saves SERIALIZADA ──────────────────────────────────────────────
-  // Garante que nunca dois saves rodem ao mesmo tempo (evita briga de gravação no
-  // banco). Cada save espera o anterior terminar e SEMPRE regenera a mensagem
-  // correta no instante do envio, usando o estado mais recente dos refs.
-  const filaSave = useRef(Promise.resolve());
-  function enfileirarSave(extra = {}) {
-    filaSave.current = filaSave.current.then(async () => {
-      // Regenera as cats corretas no momento exato do envio (estado mais novo).
-      const catsCorrigidas = gerarCatsComMensagemCorreta(agendaRef.current.cats);
-      const novaAgenda = { ...agendaRef.current, cats: catsCorrigidas, ...extra };
-      agendaRef.current = novaAgenda;
-      setAgenda(novaAgenda);
-      const body = {
-        cats: novaAgenda.cats,
-        titulo_crm: novaAgenda.titulo_crm,
-        instancia,
-        ...(novaAgenda.mapeamento_modalidade !== undefined && { mapeamento_modalidade: novaAgenda.mapeamento_modalidade }),
-      };
-      try {
-        const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-          body: JSON.stringify(body)
-        });
-        if (r.ok) toast('Salvo ✓');
-        else toast('Erro ao salvar', true);
-      } catch { toast('Erro ao salvar', true); }
-    }).catch(() => {});
-    return filaSave.current;
-  }
-
-  // Gera o objeto cats com a mensagem CORRETA por categoria (respeitando o mapeamento).
-  // Cada slot com CRM ON recebe a mensagem da SUA categoria, não a mensagem completa.
-  function gerarCatsComMensagemCorreta(catsBase) {
-    const titulo = tituloRef.current || tituloCRMExterno || TITULO_PADRAO;
-    const demandas = demandasRef.current || [];
-    const mapeamento = mapeamentoRef.current || {};
-    const cats = catsBase || {};
-    const novaCats = {};
-    Object.entries(cats).forEach(([catId, catData]) => {
-      if (!catData?.slots) { novaCats[catId] = catData; return; }
-      const catInfo = (agendaRef.current.categorias || []).find(c => c.id === catId);
-      const catName = catInfo?.name || catId;
-      const msgCategoria = gerarMensagemDaCategoria(catId, catName, titulo, demandas, mapeamento);
-      const slots = catData.slots.map(slot => {
-        if (slot.espelhar_crm && slot.ativo !== false && msgCategoria) {
-          return { ...slot, msg: msgCategoria };
-        }
-        return slot;
-      });
-      novaCats[catId] = { ...catData, slots };
-    });
-    return novaCats;
-  }
-
-  // Quando a mensagem/demandas mudam, atualiza e salva os slots com CRM ON
-  // usando a mensagem CORRETA de cada categoria (não a mensagem completa).
-  useEffect(() => {
-    if (!mensagemCRM) return;
-    const timer = setTimeout(() => {
-      const agendaAtual = agendaRef.current;
-      if (!agendaAtual.cats) return;
-      // Verifica se existe ao menos um slot com CRM ON
-      let temSlotCRM = false;
-      Object.values(agendaAtual.cats).forEach(catData => {
-        (catData.slots || []).forEach(slot => {
-          if (slot.espelhar_crm && slot.ativo !== false) temSlotCRM = true;
-        });
-      });
-      if (!temSlotCRM) return;
-      enfileirarSave();
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [mensagemCRM, demandasSelecionadas, mapeamentoModal]);
-  // Carrega título CRM e mapeamento da agenda
-  useEffect(() => {
-    if (agenda.titulo_crm) setTituloCRM(agenda.titulo_crm);
-    if (agenda.mapeamento_modalidade) setMapeamentoModal(agenda.mapeamento_modalidade);
-  }, [agenda.titulo_crm, agenda.mapeamento_modalidade]);
-
-  function toggleCatModalidade(modalidade, catId) {
-    setMapeamentoModal(prev => {
-      const atual = prev[modalidade] || [];
-      const novo = atual.includes(catId) ? atual.filter(c => c !== catId) : [...atual, catId];
-      const novoMap = { ...prev, [modalidade]: novo };
-      // Salva automaticamente
-      setTimeout(() => salvarMapeamento(novoMap), 0);
-      return novoMap;
-    });
-  }
-
-  async function salvarMapeamento(novoMap) {
-    // Atualiza o ref do mapeamento e enfileira o save (regenera mensagens com a regra nova)
-    mapeamentoRef.current = novoMap;
-    await enfileirarSave({ mapeamento_modalidade: novoMap });
-    toast('Mapeamento salvo ✓');
-  }
-
-  // Salva título automaticamente com debounce de 1.5s
-  useEffect(() => {
-    if (!tituloCRMEditando) return;
-    const timer = setTimeout(() => {
-      // Atualiza o ref do título e enfileira o save (regenera mensagens com o título novo)
-      tituloRef.current = tituloCRM;
-      enfileirarSave({ titulo_crm: tituloCRM });
-      toast('Título salvo ✓');
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [tituloCRM]);
-
-  async function salvarTituloCRM() {
-    setTituloCRMEditando(false);
-    toast('Título salvo ✓');
-  }
-
-  function toggleEspelharCRM(catId, slotIdx) {
-    setAgenda(prev => {
-      const novaCats = { ...prev.cats };
-      const slots = [...(novaCats[catId]?.slots || [])];
-      slots[slotIdx] = { ...slots[slotIdx], espelhar_crm: !slots[slotIdx].espelhar_crm };
-      novaCats[catId] = { ...novaCats[catId], slots };
-      const novaAgenda = { ...prev, cats: novaCats };
-      // Atualiza o ref e enfileira o save (a fila regenera as mensagens corretas)
-      agendaRef.current = novaAgenda;
-      enfileirarSave();
-      return novaAgenda;
-    });
-  }
-
-  function toggleAtivoSlot(catId, slotIdx) {
-    setAgenda(prev => {
-      const novaCats = { ...prev.cats };
-      const slots = [...(novaCats[catId]?.slots || [])];
-      const atual = slots[slotIdx].ativo !== false;
-      slots[slotIdx] = { ...slots[slotIdx], ativo: !atual };
-      novaCats[catId] = { ...novaCats[catId], slots };
-      const novaAgenda = { ...prev, cats: novaCats };
-      // Atualiza o ref e enfileira o save (a fila regenera as mensagens corretas)
-      agendaRef.current = novaAgenda;
-      enfileirarSave();
-      return novaAgenda;
-    });
-  }
-
-  async function salvarConfiguracoes() {
-    setSalvando(true);
-    try {
-      const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ cats: agenda.cats, titulo_crm: agenda.titulo_crm, instancia })
-      });
-      if (r.ok) { toast('Configurações salvas!'); setPendenteSalvar(false); }
-      else toast('Erro ao salvar', true);
-    } catch { toast('Erro ao salvar', true); }
-    setSalvando(false);
-  }
-
-  function toggleCatAberta(catId) {
-    setCatsAbertas(prev => {
-      const next = new Set(prev);
-      if (next.has(catId)) next.delete(catId); else next.add(catId);
-      return next;
-    });
-  }
-  function toggleSlot(catId, slotIdx) {
-    if (!mensagemCRM) { toast('Nenhuma mensagem gerada ainda', true); return; }
-    const key = `${catId}-${slotIdx}`;
-    setSlotsSubstituidos(prev => {
-      const next = new Map(prev);
-      if (next.has(key)) {
-        const msgOriginal = next.get(key);
-        next.delete(key);
-        setAgenda(ag => {
-          const novaCats = { ...ag.cats };
-          const slots = [...(novaCats[catId]?.slots || [])];
-          slots[slotIdx] = { ...slots[slotIdx], msg: msgOriginal };
-          novaCats[catId] = { ...novaCats[catId], slots };
-          return { ...ag, cats: novaCats };
-        });
-      } else {
-        const msgOriginal = agenda.cats?.[catId]?.slots?.[slotIdx]?.msg || '';
-        next.set(key, msgOriginal);
-        setAgenda(ag => {
-          const novaCats = { ...ag.cats };
-          const slots = [...(novaCats[catId]?.slots || [])];
-          slots[slotIdx] = { ...slots[slotIdx], msg: mensagemCRM };
-          novaCats[catId] = { ...novaCats[catId], slots };
-          return { ...ag, cats: novaCats };
-        });
-      }
-      return next;
-    });
-  }
-  async function salvarSubstituicoes() {
-    if (!slotsSubstituidos.size) { toast('Nenhuma substituição feita', true); return; }
-    setSalvando(true);
-    try {
-      const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY, 'x-instancia': instancia },
-        body: JSON.stringify({ cats: agenda.cats, titulo_crm: agenda.titulo_crm, instancia })
-      });
-      if (r.ok) toast(`${slotsSubstituidos.size} slot(s) salvo(s)!`);
-      else toast('Erro ao salvar', true);
-    } catch { toast('Erro ao salvar', true); }
-    setSalvando(false);
-  }
-  function toggleCatDisparo(id) {
-    setCatsSelDisparo(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-  const totalGruposDisparo = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat)).length;
-  const acimaDoLimite = totalGruposDisparo > LIMITE_AVISO_GRUPOS;
-  async function dispararAgora() {
-    if (!disparoMsg.trim()) { toast('Digite a mensagem', true); return; }
-    if (!catsSelDisparo.size) { toast('Selecione uma categoria', true); return; }
-    const grupos = (agenda.grupos || []).filter(g => catsSelDisparo.has(g.cat));
-    if (!grupos.length) { toast('Nenhum grupo nas categorias selecionadas', true); return; }
-    if (acimaDoLimite && !window.confirm(`Você está prestes a enviar para ${totalGruposDisparo} grupos de uma vez. Isso pode aumentar o risco de suspensão. Deseja continuar?`)) return;
-    setDisparando(true);
-    setLogDisparo([]);
-    let ok = 0, err = 0;
-    const porCat = {};
-    grupos.forEach(g => {
-      if (!porCat[g.cat]) porCat[g.cat] = [];
-      porCat[g.cat].push(g);
-    });
-    let primeiraCategoria = true;
-    for (const [catId, gruposCat] of Object.entries(porCat)) {
-      if (!primeiraCategoria) {
-        setLogDisparo(l => [...l, { info: true, msg: 'Aguardando entre categorias...' }]);
-        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 10000) + 10000));
-      }
-      primeiraCategoria = false;
-      for (const g of gruposCat) {
-        try {
-          const r = await fetch(`${WA_EVOLUTION_URL}/message/sendText/${instancia}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': WA_API_KEY },
-            body: JSON.stringify({ number: g.id, text: disparoMsg, delay: 1000 })
-          });
-          if (r.ok) { ok++; setLogDisparo(l => [...l, { ok: true, nome: g.name }]); }
-          else { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name, status: r.status }]); }
-        } catch { err++; setLogDisparo(l => [...l, { ok: false, nome: g.name }]); }
-        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 4000) + 3000));
-      }
+      const r = await fetch(`${WA_AGENT_URL}/scheduler/preview?instancia=${encodeURIComponent(instancia)}`);
+      if (!r.ok) throw new Error('Erro ' + r.status);
+      const data = await r.json();
+      setPreview(data);
+    } catch (err) {
+      setErro('Erro carregando agendadas: ' + err.message);
+    } finally {
+      setLoadingPreview(false);
     }
-    setDisparando(false);
-    toast(`${ok} enviado(s)${err ? ` | ${err} erro(s)` : ''}`);
-  }
+  }, [instancia]);
+
+  const carregarHistorico = useCallback(async () => {
+    if (!instancia) return;
+    setLoadingHistorico(true);
+    try {
+      const r = await fetch(`${WA_AGENT_URL}/scheduler/historico?instancia=${encodeURIComponent(instancia)}`);
+      if (!r.ok) throw new Error('Erro ' + r.status);
+      const data = await r.json();
+      setHistorico(data.historico || []);
+    } catch (err) {
+      console.warn('Erro histórico:', err.message);
+    } finally {
+      setLoadingHistorico(false);
+    }
+  }, [instancia]);
+
+  useEffect(() => {
+    carregarPreview();
+    carregarHistorico();
+  }, [carregarPreview, carregarHistorico]);
+
+  const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const formatarDias = (days) => {
+    if (!Array.isArray(days) || !days.length) return '—';
+    if (days.length === 7) return 'Todos os dias';
+    return days.map(d => DAYS[d]).join(', ');
+  };
+
+  const formatarData = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    return dt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+
   const navBtnStyle = (ativa) => ({
     flex: 1, padding: '10px 8px', background: 'transparent', border: 'none',
     borderBottom: `2px solid ${ativa ? '#2563eb' : 'transparent'}`,
     color: ativa ? '#2563eb' : textMuted, fontFamily: 'Inter, sans-serif',
     fontSize: 12, fontWeight: ativa ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap'
   });
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 28, height: 28, background: '#25d366', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>💬</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: textColor }}>WA Scheduler</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: textColor }}>Disparos WhatsApp</div>
           <div style={{ fontSize: 10, color: textMuted }}>{instancia}</div>
         </div>
-        {slotsSubstituidos.size > 0 && (
-          <span style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
-            {slotsSubstituidos.size} slot{slotsSubstituidos.size > 1 ? 's' : ''} substituído{slotsSubstituidos.size > 1 ? 's' : ''}
-          </span>
-        )}
+        <button onClick={() => { carregarPreview(); carregarHistorico(); }}
+          style={{ padding: '4px 10px', borderRadius: 7, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+          🔄
+        </button>
       </div>
+
       {/* Nav */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${border}` }}>
-        <button style={navBtnStyle(secAtiva === 'mensagens')} onClick={() => setSecAtiva('mensagens')}>📋 Mensagens</button>
-        <button style={navBtnStyle(secAtiva === 'disparo')} onClick={() => setSecAtiva('disparo')}>⚡ Disparo</button>
+        <button style={navBtnStyle(aba === 'agendadas')} onClick={() => setAba('agendadas')}>📅 Agendadas</button>
+        <button style={navBtnStyle(aba === 'historico')} onClick={() => setAba('historico')}>📜 Histórico</button>
       </div>
+
       {/* Conteúdo */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-        {carregando ? (
-          <div style={{ textAlign: 'center', padding: 30, color: textMuted, fontSize: 13 }}>Carregando...</div>
-        ) : (
+      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        {erro && (
+          <div style={{ background: '#fee', border: '1px solid #fcc', color: '#c00', padding: '8px 12px', borderRadius: 8, marginBottom: 12, fontSize: 12 }}>
+            {erro}
+          </div>
+        )}
+
+        {aba === 'agendadas' && (
           <>
-            {/* Mensagens — Configuração CRM Automático */}
-            {secAtiva === 'mensagens' && (
+            {loadingPreview && (
+              <div style={{ textAlign: 'center', padding: 20, color: textMuted, fontSize: 12 }}>Calculando…</div>
+            )}
+            {!loadingPreview && preview && (
               <>
-                {/* Título CRM */}
-                <div style={{ marginBottom: 14, padding: '12px 14px', background: bg, border: `1px solid ${border}`, borderRadius: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px' }}>Título da mensagem CRM</span>
-                    {tituloCRMEditando
-                      ? <button onClick={salvarTituloCRM} style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid #059669', background: '#f0fdf4', color: '#059669', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>💾 Salvar</button>
-                      : <button onClick={() => setTituloCRMEditando(true)} style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid #d1d5db', background: 'transparent', color: '#9ca3af', fontSize: 10, cursor: 'pointer' }}>✏️ Editar</button>
-                    }
-                  </div>
-                  {tituloCRMEditando
-                    ? <textarea value={tituloCRM} onChange={e => setTituloCRM(e.target.value)} rows={2}
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '2px solid #059669', borderRadius: 8, background: darkMode ? '#0f1117' : '#f0fdf4', color: textColor, fontSize: 12, resize: 'vertical', outline: 'none', fontFamily: 'Inter, sans-serif' }} />
-                    : <div style={{ fontSize: 12, color: textMuted, fontStyle: 'italic' }}>{tituloCRM}</div>
-                  }
-                </div>
-
-                {/* Mapeamento Modalidade → Categorias */}
-                <div style={{ marginBottom: 14, padding: '12px 14px', background: bg, border: `1px solid ${border}`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>
-                    Mapeamento de categorias
-                  </div>
-                  <p style={{ fontSize: 11, color: textMuted, marginBottom: 12, lineHeight: 1.5 }}>
-                    Defina quais categorias recebem cada parte da mensagem.
-                  </p>
-                  {['Compra', 'Locação'].map(mod => (
-                    <div key={mod} style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: textColor, marginBottom: 6 }}>
-                        {mod === 'Compra' ? '🛒' : '🔑'} {mod}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {CATS.filter(c => c.id !== 'sem-categoria').map(cat => {
-                          const sel = (mapeamentoModal[mod] || []).includes(cat.id);
-                          return (
-                            <button key={cat.id} onClick={() => toggleCatModalidade(mod, cat.id)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, border: `1px solid ${sel ? '#059669' : border}`, background: sel ? '#f0fdf4' : 'transparent', color: sel ? '#059669' : textMuted, fontSize: 11, fontWeight: sel ? 600 : 400, cursor: 'pointer' }}>
-                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
-                              {cat.name}
-                              {sel && <span style={{ fontSize: 10 }}>✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <p style={{ fontSize: 12, color: textMuted, marginBottom: 14, lineHeight: 1.6 }}>
-                  Ative o disparo automático CRM nos slots desejados. O backend buscará as demandas do CRM e enviará automaticamente no horário configurado.
-                </p>
-
-                {CATS.map(cat => {
-                  const slots = agenda.cats?.[cat.id]?.slots || [];
-                  const grpCount = (agenda.grupos || []).filter(g => g.cat === cat.id).length;
-                  const aberta = catsAbertas.has(cat.id);
-                  const numAtivos = slots.filter(s => s.espelhar_crm && s.ativo !== false).length;
-                  return (
-                    <div key={cat.id} style={{ marginBottom: 10, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                      <div onClick={() => toggleCatAberta(cat.id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', userSelect: 'none', background: aberta ? accentBg : bg }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
-                        <span style={{ fontWeight: 600, fontSize: 13, color: textColor, flex: 1 }}>{cat.name}</span>
-                        {numAtivos > 0 && (
-                          <span style={{ fontSize: 10, background: '#f0fdf4', color: '#059669', border: '1px solid #bbf7d0', borderRadius: 20, padding: '1px 7px', fontWeight: 600 }}>
-                            {numAtivos} CRM ativo{numAtivos > 1 ? 's' : ''}
-                          </span>
-                        )}
-                        <span style={{ fontSize: 11, color: textMuted }}>{grpCount}g</span>
-                        <span style={{ fontSize: 11, color: textMuted, marginLeft: 4 }}>{aberta ? '▲' : '▼'}</span>
-                      </div>
-                      {aberta && (
-                        <div style={{ borderTop: `1px solid ${border}` }}>
-                          {slots.length === 0 && (
-                            <div style={{ padding: '12px 14px', fontSize: 12, color: textMuted, fontStyle: 'italic' }}>Nenhum slot configurado</div>
-                          )}
-                          {slots.map((slot, i) => {
-                            const crmAtivo = slot.espelhar_crm === true;
-                            const slotAtivo = slot.ativo !== false;
-                            return (
-                              <div key={i} style={{ padding: '12px 14px', background: crmAtivo ? (slotAtivo ? accentBg : bg) : card, borderBottom: i < slots.length - 1 ? `1px solid ${border}` : 'none' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ fontSize: 11, color: crmAtivo ? '#2563eb' : textMuted, fontWeight: 600, flexShrink: 0 }}>⏰ {slot.time}</span>
-                                  <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'wrap' }}>
-                                    {DAYS_LABEL.map((d, j) => (
-                                      <span key={j} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 20, background: slot.days?.includes(j) ? '#f1f5f9' : 'transparent', color: slot.days?.includes(j) ? textMuted : '#d1d5db', fontWeight: slot.days?.includes(j) ? 600 : 400 }}>{d}</span>
-                                    ))}
-                                  </div>
-                                  {/* Toggle CRM automático */}
-                                  <button onClick={() => toggleEspelharCRM(cat.id, i)}
-                                    style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${crmAtivo ? '#059669' : '#d1d5db'}`, background: crmAtivo ? '#f0fdf4' : 'transparent', color: crmAtivo ? '#059669' : textMuted, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                    {crmAtivo ? '✓ CRM ON' : 'CRM OFF'}
-                                  </button>
-                                  {/* Toggle suspender */}
-                                  {crmAtivo && (
-                                    <button onClick={() => toggleAtivoSlot(cat.id, i)}
-                                      style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${slotAtivo ? '#f59e0b' : '#dc2626'}`, background: slotAtivo ? '#fffbeb' : '#fee2e2', color: slotAtivo ? '#b45309' : '#dc2626', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                      {slotAtivo ? '⏸ Suspender' : '▶ Ativar'}
-                                    </button>
-                                  )}
-                                </div>
-                                {crmAtivo && (
-                                  <div style={{ marginTop: 6, fontSize: 11, color: slotAtivo ? '#059669' : '#dc2626', fontWeight: 600 }}>
-                                    {slotAtivo ? '● Disparo automático ativo' : '○ Disparo suspenso'}
-                                  </div>
-                                )}
-                                {crmAtivo && demandasSelecionadas?.length > 0 && (() => {
-                                  const key = `${cat.id}-${i}`;
-                                  const previewAberta = previasAbertas.has(key);
-                                  const tituloUsar = tituloCRM || tituloCRMExterno || TITULO_PADRAO;
-                                  const modCompra = (mapeamentoModal['Compra'] || []).includes(cat.id);
-                                  const modLocacao = (mapeamentoModal['Locação'] || []).includes(cat.id);
-                                  let preview = '';
-                                  if (modCompra && modLocacao) {
-                                    preview = gerarMensagemCompleta(tituloUsar, demandasSelecionadas);
-                                  } else if (modLocacao) {
-                                    preview = gerarMensagemSoLocacao(tituloUsar, demandasSelecionadas);
-                                  } else if (modCompra) {
-                                    preview = gerarMensagemCompleta(tituloUsar, demandasSelecionadas.filter(d => d.modalidade === 'Compra'));
-                                  } else {
-                                    preview = gerarPreviewCategoria(cat.name, tituloUsar, demandasSelecionadas);
-                                  }
-                                  return (
-                                    <div style={{ marginTop: 8 }}>
-                                      <button onClick={() => setPreviasAbertas(prev => {
-                                        const next = new Set(prev);
-                                        if (next.has(key)) next.delete(key); else next.add(key);
-                                        return next;
-                                      })} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', color: textMuted, cursor: 'pointer' }}>
-                                        {previewAberta ? '▲ Fechar prévia' : '👁 Ver prévia'}
-                                      </button>
-                                      {previewAberta && (
-                                        <pre style={{ marginTop: 8, fontFamily: 'Inter,sans-serif', fontSize: 11, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: textColor, background: bg, borderRadius: 8, border: `1px solid ${border}`, padding: '10px 12px', maxHeight: 200, overflowY: 'auto' }}>
-                                          {preview || <em style={{ color: '#d1d5db' }}>Nenhuma demanda elegível para esta categoria</em>}
-                                        </pre>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                                {!crmAtivo && slot.msg && (
-                                  <div style={{ marginTop: 6, fontSize: 11, color: textMuted, lineHeight: 1.5, maxHeight: 40, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                    {slot.msg}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                <div style={{ background: accentBg, border: `1px solid ${border}`, padding: '10px 12px', borderRadius: 8, marginBottom: 12, fontSize: 12, color: textColor }}>
+                  {preview.agendado ? (
+                    <div>
+                      <strong>Horário 1 (CRM):</strong> {preview.agendado.time}
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{formatarDias(preview.agendado.days)}</div>
+                      {preview.agendado.ativo === false && (
+                        <div style={{ color: '#dc2626', marginTop: 4, fontSize: 11, fontWeight: 600 }}>● Desligado</div>
                       )}
                     </div>
-                  );
-                })}
-              </>
-            )}
-            {/* Disparo */}
-            {secAtiva === 'disparo' && (
-              <>
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>Mensagem</label>
-                  <textarea value={disparoMsg} onChange={e => setDisparoMsg(e.target.value)}
-                    placeholder="A mensagem das demandas aparece aqui automaticamente..."
-                    style={{ width: '100%', boxSizing: 'border-box', minHeight: 100, padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.7, border: `1px solid ${border}`, borderRadius: 10, background: bg, color: textColor, resize: 'vertical', outline: 'none' }} />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Categorias</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {CATS.map(cat => {
-                      const sel = catsSelDisparo.has(cat.id);
-                      const grpCount = (agenda.grupos || []).filter(g => g.cat === cat.id).length;
-                      return (
-                        <div key={cat.id} onClick={() => toggleCatDisparo(cat.id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: sel ? accentBg : bg, border: `2px solid ${sel ? '#2563eb' : border}`, borderRadius: 10, cursor: 'pointer', userSelect: 'none', transition: 'all .15s' }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.cor, flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: sel ? '#1d4ed8' : textColor, lineHeight: 1.3 }}>{cat.name}</div>
-                            <div style={{ fontSize: 10, color: textMuted }}>{grpCount}g</div>
-                          </div>
-                          {sel && <span style={{ color: '#2563eb', fontSize: 13 }}>✓</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {catsSelDisparo.size > 0 && (
-                  <div style={{ fontSize: 12, marginBottom: 12, padding: '8px 12px', background: acimaDoLimite ? '#fef3c7' : bg, borderRadius: 8, border: `1px solid ${acimaDoLimite ? '#fcd34d' : border}`, color: acimaDoLimite ? '#92400e' : textMuted }}>
-                    {acimaDoLimite ? '⚠️' : '📤'} {totalGruposDisparo} grupo(s) receberão a mensagem
-                    {acimaDoLimite && <div style={{ fontSize: 11, marginTop: 3 }}>Muitos grupos podem aumentar o risco de suspensão.</div>}
-                  </div>
-                )}
-                {catsSelDisparo.size > 0 && disparoMsg.trim() && (
-                  <div style={{ marginBottom: 12, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                    <div style={{ padding: '8px 14px', background: bg, borderBottom: `1px solid ${border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px' }}>👁 Prévia do disparo</span>
-                      <span style={{ fontSize: 11, color: textMuted }}>{totalGruposDisparo} grupo(s)</span>
+                  ) : (
+                    <div style={{ color: textMuted }}>Horário do CRM não configurado.</div>
+                  )}
+                  {preview.totalDemandas !== undefined && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: textMuted }}>
+                      {preview.totalDemandas} demanda(s) elegível(eis) · {preview.totalGruposCasados || 0} de {preview.totalGruposAtivos || 0} grupos ativos
                     </div>
-                    <div style={{ padding: '10px 14px' }}>
-                      {Array.from(catsSelDisparo).map(catId => {
-                        const cat = CATS.find(c => c.id === catId);
-                        const grpCount = (agenda.grupos || []).filter(g => g.cat === catId).length;
-                        if (!cat) return null;
-                        return (
-                          <div key={catId} style={{ marginBottom: 10 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: cat.cor }} />
-                              <span style={{ fontSize: 11, fontWeight: 600, color: textColor }}>{cat.name}</span>
-                              <span style={{ fontSize: 10, color: textMuted }}>({grpCount}g)</span>
-                            </div>
-                            <pre style={{ fontFamily: 'Inter,sans-serif', fontSize: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: textMuted, margin: 0, padding: '8px 10px', background: darkMode ? '#0f1117' : '#f8fafc', borderRadius: 6, border: `1px solid ${border}`, maxHeight: 120, overflowY: 'auto' }}>
-                              {disparoMsg}
-                            </pre>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                <button disabled={disparando} onClick={dispararAgora}
-                  style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: disparando ? '#9ca3af' : '#dc2626', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, cursor: disparando ? 'not-allowed' : 'pointer' }}>
-                  {disparando ? '⏳ Enviando...' : '⚡ Enviar agora'}
-                </button>
-                {logDisparo.length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Resultado</div>
-                    {logDisparo.map((l, i) => (
-                      l.info
-                        ? <div key={i} style={{ fontSize: 11, padding: '4px 8px', color: textMuted, fontStyle: 'italic', marginBottom: 4 }}>{l.msg}</div>
-                        : <div key={i} style={{ fontSize: 12, padding: '6px 10px', background: bg, borderRadius: 8, borderLeft: `3px solid ${l.ok ? '#059669' : '#dc2626'}`, marginBottom: 5, color: l.ok ? textColor : textMuted }}>
-                            {l.ok ? '✅' : '❌'} {l.nome}{l.status ? ` — erro ${l.status}` : ''}
-                          </div>
-                    ))}
+                  )}
+                  {preview.razao && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: '#b45309', fontStyle: 'italic' }}>{preview.razao}</div>
+                  )}
+                </div>
+
+                {preview.agrupado && preview.agrupado.length > 0 ? (
+                  preview.agrupado.map((bloco, i) => (
+                    <CardMensagem
+                      key={i}
+                      mensagem={bloco.mensagem}
+                      grupos={bloco.grupos}
+                      darkMode={darkMode}
+                    />
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: 20, color: textMuted, fontSize: 12, fontStyle: 'italic' }}>
+                    Nenhuma mensagem agendada.
                   </div>
                 )}
               </>
             )}
           </>
         )}
+
+        {aba === 'historico' && (
+          <>
+            {loadingHistorico && (
+              <div style={{ textAlign: 'center', padding: 20, color: textMuted, fontSize: 12 }}>Carregando…</div>
+            )}
+            {!loadingHistorico && historico.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 20, color: textMuted, fontSize: 12, fontStyle: 'italic' }}>
+                Nenhum envio registrado ainda.
+              </div>
+            )}
+            {!loadingHistorico && historico.map(h => (
+              <CardMensagem
+                key={h.id}
+                mensagem={h.mensagem}
+                grupos={(h.grupos || []).map(g => ({ id: g.id, nome: g.nome, status: g.status }))}
+                data={formatarData(h.quando)}
+                mostrarStatus
+                darkMode={darkMode}
+              />
+            ))}
+          </>
+        )}
       </div>
-      {/* Toast */}
-      {toastMsg && (
-        <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: card, border: `1px solid ${toastWarn ? '#f59e0b' : '#059669'}`, borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 600, color: toastWarn ? '#b45309' : '#059669', whiteSpace: 'nowrap', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-          {toastMsg}
+    </div>
+  );
+}
+
+function CardMensagem({ mensagem, grupos, data, mostrarStatus, darkMode }) {
+  const [aberto, setAberto] = useState(false);
+  const card = darkMode ? '#0f1117' : '#fff';
+  const border = darkMode ? '#0f3460' : '#e5e7eb';
+  const textColor = darkMode ? '#e2e8f0' : '#1a202c';
+  const textMuted = darkMode ? '#94a3b8' : '#6b7280';
+  const bg = darkMode ? '#0f1117' : '#f9fafb';
+
+  return (
+    <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {data && <div style={{ fontSize: 11, color: textMuted }}>{data}</div>}
+          <div style={{ fontWeight: 500, fontSize: 12, color: textColor, marginTop: 2 }}>
+            {grupos.length} grupo(s) {mostrarStatus ? 'receberam' : 'receberão'}
+          </div>
         </div>
+        <button onClick={() => setAberto(!aberto)}
+          style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: 11, cursor: 'pointer', padding: '2px 6px', whiteSpace: 'nowrap' }}>
+          {aberto ? 'Recolher ▲' : 'Ver ▼'}
+        </button>
+      </div>
+      {aberto && (
+        <>
+          <pre style={{ background: bg, border: `1px solid ${border}`, padding: 10, borderRadius: 7, fontSize: 11, fontFamily: 'Inter,sans-serif', whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 10, color: textColor, lineHeight: 1.6 }}>
+            {mensagem}
+          </pre>
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${border}` }}>
+            <div style={{ fontSize: 10, color: textMuted, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.4px', fontWeight: 600 }}>Grupos:</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {grupos.map((g, i) => (
+                <span key={i} style={{
+                  fontSize: 10,
+                  padding: '2px 8px',
+                  borderRadius: 12,
+                  background: g.status === 'erro' ? '#fee' : (g.status === 'ok' ? '#eef9ee' : (darkMode ? '#0f3460' : '#eff6ff')),
+                  color: g.status === 'erro' ? '#c00' : (g.status === 'ok' ? '#2a7' : '#2563eb'),
+                  border: '1px solid ' + (g.status === 'erro' ? '#fcc' : (g.status === 'ok' ? '#bce8bc' : (darkMode ? '#1e3a5c' : '#bfdbfe')))
+                }}>
+                  {g.nome}
+                  {mostrarStatus && g.status && ` · ${g.status === 'ok' ? '✓' : '✗'}`}
+                </span>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ResumoDemandasTab — componente principal
+// ═══════════════════════════════════════════════════════════════════════════
 export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParceria }) {
   const [copiado, setCopiado] = useState(false);
   const [editando, setEditando] = useState(false);
   const [textoEditado, setTextoEditado] = useState('');
   const [titulo, setTitulo] = useState(TITULO_PADRAO);
   const [editandoTitulo, setEditandoTitulo] = useState(false);
+
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
@@ -707,14 +301,17 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
   }), [data]);
+
   const [selecionados, setSelecionados] = useState(new Set());
   const inicializado = useState(false);
+
   useEffect(() => {
     if (!inicializado[0]) {
       setSelecionados(new Set(elegiveis.filter(c => c.solicitar_parceria).map(c => c.id)));
       inicializado[1](true);
     }
   }, [elegiveis]);
+
   async function toggleSelecionado(id) {
     const estaAtivo = selecionados.has(id);
     const novoValor = !estaAtivo;
@@ -726,6 +323,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
     await supabase.from('negociacoes').update({ solicitar_parceria: novoValor }).eq('id', id);
     onToggleParceria?.(id, novoValor);
   }
+
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
@@ -736,22 +334,28 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
     });
     return grupos;
   }, [elegiveis]);
+
   const textoGerado = useMemo(() => gerarTexto(titulo, [...selecionados], porModalidade), [titulo, selecionados, porModalidade]);
+
   useEffect(() => {
     if (!editando) setTextoEditado(textoGerado);
   }, [textoGerado, editando]);
+
   const textoFinal = editando ? textoEditado : textoGerado;
   const instancia = perfil?.whatsapp_instancia || '';
+
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
+
   const ordem = ['Compra', 'Locação'];
   const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
+
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', color: textColor }}>
-      {/* Esquerda */}
+      {/* Esquerda — Demandas */}
       <div style={{ flex: '0 0 54%', minWidth: 0 }}>
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>📋 Demandas</h2>
@@ -813,7 +417,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
             ))}
             {/* Mensagem gerada */}
             <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
-              {/* Título editável */}
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '.5px' }}>Título da mensagem</span>
@@ -877,16 +480,16 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
           </>
         )}
       </div>
-      {/* Direita: WA Scheduler */}
+      {/* Direita: Disparos WA */}
       <div style={{ flex: '0 0 43%', position: 'sticky', top: 0, height: 'calc(100vh - 130px)', minHeight: 500 }}>
         {instancia ? (
-          <WAPainel instancia={instancia} mensagemCRM={textoFinal} darkMode={darkMode} demandasSelecionadas={elegiveis.filter(c => selecionados.has(c.id))} tituloCRMExterno={titulo} />
+          <WAPainelDisparos instancia={instancia} darkMode={darkMode} />
         ) : (
           <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: textMuted }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
-            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14, color: textColor }}>WA Scheduler</div>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14, color: textColor }}>Disparos WhatsApp</div>
             <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-              Configure sua instância do WhatsApp na aba <strong>Perfil</strong> para usar o disparador aqui.
+              Configure sua instância do WhatsApp na aba <strong>Perfil</strong> para visualizar os disparos aqui.
             </div>
           </div>
         )}
