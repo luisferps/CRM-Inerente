@@ -297,7 +297,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
     if (c.modalidade === 'Venda') return false;
-    const etapasAvancadas = ['proposta','contrato','financiamento','recebimento','recebido'];
+    const etapasAvancadas = ['contrato','financiamento','recebimento','recebido'];
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
   }), [data]);
