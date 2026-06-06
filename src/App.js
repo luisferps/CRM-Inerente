@@ -316,7 +316,7 @@ export default function App() {
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
-            {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} />}
+            {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} perfil={perfil} onToggleParceria={(id, val) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, solicitar_parceria: val } : neg))} />}
             {tab === 'usuarios' && isGerente && <UsuariosTab />}
             {tab === 'importacao' && (isGerente || isCorretor) && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
             {tab === 'config' && <ConfigTab perfil={perfil} />}
