@@ -399,9 +399,31 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           </div>
 
           {form.ativo === 'N' && (
-            <div className="field-full">
+            <div className="field-full" style={{ position: 'relative', zIndex: 100 }}>
               <label className="form-label">Motivo da Desistência</label>
-              <input value={form.motivo_desistencia} onChange={e => set('motivo_desistencia', e.target.value)} placeholder="Por que o cliente desistiu?" />
+              <input
+                value={form.motivo_desistencia}
+                onChange={e => { set('motivo_desistencia', e.target.value); setMotivoAberto(true); }}
+                onFocus={() => setMotivoAberto(true)}
+                onBlur={() => setTimeout(() => setMotivoAberto(false), 200)}
+                placeholder="Por que o cliente desistiu?"
+                autoComplete="off"
+              />
+              {motivoAberto && motivos.length > 0 && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, maxHeight: 180, overflowY: 'auto' }}>
+                  {motivos
+                    .filter(m => !form.motivo_desistencia || m.toLowerCase().includes((form.motivo_desistencia || '').toLowerCase()))
+                    .map((m, i) => (
+                      <div key={i} onMouseDown={e => { e.preventDefault(); set('motivo_desistencia', m); setMotivoAberto(false); }}
+                        style={{ padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: '#374151', borderBottom: '1px solid #f3f4f6' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                        {m}
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
             </div>
           )}
 
