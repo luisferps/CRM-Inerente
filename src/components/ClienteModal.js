@@ -9,7 +9,7 @@ const emptyForm = {
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
   corretor: '', corretor_id: null,
-  imovel: '', modalidade: '',
+  imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
   origem_tratativa: '',
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
@@ -20,6 +20,13 @@ const emptyForm = {
 };
 
 function isIntl(value) { return (value || '').trim().startsWith('+'); }
+
+// Monta a string de exibição do tipo a partir dos campos dimensionais (tipo_id + em_condominio).
+function tipoDisplay(tipos, tipoId, emCondominio) {
+  const t = (tipos || []).find(x => x.id === tipoId);
+  if (!t) return '';
+  return (emCondominio && t.permite_condominio) ? `${t.nome} em Condomínio` : t.nome;
+}
 
 function validarTel(value, intl) {
   if (!value?.trim()) return false;
@@ -92,7 +99,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [origens, setOrigens] = useState([]);
-  const [imoveis, setImoveis] = useState([]);
+  const [tipos, setTipos] = useState([]);
   const [valorDisplay, setValorDisplay] = useState('');
   const [internacional, setInternacional] = useState(false);
   const [buscando, setBuscando] = useState(false);
@@ -129,7 +136,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     supabase.from('configuracoes').select('chave, valor').then(({ data }) => {
       if (data) data.forEach(row => {
         if (row.chave === 'origens') setOrigens(row.valor);
-        if (row.chave === 'imoveis') setImoveis(row.valor);
+        if (row.chave === 'imoveis') {
+          // Cadastro central no formato { tipos: [{id, nome, permite_condominio, ...}] }
+          const v = row.valor;
+          const lista = Array.isArray(v?.tipos) ? v.tipos
+            : (Array.isArray(v) ? v.map(n => ({ id: String(n), nome: String(n), permite_condominio: false })) : []);
+          setTipos(lista);
+        }
       });
     });
   }, []);
@@ -253,7 +266,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     if (!validarTel(form.telefone, internacional)) errs.telefone = true;
     if (!form.modalidade) errs.modalidade = true;
     if (!isVenda) {
-      if (!form.imovel) errs.imovel = true;
+      if (!form.tipo_id) errs.tipo_id = true;
       if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
     }
     if (!form.localizacao.trim()) errs.localizacao = true;
@@ -265,7 +278,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
     setSaving(true);
-    await onSave({ ...form, cliente_real_id: form.cliente_real_id || clienteEncontrado?.id });
+    const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
+    await onSave({ ...form, imovel: imovelStr, cliente_real_id: form.cliente_real_id || clienteEncontrado?.id });
     setSaving(false);
   }
 
@@ -451,10 +465,42 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             </div>
           )}
 
-          <SelectComAdd label="Tipo de Imóvel" value={form.imovel}
-            onChange={v => { set('imovel', v); if (errors.imovel) setErrors(e => ({ ...e, imovel: false })); }}
-            options={imoveis} setOptions={setImoveis} chave="imoveis" required={!isVenda} errStyle={!isVenda ? errStyle('imovel') : {}}
-            isGerente={isGerente} perfil={perfil} />
+          {(() => {
+            const tipoSel = tipos.find(t => t.id === form.tipo_id);
+            const permiteCond = !!tipoSel?.permite_condominio;
+            return (
+              <div>
+                <label className="form-label" style={errors.tipo_id ? { color: '#dc2626' } : {}}>
+                  Tipo de Imóvel{!isVenda ? ' *' : ''}
+                </label>
+                <select
+                  value={form.tipo_id}
+                  onChange={e => {
+                    const novoId = e.target.value;
+                    const t = tipos.find(x => x.id === novoId);
+                    set('tipo_id', novoId);
+                    if (!t || !t.permite_condominio) set('em_condominio', false);
+                    if (errors.tipo_id) setErrors(er => ({ ...er, tipo_id: false }));
+                  }}
+                  style={!isVenda ? errStyle('tipo_id') : {}}
+                >
+                  <option value="">Selecionar</option>
+                  {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+                {permiteCond && (
+                  <label style={{ marginTop: 6, fontSize: 13, color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!form.em_condominio}
+                      onChange={e => set('em_condominio', e.target.checked)}
+                      style={{ width: 'auto', margin: 0 }}
+                    />
+                    Em condomínio
+                  </label>
+                )}
+              </div>
+            );
+          })()}
 
           <div>
             <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
