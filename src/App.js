@@ -1,599 +1,362 @@
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../supabaseClient';
-import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import './index.css';
+import { supabase } from './supabaseClient';
+import CRMTab from './components/CRMTab';
+import FunilTab from './components/FunilTab';
+import VendasTab from './components/VendasTab';
+import DashboardTab from './components/DashboardTab';
+import ConfigTab from './components/ConfigTab';
+import InativosTab from './components/InativosTab';
+import UsuariosTab from './components/UsuariosTab';
+import LoginScreen from './components/LoginScreen';
+import ClienteModal from './components/ClienteModal';
+import PerfilTab from './components/PerfilTab';
+import BackupTab from './components/BackupTab';
+import ImportacaoTab from './components/ImportacaoTab';
+import ResumoDemandasTab from './components/ResumoDemandasTab';
+import RecebidosTab from './components/RecebidosTab';
+import ClientesTab from './components/ClientesTab';
 
-const hoje = new Date().toISOString().slice(0, 10);
-
-const emptyForm = {
-  nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
-  origem: '', is_corretor: false,
-  ativo: 'S', motivo_desistencia: '',
-  corretor: '', corretor_id: null,
-  imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
-  origem_tratativa: '',
-  valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
-  proxima_acao: '', imoveis_visitados: '',
-  ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
-  solicitar_parceria: false,
-  tratativa: false, pesquisa: false, agendamento: false, visita: false,
-  proposta: false, contrato: false, financiamento: false, recebimento: false, recebido: false,
-};
-
-function isIntl(value) { return (value || '').trim().startsWith('+'); }
-
-// Monta a string de exibição do tipo a partir dos campos dimensionais (tipo_id + em_condominio).
-function tipoDisplay(tipos, tipoId, emCondominio) {
-  const t = (tipos || []).find(x => x.id === tipoId);
-  if (!t) return '';
-  return (emCondominio && t.permite_condominio) ? `${t.nome} em Condomínio` : t.nome;
+function splitForm(form) {
+  const clienteData = {
+    nome: form.nome,
+    telefone: form.telefone,
+    telefone2: form.telefone2 || null,
+    email: form.email,
+    entrada: form.entrada || new Date().toISOString().slice(0, 10),
+    origem: form.origem || null,
+    is_corretor: form.is_corretor || false,
+  };
+  const negociacaoData = {
+    modalidade: form.modalidade,
+    origem_tratativa: form.origem_tratativa || null,
+    imovel: form.imovel,
+    tipo_id: form.tipo_id || null,
+    em_condominio: form.em_condominio || false,
+    valor: form.valor ? Number(form.valor) : null,
+    localizacao: form.localizacao,
+    detalhes: form.detalhes,
+    detalhes_externos: form.detalhes_externos || null,
+    proxima_acao: form.proxima_acao,
+    imoveis_visitados: form.imoveis_visitados,
+    ultimo_contato: form.ultimo_contato || null,
+    prox_contato: form.prox_contato || null,
+    final_contato: form.final_contato || null,
+    prorrogacao: form.prorrogacao || null,
+    ativo: form.ativo,
+    motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
+    solicitar_parceria: form.solicitar_parceria || false,
+    tratativa: form.tratativa || false,
+    pesquisa: form.pesquisa || false,
+    agendamento: form.agendamento || false,
+    visita: form.visita || false,
+    proposta: form.proposta || false,
+    contrato: form.contrato || false,
+    financiamento: form.financiamento || false,
+    recebimento: form.recebimento || false,
+    recebido: form.recebido || false,
+    corretor_id: form.corretor_id,
+    corretor: form.corretor,
+  };
+  return { clienteData, negociacaoData };
 }
 
-function validarTel(value, intl) {
-  if (!value?.trim()) return false;
-  if (intl) return value.trim().length >= 8;
-  return value.replace(/\D/g,'').length >= 10;
-}
+export default function App() {
+  const [tab, setTab] = useState(() => localStorage.getItem('crm_tab') || 'tratativas');
+  const [clientes, setClientes] = useState([]);
+  const [negociacoes, setNegociacoes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [session, setSession] = useState(null);
+  const [perfil, setPerfil] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('crm_dark') === 'true');
+  const [filtroClienteId, setFiltroClienteId] = useState(null);
+  const [abaFunil, setAbaFunil] = useState(() => localStorage.getItem('crm_funil_aba') || 'compra');
+  const sessionRef = useRef(null);
 
-function SelectComAdd({ label, value, onChange, options, setOptions, chave, required, errStyle, isGerente, perfil, bloqueado }) {
-  const [adding, setAdding] = useState(false);
-  const [novo, setNovo] = useState('');
-  const [saving, setSaving] = useState(false);
+  useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
 
-  async function handleAdd() {
-    const v = novo.trim();
-    if (!v) return;
-    if (options.includes(v)) { onChange(v); setAdding(false); setNovo(''); return; }
-    setSaving(true);
-    if (isGerente) {
-      const lista = [...options, v].sort((a,b) => a.localeCompare(b,'pt-BR'));
-      const { error } = await supabase.from('configuracoes').upsert({ chave, valor: lista }, { onConflict: 'chave' });
-      if (!error) { setOptions(lista); onChange(v); }
-      else alert('Erro: ' + error.message);
-    } else {
-      const { error } = await supabase.from('sugestoes_lista').insert({ chave, valor: v, sugerido_por: perfil?.id, sugerido_por_nome: perfil?.nome, status: 'pendente' });
-      if (!error) alert('Sugestão enviada para aprovação do gerente!');
-      else alert('Erro: ' + error.message);
-    }
-    setSaving(false); setAdding(false); setNovo('');
+  function toggleDark() {
+    setDarkMode(d => {
+      const next = !d;
+      localStorage.setItem('crm_dark', next);
+      document.body.classList.toggle('dark', next);
+      return next;
+    });
   }
 
-  if (bloqueado) return (
-    <div>
-      <label className="form-label">{label}{required ? ' *' : ''}</label>
-      <input value={value} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
-      <span style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, display: 'block' }}>Preenchido automaticamente como Carteira</span>
-    </div>
-  );
-
-  return (
-    <div>
-      <label className="form-label">{label}{required ? ' *' : ''}</label>
-      {adding ? (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input autoFocus value={novo} onChange={e => setNovo(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNovo(''); }}}
-            placeholder={isGerente ? 'Nova opção...' : 'Sugerir opção...'} style={{ flex: 1 }} />
-          <button type="button" onClick={handleAdd} disabled={saving}
-            style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: isGerente ? '#2563eb' : '#f59e0b', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            {saving ? '...' : isGerente ? '✓' : '💡'}
-          </button>
-          <button type="button" onClick={() => { setAdding(false); setNovo(''); }}
-            style={{ padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 13, cursor: 'pointer' }}>✕</button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <select value={value} onChange={e => onChange(e.target.value)} style={{ flex: 1, ...(errStyle || {}) }}>
-            <option value="">Selecionar</option>
-            {options.map(o => <option key={o}>{o}</option>)}
-          </select>
-          <button type="button" onClick={() => setAdding(true)} title={isGerente ? 'Adicionar' : 'Sugerir'}
-            style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: isGerente ? '#2563eb' : '#f59e0b', fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>+</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function ClienteModal({ modal, onSave, onClose, perfil }) {
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [origens, setOrigens] = useState([]);
-  const [tipos, setTipos] = useState([]);
-  const [valorDisplay, setValorDisplay] = useState('');
-  const [internacional, setInternacional] = useState(false);
-  const [buscando, setBuscando] = useState(false);
-  const [clienteEncontrado, setClienteEncontrado] = useState(null);
-  const [origemBloqueada, setOrigemBloqueada] = useState(false);
-  const [duplicatas, setDuplicatas] = useState([]);
-  const [motivos, setMotivos] = useState([]);
-  const [motivoAberto, setMotivoAberto] = useState(false);
-  const timerNome = useRef(null);
-
-  // Buscar motivos já usados no banco
   useEffect(() => {
-    supabase.from('negociacoes').select('motivo_desistencia').neq('motivo_desistencia', '').not('motivo_desistencia', 'is', null)
-      .then(({ data }) => {
-        const unicos = [...new Set((data || []).map(d => d.motivo_desistencia).filter(Boolean))].sort();
-        setMotivos(unicos);
-      });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      sessionRef.current = session;
+      setSession(session);
+      if (session) loadPerfil(session.user.id);
+      else setCheckingAuth(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'SIGNED_OUT') { sessionRef.current = null; setSession(null); setPerfil(null); setCheckingAuth(false); }
+      else if (_event === 'SIGNED_IN' && !sessionRef.current) { sessionRef.current = session; setSession(session); loadPerfil(session.user.id); }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  const isEdit = modal && modal.negociacao_id;
-  const isNovaNeg = modal && modal.novaNegociacao;
+  async function loadPerfil(userId) {
+    const { data } = await supabase.from('perfis').select('*').eq('id', userId).single();
+    setPerfil(data);
+    setCheckingAuth(false);
+  }
+
+  useEffect(() => { if (!session || !perfil) return; load(); }, [session, perfil]);
+
+  async function load() {
+    setLoading(true);
+    const [{ data: clientesData, error: err1 }, { data: negData, error: err2 }] = await Promise.all([
+      supabase.from('clientes').select('*').order('created_at', { ascending: false }),
+      supabase.from('negociacoes').select('*').order('created_at', { ascending: false }),
+    ]);
+    if (err1 || err2) setError((err1 || err2).message);
+    else { setClientes(clientesData || []); setNegociacoes(negData || []); }
+    setLoading(false);
+  }
+
+  const data = useMemo(() => {
+    return negociacoes.map(neg => {
+      const cliente = clientes.find(c => c.id === neg.cliente_id) || {};
+      return {
+        ...neg,
+        negociacao_id: neg.id,
+        id: neg.id,
+        cliente_real_id: cliente.id,
+        nome: cliente.nome || '',
+        telefone: cliente.telefone || '',
+        email: cliente.email || '',
+        entrada: cliente.entrada || '',
+        origem: cliente.origem || '',
+        is_corretor: cliente.is_corretor || false,
+      };
+    });
+  }, [clientes, negociacoes]);
+
+  // Permissões baseadas nas funções
   const isGerente = perfil?.is_gerente;
-  const isVenda = form.modalidade === 'Venda';
+  const isCorretor = perfil?.is_corretor;
+  const isEscritorio = perfil?.is_escritorio;
+  const podeEditar = isGerente || isCorretor; // escritório só visualiza
 
-  useEffect(() => {
-    function handleEsc(e) {
-      if (e.key === 'Escape') { localStorage.removeItem('crm_rascunho'); onClose(); }
-    }
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
+  async function handleSave(form) {
+    if (!podeEditar) return alert('Sem permissão para editar.');
+    const { clienteData, negociacaoData } = splitForm(form);
+    const editNegId = form.negociacao_id || null;
+    const editClienteId = form.cliente_real_id || null;
 
-  useEffect(() => {
-    supabase.from('configuracoes').select('chave, valor').then(({ data }) => {
-      if (data) data.forEach(row => {
-        if (row.chave === 'origens') setOrigens(row.valor);
-        if (row.chave === 'imoveis') {
-          // Cadastro central no formato { tipos: [{id, nome, permite_condominio, ...}] }
-          const v = row.valor;
-          const lista = Array.isArray(v?.tipos) ? v.tipos
-            : (Array.isArray(v) ? v.map(n => ({ id: String(n), nome: String(n), permite_condominio: false })) : []);
-          setTipos(lista);
-        }
-      });
-    });
-  }, []);
-
-  useEffect(() => {
-    setClienteEncontrado(null);
-    setOrigemBloqueada(false);
-    if (isEdit) {
-      setForm({ ...emptyForm, ...modal });
-      setValorDisplay(modal.valor !== '' && modal.valor !== null && modal.valor !== undefined
-        ? Number(modal.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
-      setInternacional(isIntl(modal.telefone || ''));
-      localStorage.removeItem('crm_rascunho');
-    } else if (isNovaNeg) {
-      const c = modal.cliente;
-      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: 'Carteira', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
-      if (perfil) { initial.corretor = perfil.nome; initial.corretor_id = perfil.id; }
-      setForm(initial);
-      setOrigemBloqueada(true);
-      setInternacional(isIntl(c.telefone || ''));
-      setValorDisplay('');
+    if (editNegId && editClienteId) {
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        supabase.from('clientes').update(clienteData).eq('id', editClienteId),
+        supabase.from('negociacoes').update(negociacaoData).eq('id', editNegId),
+      ]);
+      if (e1 || e2) return alert('Erro ao salvar: ' + (e1 || e2).message);
     } else {
-      const rascunho = localStorage.getItem('crm_rascunho');
-      if (rascunho) {
-        try {
-          const r = JSON.parse(rascunho);
-          setForm(r);
-          setValorDisplay(r.valor !== '' && r.valor !== null ? Number(r.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
-          setInternacional(isIntl(r.telefone || ''));
-        } catch { resetForm(); }
-      } else { resetForm(); }
-    }
-  }, [modal]);
-
-  function resetForm() {
-    const initial = { ...emptyForm };
-    if (perfil) { initial.corretor = perfil.nome; initial.corretor_id = perfil.id; }
-    setForm(initial);
-    setValorDisplay('');
-    setInternacional(false);
-  }
-
-  // Busca por telefone — debounce 700ms, usa últimos 8 dígitos
-  async function buscarPorTelefone(tel) {
-    const digits = tel.replace(/\D/g, '');
-    if (digits.length < 8) { setClienteEncontrado(null); setOrigemBloqueada(false); return; }
-    setBuscando(true);
-    try {
-      const sufixo = digits.slice(-8);
-      // Busca tanto formatado quanto só números
-      const { data } = await supabase
-        .from('clientes')
-        .select('*')
-        .or(`telefone.ilike.%${sufixo}%,telefone.eq.${digits}`)
-        .limit(1);
-      if (data && data.length > 0) {
-        const c = data[0];
-        setClienteEncontrado(c);
-        const { data: negs } = await supabase.from('negociacoes').select('id').eq('cliente_id', c.id).limit(1);
-        const temTratativas = negs && negs.length > 0;
-        setForm(f => ({
-          ...f,
-          nome: c.nome,
-          email: c.email || f.email,
-          origem: temTratativas ? 'Carteira' : (c.origem || f.origem),
-          is_corretor: c.is_corretor || false,
-          cliente_real_id: c.id,
-        }));
-        setOrigemBloqueada(temTratativas);
+      if (!isGerente) {
+        negociacaoData.corretor_id = perfil.id;
+        negociacaoData.corretor = perfil.nome;
+        negociacaoData.corretor_original_id = perfil.id;
+        negociacaoData.corretor_original = perfil.nome;
       } else {
-        setClienteEncontrado(null);
-        setOrigemBloqueada(false);
+        negociacaoData.corretor_original_id = negociacaoData.corretor_id;
+        negociacaoData.corretor_original = negociacaoData.corretor;
       }
-    } catch (e) { console.error(e); }
-    setBuscando(false);
-  }
-
-  function handleTelChange(e) {
-    // Só dígitos (ou + para internacional)
-    let val = internacional
-      ? e.target.value.replace(/[^\d+]/g, '')
-      : e.target.value.replace(/\D/g, '').slice(0, 11);
-    set('telefone', val);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => buscarPorTelefone(val), 700);
-  }
-
-  async function buscarDuplicatas(nome) {
-    if (!nome || nome.trim().length < 3) { setDuplicatas([]); return; }
-    const primeiros = nome.trim().split(' ').slice(0,2).join(' ');
-    const { data } = await supabase.from('clientes').select('id, nome, telefone').ilike('nome', `%${primeiros}%`).limit(5);
-    setDuplicatas((data || []).filter(c => c.id !== form.cliente_real_id));
-  }
-
-  function handleNomeChange(e) {
-    set('nome', e.target.value);
-    if (timerNome.current) clearTimeout(timerNome.current);
-    timerNome.current = setTimeout(() => buscarDuplicatas(e.target.value), 600);
-  }
-
-  function set(key, val) {
-    setForm(f => {
-      const u = { ...f, [key]: val };
-      if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
-      return u;
-    });
-    if (errors[key]) setErrors(e => ({ ...e, [key]: false }));
-  }
-
-  function handleValorChange(e) {
-    const raw = e.target.value.replace(/\D/g, '');
-    if (raw === '') { setValorDisplay(''); set('valor', ''); return; }
-    const n = parseInt(raw, 10) / 100;
-    setValorDisplay(n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-    set('valor', n);
-  }
-
-  function validate() {
-    const errs = {};
-    if (!form.nome.trim()) errs.nome = true;
-    if (!validarTel(form.telefone, internacional)) errs.telefone = true;
-    if (!form.modalidade) errs.modalidade = true;
-    if (!isVenda) {
-      if (!form.tipo_id) errs.tipo_id = true;
-      if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
+      // Verifica se cliente já existe
+      if (editClienteId) {
+        // Cliente já existe, só cria negociação
+        const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: editClienteId });
+        if (e2) return alert('Erro ao inserir tratativa: ' + e2.message);
+      } else {
+        const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clienteData).select().single();
+        if (e1) return alert('Erro ao inserir cliente: ' + e1.message);
+        const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: novoCliente.id });
+        if (e2) return alert('Erro ao inserir tratativa: ' + e2.message);
+      }
     }
-    if (!form.localizacao.trim()) errs.localizacao = true;
-    if (form.valor === '' || form.valor === null || form.valor === undefined) errs.valor = true;
-    return errs;
+    localStorage.removeItem('crm_rascunho');
+    setModal(null);
+    await load();
   }
 
-  async function handleSave() {
-    const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
-    setSaving(true);
-    const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
-    await onSave({ ...form, imovel: imovelStr, cliente_real_id: form.cliente_real_id || clienteEncontrado?.id });
-    setSaving(false);
+  async function handleNovaNegociacao(clienteRealId) {
+    const cliente = clientes.find(c => c.id === clienteRealId);
+    if (!cliente) return;
+    setModal({ cliente, negociacao: null, novaNegociacao: true });
   }
 
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') { localStorage.removeItem('crm_rascunho'); onClose(); }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  async function handleDelete(negId) {
+    if (!podeEditar) return;
+    const { error: err } = await supabase.from('negociacoes').delete().eq('id', negId);
+    if (err) return alert('Erro ao excluir: ' + err.message);
+    await load();
+  }
 
-  const errStyle = k => errors[k] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
-  const clienteLocked = (isNovaNeg || !!clienteEncontrado) && !isEdit;
-  const titulo = isNovaNeg ? `Nova Tratativa — ${modal.cliente?.nome}` : isEdit ? 'Editar Tratativa' : 'Nova Tratativa';
+  async function handleToggleFunil(negId, etapaOuUpdates, val) {
+    if (!podeEditar) return;
+    const updates = typeof etapaOuUpdates === 'object' ? etapaOuUpdates : { [etapaOuUpdates]: val };
+    const { error: err } = await supabase.from('negociacoes').update(updates).eq('id', negId);
+    if (err) return alert('Erro: ' + err.message);
+    setNegociacoes(n => n.map(neg => neg.id === negId ? { ...neg, ...updates } : neg));
+  }
+
+  async function handleDevolver(negId) {
+    const { error } = await supabase.from('negociacoes').update({ recebido: false, recebimento: false }).eq('id', negId);
+    if (error) return alert('Erro: ' + error.message);
+    await load();
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setClientes([]); setNegociacoes([]); setPerfil(null);
+  }
+
+  function handleSetAbaFunil(aba) {
+    setAbaFunil(aba);
+    localStorage.setItem('crm_funil_aba', aba);
+  }
+
+  function handleVerTratativas(clienteId) {
+    setFiltroClienteId(clienteId);
+    setTab('tratativas');
+  }
+
+  const stats = useMemo(() => ({
+    total: data.filter(c => c.ativo === 'S').length,
+    compras: data.filter(c => c.ativo === 'S' && c.modalidade === 'Compra').length,
+    locacoes: data.filter(c => c.ativo === 'S' && c.modalidade === 'Locação').length,
+    vendas: data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda').length,
+    contratos: data.filter(c => c.contrato).length,
+  }), [data]);
+
+  if (checkingAuth) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: '#9ca3af' }}>Carregando...</div>
+  );
+
+  if (!session || !perfil) return <LoginScreen />;
+
+  // Abas por função
+  const todasAbas = [
+    ['tratativas', 'Tratativas'],
+    ['funil', 'Funil'],
+    ['vendas', '🏠 Vendas'],
+    ['dash', 'Dashboard'],
+    ['recebidos', '💰 Recebidos'],
+    ['inativos', 'Finalizadas'],
+    ['resumo', '📋 Demandas'],
+    ['clientes', '👤 Clientes'],
+    ['usuarios', '👥 Usuários', 'gerente'],
+    ['importacao', '📥 Importar', 'gerente_corretor'],
+    ['config', '⚙️ Config'],
+    ['backup', '💾 Backup', 'gerente'],
+    ['perfil', '👤 Perfil'],
+  ];
+
+  const tabs = todasAbas.filter(([, , acesso]) => {
+    if (!acesso) return true;
+    if (acesso === 'gerente') return isGerente;
+    if (acesso === 'gerente_corretor') return isGerente || isCorretor;
+    return true;
+  });
+
+  const funcaoLabel = isGerente ? 'Gerente' : isCorretor ? 'Corretor' : isEscritorio ? 'Escritório' : '';
+  const funcaoCor = isGerente ? '#2563eb' : isCorretor ? '#059669' : '#7c3aed';
 
   return (
-    <div className="modal-overlay" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <span className="modal-title">{titulo}</span>
-          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>✕</button>
+    <div className="app-shell">
+      <header className="header">
+        <div className="header-logo">CRM <span>Imobiliário</span></div>
+        <nav className="tab-nav">
+          {tabs.map(([t, l]) => (
+            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); localStorage.setItem('crm_tab', t); setFiltroClienteId(null); }}>{l}</button>
+          ))}
+        </nav>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, color: '#6b7280' }}>
+            {perfil.nome} · <span style={{ color: funcaoCor, fontWeight: 600 }}>{funcaoLabel}</span>
+          </span>
+          <button onClick={toggleDark} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 14, color: '#6b7280', cursor: 'pointer' }}>
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+          <button onClick={handleLogout} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 14px', fontSize: 12, color: '#6b7280', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            Sair
+          </button>
         </div>
-        <div className="modal-body">
+      </header>
 
-          {/* DADOS DO CLIENTE */}
-          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados do Cliente</span>
-          </div>
-
-          <div>
-            <label className="form-label">
-              Telefone *
-              <label style={{ marginLeft: 12, fontSize: 11, fontWeight: 400, color: '#6b7280', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); setClienteEncontrado(null); }} style={{ width: 'auto', margin: 0 }} disabled={isEdit} />
-                Internacional
-              </label>
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                value={form.telefone}
-                onChange={handleTelChange}
-                placeholder={internacional ? '+1 555 000 0000' : '62999999999'}
-                style={errStyle('telefone')}
-                disabled={isEdit}
-                inputMode="numeric"
-              />
-              {buscando && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#9ca3af' }}>🔍</span>}
-            </div>
-            {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>Informe um número válido.</span>}
-            {clienteEncontrado && (
-              <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 12, color: '#065f46' }}>
-                ✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="form-label">Telefone 2 <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— reserva</span></label>
-            <input
-              value={form.telefone2 || ''}
-              onChange={e => set('telefone2', e.target.value.replace(/\D/g,'').slice(0,11))}
-              placeholder="62999999999"
-              inputMode="numeric"
-              disabled={clienteLocked}
-            />
-          </div>
-
-          <div>
-            <label className="form-label">Nome *</label>
-            <input value={form.nome} onChange={handleNomeChange} placeholder="Nome completo" style={errStyle('nome')} disabled={clienteLocked} />
-            {!clienteLocked && duplicatas.length > 0 && (
-              <div style={{ marginTop: 6, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: '#92400e', marginBottom: 4 }}>⚠️ Clientes parecidos encontrados:</div>
-                {duplicatas.map(d => (
-                  <div key={d.id} style={{ color: '#78350f', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{d.nome}</span>
-                    <span style={{ color: '#9ca3af' }}>{d.telefone || '—'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="form-label">Email</label>
-            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" disabled={clienteLocked} />
-          </div>
-
-          <div>
-            <label className="form-label">Data de Entrada</label>
-            <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} />
-          </div>
-
-          <SelectComAdd label="Aquisição" value={form.origem} onChange={v => set('origem', v)}
-            options={origens} setOptions={setOrigens} chave="origens"
-            isGerente={isGerente} perfil={perfil} bloqueado={origemBloqueada && !isEdit} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 20 }}>
-            <input type="checkbox" id="is_corretor" checked={form.is_corretor || false} onChange={e => set('is_corretor', e.target.checked)}
-              style={{ width: 16, height: 16, cursor: 'pointer', margin: 0 }} disabled={clienteLocked} />
-            <label htmlFor="is_corretor" style={{ fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>Este cliente é corretor</label>
-          </div>
-
-          {/* TRATATIVA */}
-          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginTop: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tratativa</span>
-          </div>
-
-          <div>
-            <label className="form-label">Corretor</label>
-            <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
-          </div>
-
-          <SelectComAdd label="Origem da Tratativa" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
-            options={origens} setOptions={setOrigens} chave="origens"
-            isGerente={isGerente} perfil={perfil} />
-
-          <div>
-            <label className="form-label">Status</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {['S','N'].map(v => (
-                <button key={v} type="button" onClick={() => set('ativo', v)}
-                  style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${form.ativo === v ? (v === 'S' ? '#059669' : '#dc2626') : '#d1d5db'}`,
-                    background: form.ativo === v ? (v === 'S' ? '#d1fae5' : '#fee2e2') : '#fff',
-                    color: form.ativo === v ? (v === 'S' ? '#065f46' : '#991b1b') : '#6b7280' }}>
-                  {v === 'S' ? '✓ Ativo' : '✕ Inativo'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {form.ativo === 'N' && (
-            <div className="field-full" style={{ position: 'relative', zIndex: 100 }}>
-              <label className="form-label">Motivo da Desistência</label>
-              <input
-                value={form.motivo_desistencia}
-                onChange={e => { set('motivo_desistencia', e.target.value); setMotivoAberto(true); }}
-                onFocus={() => setMotivoAberto(true)}
-                onBlur={() => setTimeout(() => setMotivoAberto(false), 200)}
-                placeholder="Por que o cliente desistiu?"
-                autoComplete="off"
-              />
-              {motivoAberto && motivos.length > 0 && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, maxHeight: 180, overflowY: 'auto' }}>
-                  {motivos
-                    .filter(m => !form.motivo_desistencia || m.toLowerCase().includes((form.motivo_desistencia || '').toLowerCase()))
-                    .map((m, i) => (
-                      <div key={i} onMouseDown={e => { e.preventDefault(); set('motivo_desistencia', m); setMotivoAberto(false); }}
-                        style={{ padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: '#374151', borderBottom: '1px solid #f3f4f6' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-                        {m}
-                      </div>
-                    ))
-                  }
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="field-full">
-            <label className="form-label">Modalidade *</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['Compra','🛒','#059669','#dcfce7','#065f46'],['Venda','🏠','#2563eb','#dbeafe','#1d4ed8'],['Locação','🔑','#7c3aed','#ede9fe','#5b21b6']].map(([m, icon, border, bg, text]) => (
-                <button key={m} type="button" onClick={() => set('modalidade', m)}
-                  style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${form.modalidade === m ? border : '#d1d5db'}`,
-                    background: form.modalidade === m ? bg : '#fff',
-                    color: form.modalidade === m ? text : '#6b7280',
-                    outline: errors.modalidade ? '2px solid #dc2626' : 'none' }}>
-                  {icon} {m}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Captação (Venda) */}
-          {isVenda && (
-            <div className="field-full" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '12px 14px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>🏠 Captação</div>
-              <div style={{ fontSize: 12, color: '#3b82f6' }}>Imóvel a ser captado para venda. Preencha localização e observações.</div>
-            </div>
-          )}
-
-          {(() => {
-            const tipoSel = tipos.find(t => t.id === form.tipo_id);
-            const permiteCond = !!tipoSel?.permite_condominio;
-            return (
-              <div>
-                <label className="form-label" style={errors.tipo_id ? { color: '#dc2626' } : {}}>
-                  Tipo de Imóvel{!isVenda ? ' *' : ''}
-                </label>
-                <select
-                  value={form.tipo_id}
-                  onChange={e => {
-                    const novoId = e.target.value;
-                    const t = tipos.find(x => x.id === novoId);
-                    set('tipo_id', novoId);
-                    if (!t || !t.permite_condominio) set('em_condominio', false);
-                    if (errors.tipo_id) setErrors(er => ({ ...er, tipo_id: false }));
-                  }}
-                  style={!isVenda ? errStyle('tipo_id') : {}}
-                >
-                  <option value="">Selecionar</option>
-                  {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-                </select>
-                {permiteCond && (
-                  <label style={{ marginTop: 6, fontSize: 13, color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={!!form.em_condominio}
-                      onChange={e => set('em_condominio', e.target.checked)}
-                      style={{ width: 'auto', margin: 0 }}
-                    />
-                    Em condomínio
-                  </label>
-                )}
-              </div>
-            );
-          })()}
-
-          <div>
-            <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
-            <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" style={errStyle('valor')} />
-          </div>
-
-          <div>
-            <label className="form-label">Localização *</label>
-            <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
-          </div>
-
-          <div>
-            <label className="form-label">Próxima Ação</label>
-            <input value={form.proxima_acao} onChange={e => set('proxima_acao', e.target.value)} placeholder="O que fazer?" />
-          </div>
-
-          <div className="field-full">
-            <label className="form-label">
-              Observações Internas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
-            </label>
-            <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
-              placeholder="Anotações internas, perfil do cliente, situação financeira..."
-              style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
-          </div>
-
-          <div className="field-full">
-            <label className="form-label">
-              Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
-            </label>
-            <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
-              placeholder="Informações para enviar a parceiros ou clientes..."
-              style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
-          </div>
-
-          <div>
-            <label className="form-label">Último Contato</label>
-            <input type="date" value={form.ultimo_contato || ''} onChange={e => set('ultimo_contato', e.target.value)} />
-          </div>
-
-          <div>
-            <label className="form-label">Próx. Contato</label>
-            <input type="date" value={form.prox_contato || ''} onChange={e => set('prox_contato', e.target.value)} />
-          </div>
-
-          {!isVenda && (
-            <div>
-              <label className="form-label">Imóveis Visitados</label>
-              <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
-            </div>
-          )}
-
-          {!isVenda && (
-            <div className="field-full">
-              <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
-                Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
-              </label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, padding: errors.funil ? '8px' : '0', borderRadius: 7, border: errors.funil ? '1px solid #dc2626' : 'none' }}>
-                {ETAPAS_FUNIL_COMPLETO.map(e => (
-                  <button key={e} type="button" onClick={() => set(e, !form[e])}
-                    style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      border: `1px solid ${form[e] ? '#059669' : '#d1d5db'}`,
-                      background: form[e] ? '#d1fae5' : '#fff',
-                      color: form[e] ? '#065f46' : '#6b7280' }}>
-                    {ETAPAS_LABEL[e]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!isVenda && (
-            <div className="field-full">
-              <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
-                  border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
-                  background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
-                <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
-                </div>
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
-                </div>
-              </button>
-            </div>
-          )}
-
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
-        </div>
+      <div className="stats-bar">
+        <div className="stat-item"><span className="stat-label">Tratativas</span><span className="stat-value stat-blue">{stats.total}</span></div>
+        <div className="stat-item"><span className="stat-label">Compras</span><span className="stat-value stat-green">{stats.compras}</span></div>
+        <div className="stat-item"><span className="stat-label">Locações</span><span className="stat-value stat-purple">{stats.locacoes}</span></div>
+        <div className="stat-item"><span className="stat-label">Vendas</span><span className="stat-value stat-orange">{stats.vendas}</span></div>
+        <div className="stat-item"><span className="stat-label">Contratos</span><span className="stat-value stat-green">{stats.contratos}</span></div>
       </div>
+
+      {error && <div className="error-banner">⚠️ Erro de conexão: {error}</div>}
+
+      <main className="main">
+        {loading ? <div className="loading">Carregando dados...</div> : (
+          <>
+            {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
+            {tab === 'tratativas' && <CRMTab
+              data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido) : data.filter(c => c.ativo === 'S' && !c.recebido)}
+              todosData={data}
+              onOpenModal={podeEditar ? setModal : null}
+              onDelete={podeEditar ? handleDelete : null}
+              onToggleFunil={handleToggleFunil}
+              onNovaNegociacao={podeEditar ? handleNovaNegociacao : null}
+              isGerente={isGerente}
+              filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
+              onLimparFiltro={() => setFiltroClienteId(null)}
+            />}
+            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
+            {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
+            {tab === 'dash' && <DashboardTab data={data} />}
+            {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
+            {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
+            {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} perfil={perfil} onToggleParceria={(id, val) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, solicitar_parceria: val } : neg))} />}
+            {tab === 'usuarios' && isGerente && <UsuariosTab />}
+            {tab === 'importacao' && (isGerente || isCorretor) && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
+            {tab === 'config' && <ConfigTab perfil={perfil} />}
+            {tab === 'backup' && isGerente && <BackupTab />}
+            {tab === 'perfil' && <PerfilTab perfil={perfil} onUpdate={setPerfil} />}
+          </>
+        )}
+      </main>
+
+      {modal !== null && podeEditar && (
+        <ClienteModal
+          modal={modal}
+          onSave={handleSave}
+          onClose={() => { localStorage.removeItem('crm_rascunho'); setModal(null); }}
+          perfil={perfil}
+        />
+      )}
+
+      {/* Botão flutuante global — Nova Tratativa */}
+      {podeEditar && modal === null && (
+        <button
+          onClick={() => setModal('new')}
+          title="Nova Tratativa"
+          style={{
+            position: 'fixed', bottom: 28, right: 28, zIndex: 999,
+            width: 56, height: 56, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+            color: '#fff', border: 'none', fontSize: 26, fontWeight: 700,
+            cursor: 'pointer', boxShadow: '0 4px 20px rgba(37,99,235,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(37,99,235,0.65)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(37,99,235,0.5)'; }}
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }
