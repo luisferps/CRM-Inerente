@@ -36,6 +36,13 @@ const ICONS = {
   proposta: '📋', contrato: '✍️', financiamento: '🏦', recebimento: '🕐',
 };
 
+// Link de WhatsApp a partir do telefone do cliente (trata DDI 55).
+function whatsappLink(phone) {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  return `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}`;
+}
+
 function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
   const ativos = data.filter(c => c.ativo === 'S' && !c.recebido);
   const porEtapa = {};
@@ -107,7 +114,9 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
                   }}>
                     {clientes.length === 0 && !isDragOver && <div style={{ textAlign: 'center', color: '#d1d5db', fontSize: 24, marginTop: 30 }}>—</div>}
                     {isDragOver && clientes.length === 0 && <div style={{ textAlign: 'center', color: colors.dot, fontSize: 13, marginTop: 30, fontWeight: 600 }}>Soltar aqui</div>}
-                    {clientes.map(c => (
+                    {clientes.map(c => {
+                      const wa = whatsappLink(c.telefone);
+                      return (
                       <div key={c.id}
                         draggable
                         onDragStart={() => { dragCard.current = c; }}
@@ -120,9 +129,17 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
                           <div style={{ width: 26, height: 26, borderRadius: '50%', background: colors.dot, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                             {c.nome.charAt(0).toUpperCase()}
                           </div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.3 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.3, flex: 1 }}>
                             {c.nome.split(' ').slice(0, 2).join(' ')}
                           </div>
+                          {wa && (
+                            <a href={wa} target="_blank" rel="noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              title="Abrir no WhatsApp"
+                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 5, background: '#25d366', color: '#fff', fontSize: 11, fontWeight: 700, textDecoration: 'none', flexShrink: 0 }}>
+                              💬
+                            </a>
+                          )}
                         </div>
                         <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 2 }}>{c.imovel || '—'}</div>
                         {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
@@ -133,7 +150,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
                         {c.proxima_acao && <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 4, padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {c.proxima_acao}</div>}
                         <div style={{ marginTop: 4, fontSize: 9, color: '#d1d5db', textAlign: 'right' }}>⠿ arrastar</div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 </div>
                 {idx < ETAPAS_FUNIL.length - 1 && (
