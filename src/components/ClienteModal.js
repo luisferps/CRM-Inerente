@@ -8,6 +8,7 @@ const emptyForm = {
   nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
+  captado: false,
   corretor: '', corretor_id: null,
   imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
   origem_tratativa: '',
@@ -253,6 +254,25 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     if (errors[key]) setErrors(e => ({ ...e, [key]: false }));
   }
 
+  // Status (Ativo/Inativo) — inativar desmarca o Captado (não faz sentido junto)
+  function setStatus(v) {
+    setForm(f => {
+      const u = { ...f, ativo: v, captado: v === 'N' ? false : f.captado };
+      if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
+      return u;
+    });
+  }
+
+  // Imóvel captado (só Venda) — marcar também garante status Ativo (sucesso, igual ao Recebido)
+  function toggleCaptado() {
+    setForm(f => {
+      const novo = !f.captado;
+      const u = { ...f, captado: novo, ativo: novo ? 'S' : f.ativo };
+      if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
+      return u;
+    });
+  }
+
   function handleValorChange(e) {
     const raw = e.target.value.replace(/\D/g, '');
     if (raw === '') { setValorDisplay(''); set('valor', ''); return; }
@@ -410,7 +430,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
             <label className="form-label">Status</label>
             <div style={{ display: 'flex', gap: 8 }}>
               {['S','N'].map(v => (
-                <button key={v} type="button" onClick={() => set('ativo', v)}
+                <button key={v} type="button" onClick={() => setStatus(v)}
                   style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                     border: `1px solid ${form.ativo === v ? (v === 'S' ? '#059669' : '#dc2626') : '#d1d5db'}`,
                     background: form.ativo === v ? (v === 'S' ? '#d1fae5' : '#fee2e2') : '#fff',
@@ -418,7 +438,22 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
                   {v === 'S' ? '✓ Ativo' : '✕ Inativo'}
                 </button>
               ))}
+              {isVenda && (
+                <button type="button" onClick={toggleCaptado}
+                  title="Marca a tratativa de venda como encerrada com sucesso: o imóvel foi captado"
+                  style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `1px solid ${form.captado ? '#2563eb' : '#d1d5db'}`,
+                    background: form.captado ? '#dbeafe' : '#fff',
+                    color: form.captado ? '#1d4ed8' : '#6b7280' }}>
+                  🏠 Captado
+                </button>
+              )}
             </div>
+            {isVenda && form.captado && (
+              <span style={{ fontSize: 11, color: '#2563eb', marginTop: 4, display: 'block' }}>
+                Imóvel captado — tratativa encerrada com sucesso.
+              </span>
+            )}
           </div>
 
           {form.ativo === 'N' && (
