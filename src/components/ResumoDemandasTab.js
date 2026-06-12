@@ -15,13 +15,23 @@ function formatarPreco(valor) {
   return `Paga até R$ ${n.toLocaleString('pt-BR')}`;
 }
 function formatarLinha(c) {
-  const partes = [];
-  if (c.imovel) partes.push(capitalize(c.imovel));
-  if (c.localizacao) partes.push(capitalize(c.localizacao));
-  if (c.detalhes_externos) partes.push(capitalize(c.detalhes_externos.trim()));
+  const limpar = p => p.replace(/\.\s*$/, '');
+  const imovel = c.imovel ? limpar(capitalize(c.imovel)) : '';
+  const local = c.localizacao ? limpar(capitalize(c.localizacao)) : '';
+  // Demais partes (observações externas + preço), juntadas com ". "
+  const resto = [];
+  if (c.detalhes_externos) resto.push(limpar(capitalize(c.detalhes_externos.trim())));
   const preco = formatarPreco(c.valor);
-  if (preco) partes.push(preco);
-  const texto = partes.map(p => p.replace(/\.\s*$/, '')).join('. ');
+  if (preco) resto.push(limpar(preco));
+
+  let cabeca;
+  if (imovel && local) {
+    // Só entre imóvel e local o separador é ":"
+    cabeca = `${imovel}: ${local}`;
+  } else {
+    cabeca = [imovel, local].filter(Boolean).join('. ');
+  }
+  const texto = [cabeca, ...resto].filter(Boolean).join('. ');
   return `- ${texto}.`;
 }
 function gerarTexto(titulo, selecionados, porModalidade) {
