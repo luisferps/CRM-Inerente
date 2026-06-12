@@ -46,6 +46,7 @@ function splitForm(form) {
     ativo: form.ativo,
     motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
     solicitar_parceria: form.solicitar_parceria || false,
+    captado: form.captado || false,
     tratativa: form.tratativa || false,
     pesquisa: form.pesquisa || false,
     agendamento: form.agendamento || false,
@@ -303,7 +304,7 @@ export default function App() {
           <>
             {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
             {tab === 'tratativas' && <CRMTab
-              data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido) : data.filter(c => c.ativo === 'S' && !c.recebido)}
+              data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido && !c.captado) : data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)}
               todosData={data}
               onOpenModal={podeEditar ? setModal : null}
               onDelete={podeEditar ? handleDelete : null}
@@ -313,11 +314,11 @@ export default function App() {
               filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
-            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
+            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
-            {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N')} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
+            {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N' || c.captado)} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
             {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} perfil={perfil} onToggleParceria={(id, val) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, solicitar_parceria: val } : neg))} />}
             {tab === 'usuarios' && isGerente && <UsuariosTab />}
             {tab === 'importacao' && (isGerente || isCorretor) && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
