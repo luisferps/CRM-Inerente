@@ -109,6 +109,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [motivos, setMotivos] = useState([]);
   const [motivoAberto, setMotivoAberto] = useState(false);
   const timerNome = useRef(null);
+  const timer = useRef(null);
 
   // Buscar motivos já usados no banco
   useEffect(() => {
@@ -294,6 +295,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const errStyle = k => errors[k] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
   const clienteLocked = (isNovaNeg || !!clienteEncontrado) && !isEdit;
   const titulo = isNovaNeg ? `Nova Tratativa — ${modal.cliente?.nome}` : isEdit ? 'Editar Tratativa' : 'Nova Tratativa';
+  const waDigits = (form.telefone || '').replace(/\D/g, '');
+  const waHref = waDigits ? `https://wa.me/${internacional ? waDigits : (waDigits.startsWith('55') ? waDigits : '55' + waDigits)}` : null;
 
   return (
     <div className="modal-overlay" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>
@@ -328,6 +331,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
               />
               {buscando && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#9ca3af' }}>🔍</span>}
             </div>
+            {waHref && (
+              <a href={waHref} target="_blank" rel="noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: '#25d366', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                💬 Abrir no WhatsApp
+              </a>
+            )}
             {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>Informe um número válido.</span>}
             {clienteEncontrado && (
               <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 12, color: '#065f46' }}>
@@ -538,6 +547,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           <div>
             <label className="form-label">Último Contato</label>
             <input type="date" value={form.ultimo_contato || ''} onChange={e => set('ultimo_contato', e.target.value)} />
+            <button type="button" onClick={() => set('ultimo_contato', hoje)}
+              style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              📌 Registrar contato hoje
+            </button>
           </div>
 
           <div>
