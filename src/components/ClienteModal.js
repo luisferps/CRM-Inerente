@@ -32,7 +32,9 @@ function tipoDisplay(tipos, tipoId, emCondominio) {
 function validarTel(value, intl) {
   if (!value?.trim()) return false;
   if (intl) return value.trim().length >= 8;
-  return value.replace(/\D/g,'').length >= 10;
+  const d = value.replace(/\D/g, '');
+  // Celular brasileiro: 11 dígitos (DDD + 9 + 8 dígitos), 3º dígito = 9
+  return d.length === 11 && d[2] === '9';
 }
 
 function SelectComAdd({ label, value, onChange, options, setOptions, chave, required, errStyle, isGerente, perfil, bloqueado }) {
@@ -299,8 +301,31 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
     setSaving(true);
+
+    // Bloqueio de duplicata: só para cliente NOVO (sem vínculo). Se o telefone já existe
+    // em outro cliente, não deixa criar um cadastro repetido.
+    const idVinculado = form.cliente_real_id || clienteEncontrado?.id || null;
+    if (!isEdit && !idVinculado) {
+      const digits = (form.telefone || '').replace(/\D/g, '');
+      if (digits.length >= 8) {
+        const sufixo = digits.slice(-8);
+        const { data: jaExiste } = await supabase
+          .from('clientes')
+          .select('id, nome, telefone')
+          .or(`telefone.ilike.%${sufixo}%,telefone.eq.${digits}`)
+          .limit(1);
+        if (jaExiste && jaExiste.length > 0) {
+          const c = jaExiste[0];
+          setSaving(false);
+          setErrors(e => ({ ...e, telefone: true }));
+          alert(`Já existe um cliente com este telefone: ${c.nome}.\n\nPara registrar uma nova tratativa para ele, feche e digite o telefone novamente — o sistema vai localizá-lo e vincular automaticamente.`);
+          return;
+        }
+      }
+    }
+
     const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
-    await onSave({ ...form, imovel: imovelStr, cliente_real_id: form.cliente_real_id || clienteEncontrado?.id });
+    await onSave({ ...form, imovel: imovelStr, cliente_real_id: idVinculado });
     setSaving(false);
   }
 
@@ -357,7 +382,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
                 💬 Abrir no WhatsApp
               </a>
             )}
-            {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>Informe um número válido.</span>}
+            {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>{internacional ? 'Informe um número válido.' : 'Informe um celular completo (11 dígitos: DDD + 9 + número).'}</span>}
             {clienteEncontrado && (
               <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 12, color: '#065f46' }}>
                 ✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>
