@@ -135,7 +135,7 @@ export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggl
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const fonte = buscarEmTodas ? todosData : data;
+    const fonte = buscarEmTodas ? todosData.filter(c => !c.captado) : data;
     let result = fonte.filter(c =>
       (!q ||
         c.nome.toLowerCase().includes(q) ||

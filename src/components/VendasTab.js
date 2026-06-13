@@ -15,7 +15,10 @@ export default function VendasTab({ data, onOpenModal }) {
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterCorretor, setFilterCorretor] = useState('');
 
-  const vendas = useMemo(() => data.filter(c => c.modalidade === 'Venda' && c.ativo === 'S'), [data]);
+  // Vendas em andamento: ativas e ainda não captadas (a captação encerra a tratativa com sucesso).
+  const vendas = useMemo(() => data.filter(c => c.modalidade === 'Venda' && c.ativo === 'S' && !c.captado), [data]);
+  // Captados: vendas concluídas por captação (entram no contador, fora da lista principal).
+  const captados = useMemo(() => data.filter(c => c.modalidade === 'Venda' && c.captado), [data]);
   const corretoresUnicos = useMemo(() => [...new Set(vendas.map(c => c.corretor).filter(Boolean))].sort(), [vendas]);
 
   const filtered = useMemo(() => {
@@ -30,7 +33,7 @@ export default function VendasTab({ data, onOpenModal }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        {[['🏠 Total', vendas.length, '#2563eb'],['✍️ Contratos', vendas.filter(c => c.contrato).length, '#7c3aed'],['💰 Recebidos', vendas.filter(c => c.recebido).length, '#059669']].map(([l, v, cor]) => (
+        {[['🏠 Total', vendas.length, '#2563eb'],['✍️ Contratos', vendas.filter(c => c.contrato).length, '#7c3aed'],['💰 Recebidos', vendas.filter(c => c.recebido).length, '#059669'],['✅ Captados', captados.length, '#0891b2']].map(([l, v, cor]) => (
           <div key={l} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 18px', fontSize: 12 }}>
             <span style={{ color: '#9ca3af' }}>{l} </span>
             <span style={{ fontWeight: 700, color: cor, fontSize: 18 }}>{v}</span>
@@ -64,7 +67,7 @@ export default function VendasTab({ data, onOpenModal }) {
           </thead>
           <tbody>
             {filtered.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma venda encontrada.</td></tr>}
-            {filtered.map((c, idx) => {
+            {filtered.map((c) => {
               const etapa = getEtapaAtual(c);
               const etapaIdx = etapa ? ETAPAS_FUNIL_COMPLETO.indexOf(etapa) : -1;
               const cor = etapaIdx >= 0 ? CORES[etapaIdx] : '#e5e7eb';
@@ -88,6 +91,39 @@ export default function VendasTab({ data, onOpenModal }) {
           </tbody>
         </table>
       </div>
+
+      {captados.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0891b2', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            ✅ Captados <span style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af' }}>({captados.length})</span>
+          </h3>
+          <div className="table-wrapper">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#ecfeff', borderBottom: '1px solid #cffafe' }}>
+                  {['Nome','Imóvel','Valor','Localização','Corretor',''].map(h => (
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {captados.map(c => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }} onClick={() => onOpenModal && onOpenModal(c)}>
+                    <td style={{ padding: '12px 16px', fontWeight: 600 }}>{c.nome}</td>
+                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.imovel || '—'}</td>
+                    <td style={{ padding: '12px 16px', color: '#059669', fontWeight: 600 }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
+                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
+                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.corretor || '—'}</td>
+                    <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
+                      {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Ver</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
