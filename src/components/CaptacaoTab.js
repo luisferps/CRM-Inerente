@@ -105,10 +105,7 @@ export default function CaptacaoTab({ perfil }) {
   const [selec, setSelec] = useState(new Set());
 
   // filtros por coluna
-  const [texto, setTexto] = useState({});
-  const [sel, setSel] = useState({});
-  const [faixa, setFaixa] = useState({});
-  const [multiSel, setMultiSel] = useState({}); // { setor: Set, cidade: Set }
+  const [multiSel, setMultiSel] = useState({}); // { coluna: Set } — todos os filtros são multi-seleção
 
   // ordenação
   const [sortCol, setSortCol] = useState('data_captura');
@@ -166,10 +163,14 @@ export default function CaptacaoTab({ perfil }) {
     return () => { clearTimeout(id); window.removeEventListener('resize', medir); };
   });
 
+  const numericasOpc = ['preco', 'quartos', 'vagas', 'area'];
   const opcoes = useMemo(() => {
     const o = {};
-    ['tipo', 'subtipo', 'transacao', 'estado', 'regiao', 'subregiao', 'cidade', 'setor'].forEach(k => {
-      o[k] = [...new Set(leads.map(l => l[k]).filter(Boolean))].sort();
+    COLS.forEach(col => {
+      let vals = [...new Set(leads.map(l => (l[col.key] == null ? '' : String(l[col.key]))).filter(v => v !== ''))];
+      if (numericasOpc.includes(col.key)) vals.sort((a, b) => (parseNum(a) || 0) - (parseNum(b) || 0));
+      else vals.sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+      o[col.key] = vals;
     });
     return o;
   }, [leads]);
@@ -190,23 +191,16 @@ export default function CaptacaoTab({ perfil }) {
   const filtrados = useMemo(() => {
     return leads.filter(l => {
       if (!passaView(l)) return false;
-      for (const k of ['telefone', 'nome']) {
-        const q = (texto[k] || '').trim().toLowerCase();
-        if (q && !String(l[k] || '').toLowerCase().includes(q)) return false;
+      for (const col of COLS) {
+        const ms = multiSel[col.key];
+        if (ms && ms.size) {
+          const v = l[col.key] == null ? '' : String(l[col.key]);
+          if (!ms.has(v)) return false;
+        }
       }
-      for (const k of ['tipo', 'subtipo', 'transacao', 'estado', 'regiao', 'subregiao', 'cidade', 'status']) {
-        if (sel[k] && (l[k] || '') !== sel[k]) return false;
-      }
-      for (const k of ['preco', 'quartos', 'vagas', 'area']) {
-        const min = faixa[k + 'Min'], max = faixa[k + 'Max'];
-        const n = parseNum(l[k]);
-        if (min !== '' && min != null && min !== undefined) { if (n == null || n < Number(min)) return false; }
-        if (max !== '' && max != null && max !== undefined) { if (n == null || n > Number(max)) return false; }
-      }
-      for (const mk of ['setor', 'cidade']) { const ms = multiSel[mk]; if (ms && ms.size && !ms.has(l[mk] || '')) return false; }
       return true;
     });
-  }, [leads, texto, sel, faixa, view, multiSel]);
+  }, [leads, view, multiSel]);
 
   const numericas = ['preco', 'quartos', 'vagas', 'area'];
   const ordenados = useMemo(() => {
@@ -227,8 +221,8 @@ export default function CaptacaoTab({ perfil }) {
     else { setSortCol(key); setSortDir('asc'); }
   }
   function setaSort(key) { return sortCol !== key ? '' : (sortDir === 'asc' ? ' ↑' : ' ↓'); }
-  function limparFiltros() { setTexto({}); setSel({}); setFaixa({}); setMultiSel({}); }
-  const temFiltro = Object.values(texto).some(v => v) || Object.values(sel).some(v => v) || Object.values(faixa).some(v => v) || Object.values(multiSel).some(x => x && x.size);
+  function limparFiltros() { setMultiSel({}); }
+  const temFiltro = Object.values(multiSel).some(x => x && x.size);
 
   // ─── seleção ───
   function toggleSel(id) { setSelec(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
@@ -390,8 +384,8 @@ export default function CaptacaoTab({ perfil }) {
     barra: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 },
     btn: { padding: '7px 12px', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
     btnm: { padding: '4px 7px', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' },
-    th: { textAlign: 'left', padding: '8px 10px', fontSize: 12, color: '#374151', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: '#f9fafb', fontWeight: 700, position: 'sticky', top: 0, zIndex: 4 },
-    thF: { padding: '4px 8px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', verticalAlign: 'top', position: 'sticky', top: 33, zIndex: 4 },
+    th: { textAlign: 'left', padding: '8px 10px', fontSize: 12, color: '#374151', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: '#f9fafb', fontWeight: 700 },
+    thF: { padding: '4px 8px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', verticalAlign: 'top' },
     td: { padding: '8px 10px', fontSize: 13, borderBottom: '1px solid #f1f1f1', verticalAlign: 'top', whiteSpace: 'nowrap' },
     inp: { padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 12, width: '100%', boxSizing: 'border-box' },
     inpN: { padding: '3px 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, width: 48, boxSizing: 'border-box', textAlign: 'right' },
@@ -403,31 +397,11 @@ export default function CaptacaoTab({ perfil }) {
     lab: { fontSize: 12, color: '#6b7280' },
     chip: (c) => ({ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, color: '#fff', background: c }),
   };
-  const sTexto = (k, v) => setTexto(o => ({ ...o, [k]: v }));
-  const sSel = (k, v) => setSel(o => ({ ...o, [k]: v }));
-  const sFaixa = (k, v) => setFaixa(o => ({ ...o, [k]: v }));
   const setF = (k, v) => setForm(o => ({ ...o, [k]: v }));
 
   function celulaFiltro(col) {
-    if (col.kind === 'multi') { const cur = multiSel[col.key] || new Set(); return <MultiSelect options={opcoes[col.key] || []} selected={cur} onChange={(ns) => setMultiSel(m => ({ ...m, [col.key]: ns }))} />; }
-    if (col.kind === 'texto') return <input style={S.inp} placeholder="buscar" value={texto[col.key] || ''} onChange={e => sTexto(col.key, e.target.value)} />;
-    if (col.kind === 'status') return (
-      <select style={S.selF} value={sel.status || ''} onChange={e => sSel('status', e.target.value)}>
-        <option value="">todos</option>{STATUS.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-    );
-    if (col.kind === 'sel') return (
-      <select style={S.selF} value={sel[col.key] || ''} onChange={e => sSel(col.key, e.target.value)}>
-        <option value="">todos</option>{(opcoes[col.key] || []).map(v => <option key={v} value={v}>{v}</option>)}
-      </select>
-    );
-    if (col.kind === 'num') return (
-      <div style={{ display: 'flex', gap: 3 }}>
-        <input style={S.inpN} placeholder="mín" value={faixa[col.key + 'Min'] || ''} onChange={e => sFaixa(col.key + 'Min', e.target.value)} />
-        <input style={S.inpN} placeholder="máx" value={faixa[col.key + 'Max'] || ''} onChange={e => sFaixa(col.key + 'Max', e.target.value)} />
-      </div>
-    );
-    return null;
+    const cur = multiSel[col.key] || new Set();
+    return <MultiSelect options={opcoes[col.key] || []} selected={cur} onChange={(ns) => setMultiSel(m => ({ ...m, [col.key]: ns }))} />;
   }
 
   const idsSelec = [...selec];
