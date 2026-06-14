@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -79,6 +79,13 @@ export default function CaptacaoTab({ perfil }) {
   const [testeNum, setTesteNum] = useState('');
   const [painelAberto, setPainelAberto] = useState(false);
 
+  // rolagem horizontal: barra de cima sincronizada com a tabela
+  const scrollRef = useRef(null);
+  const topRef = useRef(null);
+  const [tableW, setTableW] = useState(1500);
+  function syncFromTop() { if (scrollRef.current && topRef.current) scrollRef.current.scrollLeft = topRef.current.scrollLeft; }
+  function syncFromTable() { if (scrollRef.current && topRef.current) topRef.current.scrollLeft = scrollRef.current.scrollLeft; }
+
   async function carregar() {
     setCarregando(true);
     setErro('');
@@ -107,6 +114,14 @@ export default function CaptacaoTab({ perfil }) {
   }
 
   useEffect(() => { carregar(); carregarCampanha(); }, []);
+
+  useEffect(() => {
+    function medir() { const sc = scrollRef.current; if (sc) { const t = sc.querySelector('table'); if (t) setTableW(t.scrollWidth); } }
+    medir();
+    const id = setTimeout(medir, 300);
+    window.addEventListener('resize', medir);
+    return () => { clearTimeout(id); window.removeEventListener('resize', medir); };
+  });
 
   const opcoes = useMemo(() => {
     const o = {};
@@ -445,7 +460,11 @@ export default function CaptacaoTab({ perfil }) {
       {carregando && <div style={{ color: '#6b7280' }}>Carregando...</div>}
 
       {!carregando && (
-        <div style={{ overflow: 'auto', maxHeight: '72vh', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+        <>
+        <div ref={topRef} onScroll={syncFromTop} style={{ overflowX: 'auto', overflowY: 'hidden', position: 'sticky', top: 0, zIndex: 5, height: 16, background: '#eef0f3', border: '1px solid #e5e7eb', borderBottom: 'none', borderRadius: '8px 8px 0 0' }}>
+          <div style={{ width: tableW, height: 1 }} />
+        </div>
+        <div ref={scrollRef} onScroll={syncFromTable} style={{ overflow: 'auto', maxHeight: '68vh', border: '1px solid #e5e7eb', borderRadius: '0 0 8px 8px' }}>
           <table style={{ borderCollapse: 'collapse', background: '#fff', minWidth: 1500 }}>
             <thead>
               <tr>
@@ -519,6 +538,7 @@ export default function CaptacaoTab({ perfil }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
