@@ -40,7 +40,7 @@ const COLS = [
   { key: 'estado', label: 'Estado', kind: 'sel' },
   { key: 'regiao', label: 'Região', kind: 'sel' },
   { key: 'subregiao', label: 'Sub-região', kind: 'sel' },
-  { key: 'cidade', label: 'Cidade', kind: 'sel' },
+  { key: 'cidade', label: 'Cidade', kind: 'multi' },
   { key: 'setor', label: 'Setor', kind: 'multi' },
   { key: 'status', label: 'Status', kind: 'status' },
 ];
@@ -108,7 +108,7 @@ export default function CaptacaoTab({ perfil }) {
   const [texto, setTexto] = useState({});
   const [sel, setSel] = useState({});
   const [faixa, setFaixa] = useState({});
-  const [setorSel, setSetorSel] = useState(new Set());
+  const [multiSel, setMultiSel] = useState({}); // { setor: Set, cidade: Set }
 
   // ordenação
   const [sortCol, setSortCol] = useState('data_captura');
@@ -203,10 +203,10 @@ export default function CaptacaoTab({ perfil }) {
         if (min !== '' && min != null && min !== undefined) { if (n == null || n < Number(min)) return false; }
         if (max !== '' && max != null && max !== undefined) { if (n == null || n > Number(max)) return false; }
       }
-      if (setorSel.size && !setorSel.has(l.setor || '')) return false;
+      for (const mk of ['setor', 'cidade']) { const ms = multiSel[mk]; if (ms && ms.size && !ms.has(l[mk] || '')) return false; }
       return true;
     });
-  }, [leads, texto, sel, faixa, view, setorSel]);
+  }, [leads, texto, sel, faixa, view, multiSel]);
 
   const numericas = ['preco', 'quartos', 'vagas', 'area'];
   const ordenados = useMemo(() => {
@@ -227,8 +227,8 @@ export default function CaptacaoTab({ perfil }) {
     else { setSortCol(key); setSortDir('asc'); }
   }
   function setaSort(key) { return sortCol !== key ? '' : (sortDir === 'asc' ? ' ↑' : ' ↓'); }
-  function limparFiltros() { setTexto({}); setSel({}); setFaixa({}); setSetorSel(new Set()); }
-  const temFiltro = Object.values(texto).some(v => v) || Object.values(sel).some(v => v) || Object.values(faixa).some(v => v) || setorSel.size > 0;
+  function limparFiltros() { setTexto({}); setSel({}); setFaixa({}); setMultiSel({}); }
+  const temFiltro = Object.values(texto).some(v => v) || Object.values(sel).some(v => v) || Object.values(faixa).some(v => v) || Object.values(multiSel).some(x => x && x.size);
 
   // ─── seleção ───
   function toggleSel(id) { setSelec(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
@@ -396,8 +396,8 @@ export default function CaptacaoTab({ perfil }) {
     inp: { padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 12, width: '100%', boxSizing: 'border-box' },
     inpN: { padding: '3px 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, width: 48, boxSizing: 'border-box', textAlign: 'right' },
     selF: { padding: '4px 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, width: '100%', background: '#fff', boxSizing: 'border-box' },
-    fix: { position: 'sticky', left: 0, zIndex: 3, borderRight: '2px solid #eef0f3' },
-    fixH: { position: 'sticky', left: 0, zIndex: 7, borderRight: '2px solid #e5e7eb' },
+    fix: { position: 'sticky', left: 0, zIndex: 30, background: '#fff', boxShadow: '3px 0 6px -2px rgba(0,0,0,.25)' },
+    fixH: { position: 'sticky', left: 0, zIndex: 50, background: '#eef2f5', boxShadow: '3px 0 6px -2px rgba(0,0,0,.25)' },
     cardCfg: { border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 12, background: '#fbfbfd' },
     cfgRow: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 8 },
     lab: { fontSize: 12, color: '#6b7280' },
@@ -409,7 +409,7 @@ export default function CaptacaoTab({ perfil }) {
   const setF = (k, v) => setForm(o => ({ ...o, [k]: v }));
 
   function celulaFiltro(col) {
-    if (col.kind === 'multi') return <MultiSelect options={opcoes[col.key] || []} selected={setorSel} onChange={setSetorSel} />;
+    if (col.kind === 'multi') { const cur = multiSel[col.key] || new Set(); return <MultiSelect options={opcoes[col.key] || []} selected={cur} onChange={(ns) => setMultiSel(m => ({ ...m, [col.key]: ns }))} />; }
     if (col.kind === 'texto') return <input style={S.inp} placeholder="buscar" value={texto[col.key] || ''} onChange={e => sTexto(col.key, e.target.value)} />;
     if (col.kind === 'status') return (
       <select style={S.selF} value={sel.status || ''} onChange={e => sSel('status', e.target.value)}>
