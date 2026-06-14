@@ -13,8 +13,8 @@ const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 const STATUS = ['novo', 'contatado', 'interessado', 'descartado', 'virou_cliente'];
 const STATUS_COR = { novo: '#2563eb', contatado: '#d97706', interessado: '#059669', descartado: '#6b7280', virou_cliente: '#7c3aed' };
 
-const CAMP_COR = { '': '#9ca3af', guardado: '#d97706', fila: '#2563eb', enviado: '#059669', descartado: '#6b7280', optout: '#b91c1c' };
-const CAMP_LABEL = { '': '—', guardado: '🕒 guardado', fila: '⏳ na fila', enviado: '✓ enviado', descartado: '🚫 descartado', optout: '⛔ opt-out' };
+const CAMP_COR = { '': '#9ca3af', guardado: '#d97706', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', descartado: '#6b7280', optout: '#b91c1c' };
+const CAMP_LABEL = { '': '—', guardado: '🕒 guardado', fila: '⏳ na fila', enviado: '✓ enviado', respondido: '💬 respondeu', expirado: '⌛ sem resposta', descartado: '🚫 descartado', optout: '⛔ opt-out' };
 
 const VIEWS = [
   ['pendentes', 'A decidir'],
@@ -23,6 +23,8 @@ const VIEWS = [
   ['guardados', 'Guardados'],
   ['fila', 'Na fila'],
   ['enviados', 'Enviados'],
+  ['respondidos', 'Responderam'],
+  ['expirados', 'Sem resposta (48h)'],
   ['descartados', 'Descartados'],
   ['optout', 'Opt-out'],
 ];
@@ -150,7 +152,7 @@ export default function CaptacaoTab({ perfil }) {
         maxDia: c.maxDia,
         pausaMin: Math.round(c.pausaMin / 60), pausaMax: Math.round(c.pausaMax / 60),
         longaMin: Math.round(c.longaMin / 60), longaMax: Math.round(c.longaMax / 60),
-        longaCada: c.longaCada, horaIni: c.horaIni, horaFim: c.horaFim,
+        longaCada: c.longaCada, horaIni: c.horaIni, horaFim: c.horaFim, instancia: c.instancia || '', expiraHoras: c.expiraHoras || 48,
       });
       setMsgForm({ msg1: c.msg1 || '', msg2intro: c.msg2intro || '' });
     } catch (e) { /* backend offline */ }
@@ -186,6 +188,8 @@ export default function CaptacaoTab({ perfil }) {
     if (view === 'guardados') return s === 'guardado';
     if (view === 'fila') return s === 'fila';
     if (view === 'enviados') return s === 'enviado';
+    if (view === 'respondidos') return s === 'respondido';
+    if (view === 'expirados') return s === 'expirado';
     if (view === 'descartados') return s === 'descartado';
     if (view === 'optout') return s === 'optout';
     return true;
@@ -366,7 +370,7 @@ export default function CaptacaoTab({ perfil }) {
     await postConfig({
       maxDia: Number(form.maxDia), pausaMin: Number(form.pausaMin) * 60, pausaMax: Number(form.pausaMax) * 60,
       longaMin: Number(form.longaMin) * 60, longaMax: Number(form.longaMax) * 60,
-      longaCada: Number(form.longaCada), horaIni: Number(form.horaIni), horaFim: Number(form.horaFim),
+      longaCada: Number(form.longaCada), horaIni: Number(form.horaIni), horaFim: Number(form.horaFim), instancia: form.instancia, expiraHoras: Number(form.expiraHoras),
     });
     alert('Antiban salvo.');
   }
@@ -435,6 +439,8 @@ export default function CaptacaoTab({ perfil }) {
               <label style={S.lab}>máx(min) <input style={S.inpN} type="number" value={form.longaMax} onChange={e => setF('longaMax', e.target.value)} /></label>
               <label style={S.lab}>a cada <input style={{ ...S.inpN, width: 44 }} type="number" value={form.longaCada} onChange={e => setF('longaCada', e.target.value)} /></label>
               <label style={S.lab}>Janela <input style={{ ...S.inpN, width: 40 }} type="number" value={form.horaIni} onChange={e => setF('horaIni', e.target.value)} />h–<input style={{ ...S.inpN, width: 40 }} type="number" value={form.horaFim} onChange={e => setF('horaFim', e.target.value)} />h</label>
+              <label style={S.lab}>Sem resposta vira descarte em (h) <input style={{ ...S.inpN, width: 50 }} type="number" value={form.expiraHoras} onChange={e => setF('expiraHoras', e.target.value)} /></label>
+              <label style={S.lab}>Instância de envio <input style={{ ...S.inp, width: 160, display: 'inline-block' }} value={form.instancia || ''} onChange={e => setF('instancia', e.target.value)} placeholder="vazio = SDR/imobiliária" /></label>
               <button style={{ ...S.btnm, background: '#2563eb', color: '#fff' }} onClick={salvarAntiban}>💾 salvar antiban</button>
             </div>
             <div style={{ marginTop: 10 }}>
@@ -538,7 +544,7 @@ export default function CaptacaoTab({ perfil }) {
                         {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td style={S.td}><span style={S.chip(CAMP_COR[cs])}>{CAMP_LABEL[cs]}</span></td>
+                    <td style={S.td}><span style={S.chip(CAMP_COR[cs])} title={l.campanha_resposta || ''}>{CAMP_LABEL[cs]}</span>{l.campanha_resposta ? <div style={{ fontSize: 10, color: '#6b7280', maxWidth: 130, whiteSpace: 'normal' }}>“{String(l.campanha_resposta).slice(0, 60)}”</div> : null}</td>
                     <td style={S.td}>
                       <input style={{ ...S.inp, width: 120 }} defaultValue={l.observacoes || ''} placeholder="anotar..." onBlur={e => { if (e.target.value !== (l.observacoes || '')) salvarObs(l, e.target.value); }} />
                     </td>
