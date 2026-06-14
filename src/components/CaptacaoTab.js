@@ -3,8 +3,8 @@ import { supabase } from '../supabaseClient';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Aba "📍 Captação" — leads do OLX + campanha de abordagem (SDR outbound).
-// Estados de campanha (campo campanha_status): '' (sem status) · guardado ·
-// fila · enviado · descartado · optout. Visão padrão esconde enviados+descartados+optout.
+// Estados (campanha_status): '' não analisado · fila · enviado (abordado) ·
+// respondido (em andamento) · optout · corretor · expirado (não respondeu) · descartado (não compensa).
 // REGRA DE OURO: nada vira cliente automaticamente (só no botão "→ Virar cliente").
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -13,20 +13,21 @@ const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 const STATUS = ['novo', 'contatado', 'interessado', 'descartado', 'virou_cliente'];
 const STATUS_COR = { novo: '#2563eb', contatado: '#d97706', interessado: '#059669', descartado: '#6b7280', virou_cliente: '#7c3aed' };
 
-const CAMP_COR = { '': '#9ca3af', guardado: '#d97706', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', descartado: '#6b7280', optout: '#b91c1c' };
-const CAMP_LABEL = { '': '—', guardado: '🕒 guardado', fila: '⏳ na fila', enviado: '✓ enviado', respondido: '💬 respondeu', expirado: '⌛ sem resposta', descartado: '🚫 descartado', optout: '⛔ opt-out' };
+const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c' };
+const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 não compensa', optout: '⛔ opt-out' };
 
 const VIEWS = [
-  ['pendentes', 'A decidir'],
-  ['todos', 'Todos'],
-  ['sem', 'Sem status'],
-  ['guardados', 'Guardados'],
+  ['pendentes', 'Não analisados'],
   ['fila', 'Na fila'],
-  ['enviados', 'Enviados'],
-  ['respondidos', 'Responderam'],
-  ['expirados', 'Sem resposta (48h)'],
-  ['descartados', 'Descartados'],
-  ['optout', 'Opt-out'],
+  ['naocompensa', 'Não compensa'],
+  ['abordados', 'Abordados (todos)'],
+  ['aguardando', '— Aguardando resposta'],
+  ['andamento', '— Tratativa em andamento'],
+  ['descartadas', '— Tratativa descartada'],
+  ['optout', '—— Opt-out'],
+  ['corretor', '—— Corretor'],
+  ['naoresp', '—— Não respondeu'],
+  ['todos', 'Todos'],
 ];
 
 const COLS = [
@@ -182,16 +183,16 @@ export default function CaptacaoTab({ perfil }) {
 
   function passaView(l) {
     const s = l.campanha_status || '';
-    if (view === 'pendentes') return s === '' || s === 'guardado' || s === 'fila';
-    if (view === 'todos') return true;
-    if (view === 'sem') return s === '';
-    if (view === 'guardados') return s === 'guardado';
+    if (view === 'pendentes') return s === '';
     if (view === 'fila') return s === 'fila';
-    if (view === 'enviados') return s === 'enviado';
-    if (view === 'respondidos') return s === 'respondido';
-    if (view === 'expirados') return s === 'expirado';
-    if (view === 'descartados') return s === 'descartado';
+    if (view === 'naocompensa') return s === 'descartado';
+    if (view === 'abordados') return ['enviado', 'respondido', 'optout', 'corretor', 'expirado'].includes(s);
+    if (view === 'aguardando') return s === 'enviado';
+    if (view === 'andamento') return s === 'respondido';
+    if (view === 'descartadas') return ['optout', 'corretor', 'expirado'].includes(s);
     if (view === 'optout') return s === 'optout';
+    if (view === 'corretor') return s === 'corretor';
+    if (view === 'naoresp') return s === 'expirado';
     return true;
   }
 
@@ -328,7 +329,7 @@ export default function CaptacaoTab({ perfil }) {
         clienteId = cli.id;
       }
       const negociacao = {
-        cliente_id: clienteId, modalidade: mapModalidade(lead.transacao),
+        cliente_id: clienteId, modalidade: mapModalidade(lead.transacao), origem_tratativa: 'Olx',
         imovel: [lead.subtipo || lead.tipo, lead.transacao].filter(Boolean).join(' - ') || 'Imóvel OLX',
         localizacao: [lead.setor, lead.cidade, lead.estado].filter(Boolean).join(', ') || null,
         detalhes: montarResumoImovel(lead), valor: valorNumerico(lead.preco), ativo: 'S', captado: false,
@@ -477,8 +478,7 @@ export default function CaptacaoTab({ perfil }) {
         <div style={{ ...S.barra, background: '#eff6ff', padding: 8, borderRadius: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{idsSelec.length} selecionado(s):</span>
           <button style={{ ...S.btnm, background: '#2563eb', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'fila')}>⏳ Adicionar à campanha (fila)</button>
-          <button style={{ ...S.btnm, background: '#d97706', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'guardado')}>🕒 Guardar p/ depois</button>
-          <button style={{ ...S.btnm, background: '#6b7280', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'descartado')}>🚫 Descartar</button>
+          <button style={{ ...S.btnm, background: '#6b7280', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'descartado')}>🚫 Não compensa</button>
           <button style={{ ...S.btnm, background: '#f3f4f6', color: '#1a1a2e' }} onClick={() => mudarCampanha(idsSelec, null)}>↩ tirar status</button>
           <button style={{ ...S.btnm, background: '#fff', color: '#6b7280', border: '1px solid #d1d5db' }} onClick={() => setSelec(new Set())}>limpar seleção</button>
         </div>
@@ -552,9 +552,8 @@ export default function CaptacaoTab({ perfil }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 130 }}>
                         <button style={{ ...S.btnm, background: cs === 'enviado' || cs === 'optout' ? '#e5e7eb' : '#16a34a', color: cs === 'enviado' || cs === 'optout' ? '#9ca3af' : '#fff' }} disabled={cs === 'enviado' || cs === 'optout' || enviandoId === l.id} onClick={() => abordarAgora(l)}>{enviandoId === l.id ? '...' : '📨 Abordar agora'}</button>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button title="Guardar p/ depois" style={{ ...S.btnm, background: '#fff7ed', color: '#d97706', border: '1px solid #fed7aa', flex: 1 }} onClick={() => mudarCampanha([l.id], 'guardado')}>🕒</button>
-                          <button title="Descartar" style={{ ...S.btnm, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', flex: 1 }} onClick={() => mudarCampanha([l.id], 'descartado')}>🚫</button>
-                          <button title="Excluir de vez" style={{ ...S.btnm, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', flex: 1 }} onClick={() => excluir(l)}>🗑</button>
+                          <button title="Não compensa (descartar)" style={{ ...S.btnm, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', flex: 1 }} onClick={() => mudarCampanha([l.id], 'descartado')}>🚫 não compensa</button>
+                          <button title="Excluir de vez" style={{ ...S.btnm, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }} onClick={() => excluir(l)}>🗑</button>
                         </div>
                         <button style={{ ...S.btnm, background: l.virou_cliente ? '#e5e7eb' : '#7c3aed', color: l.virou_cliente ? '#9ca3af' : '#fff' }} disabled={l.virou_cliente || promovendo === l.id} onClick={() => virarCliente(l)}>{l.virou_cliente ? '✓ já é cliente' : (promovendo === l.id ? '...' : '→ Virar cliente')}</button>
                       </div>
