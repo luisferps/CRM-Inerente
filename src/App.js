@@ -89,11 +89,35 @@ export default function App() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      sessionRef.current = session;
-      setSession(session);
-      if (session) loadPerfil(session.user.id);
-      else setCheckingAuth(false);
+    // ── Mini-SSO: se veio ?sso=token do painel, faz login automático antes de tudo ──
+    async function tentarSSO() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('sso');
+      if (!token) return false;
+      // limpa o token da URL na hora (não fica no histórico)
+      const urlLimpa = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', urlLimpa);
+      try {
+        const resp = await fetch('https://agentes-de-whatsapp-production.up.railway.app/painel/sso-resgatar', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, sistema: 'crm' })
+        });
+        const data = await resp.json();
+        if (data && data.ok && data.login && data.senha) {
+          const { error } = await supabase.auth.signInWithPassword({ email: data.login, password: data.senha });
+          if (!error) return true; // logou — o onAuthStateChange cuida do resto
+        }
+      } catch (e) { /* falha silenciosa: cai no login normal */ }
+      return false;
+    }
+
+    tentarSSO().then(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        sessionRef.current = session;
+        setSession(session);
+        if (session) loadPerfil(session.user.id);
+        else setCheckingAuth(false);
+      });
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (_event === 'SIGNED_OUT') { sessionRef.current = null; setSession(null); setPerfil(null); setCheckingAuth(false); }
