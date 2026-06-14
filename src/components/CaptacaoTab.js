@@ -10,25 +10,9 @@ import { supabase } from '../supabaseClient';
 
 const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
-const STATUS = ['novo', 'contatado', 'interessado', 'descartado', 'virou_cliente'];
-const STATUS_COR = { novo: '#2563eb', contatado: '#d97706', interessado: '#059669', descartado: '#6b7280', virou_cliente: '#7c3aed' };
 
 const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c' };
 const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 não compensa', optout: '⛔ opt-out' };
-
-const VIEWS = [
-  ['pendentes', 'Não analisados'],
-  ['fila', 'Na fila'],
-  ['naocompensa', 'Não compensa'],
-  ['abordados', 'Abordados (todos)'],
-  ['aguardando', '— Aguardando resposta'],
-  ['andamento', '— Tratativa em andamento'],
-  ['descartadas', '— Tratativa descartada'],
-  ['optout', '—— Opt-out'],
-  ['corretor', '—— Corretor'],
-  ['naoresp', '—— Não respondeu'],
-  ['todos', 'Todos'],
-];
 
 const COLS = [
   { key: 'telefone', label: 'Telefone', kind: 'texto' },
@@ -45,7 +29,6 @@ const COLS = [
   { key: 'subregiao', label: 'Sub-região', kind: 'sel' },
   { key: 'cidade', label: 'Cidade', kind: 'multi' },
   { key: 'setor', label: 'Setor', kind: 'multi' },
-  { key: 'status', label: 'Status', kind: 'status' },
 ];
 
 function parseNum(v) {
@@ -181,8 +164,17 @@ export default function CaptacaoTab({ perfil }) {
     return o;
   }, [leads]);
 
+  const cont = useMemo(() => {
+    const c = { '': 0, fila: 0, enviado: 0, respondido: 0, descartado: 0, optout: 0, corretor: 0, expirado: 0 };
+    leads.forEach(l => { const st = l.campanha_status || ''; if (c[st] !== undefined) c[st]++; });
+    return c;
+  }, [leads]);
+
   function passaView(l) {
     const s = l.campanha_status || '';
+    if (view === 'g_abordar') return s === '' || s === 'fila';
+    if (view === 'g_abordados') return ['enviado', 'respondido'].includes(s);
+    if (view === 'g_descartados') return ['descartado', 'optout', 'corretor', 'expirado'].includes(s);
     if (view === 'pendentes') return s === '';
     if (view === 'fila') return s === 'fila';
     if (view === 'naocompensa') return s === 'descartado';
@@ -255,11 +247,6 @@ export default function CaptacaoTab({ perfil }) {
   }
 
   // ─── mudança de status (triagem do lead, campo status) ───
-  async function mudarStatus(lead, novo) {
-    const { error } = await supabase.from('leads_captacao').update({ status: novo }).eq('id', lead.id);
-    if (error) { alert('Erro: ' + error.message); return; }
-    setLeads(ls => ls.map(l => l.id === lead.id ? { ...l, status: novo } : l));
-  }
   async function salvarObs(lead, txt) {
     const { error } = await supabase.from('leads_captacao').update({ observacoes: txt }).eq('id', lead.id);
     if (error) { alert('Erro: ' + error.message); return; }
@@ -347,7 +334,7 @@ export default function CaptacaoTab({ perfil }) {
 
   function exportarCSV() {
     if (!ordenados.length) { alert('Nada pra exportar.'); return; }
-    const cols = ['telefone', 'nome', 'tipo', 'subtipo', 'transacao', 'preco', 'quartos', 'vagas', 'banheiros', 'area', 'estado', 'regiao', 'subregiao', 'cidade', 'setor', 'codigo', 'status', 'campanha_status', 'observacoes', 'url', 'data_captura'];
+    const cols = ['telefone', 'nome', 'tipo', 'subtipo', 'transacao', 'preco', 'quartos', 'vagas', 'banheiros', 'area', 'estado', 'regiao', 'subregiao', 'cidade', 'setor', 'codigo', 'campanha_status', 'observacoes', 'url', 'data_captura'];
     const linhas = [cols];
     ordenados.forEach(l => linhas.push(cols.map(c => l[c] == null ? '' : String(l[c]))));
     const csv = linhas.map(l => l.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\n');
@@ -412,6 +399,18 @@ export default function CaptacaoTab({ perfil }) {
     return <MultiSelect options={opcoes[col.key] || []} selected={cur} onChange={(ns) => setMultiSel(m => ({ ...m, [col.key]: ns }))} />;
   }
 
+  function bView(key, label, count, cor) {
+    const ativo = view === key;
+    return (
+      <button onClick={() => { setView(key); setSelec(new Set()); }} style={{ padding: '5px 9px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (ativo ? cor : '#d1d5db'), background: ativo ? cor : '#fff', color: ativo ? '#fff' : '#374151', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+        {label}<span style={{ background: ativo ? 'rgba(255,255,255,.25)' : '#f3f4f6', color: ativo ? '#fff' : '#6b7280', borderRadius: 10, padding: '0 6px', fontSize: 11 }}>{count}</span>
+      </button>
+    );
+  }
+  const grupoBox = { display: 'flex', flexDirection: 'column', gap: 5 };
+  const grupoTit = { fontSize: 10, fontWeight: 700, color: '#9ca3af', letterSpacing: '.04em' };
+  const grupoLinha = { display: 'flex', gap: 5, flexWrap: 'wrap' };
+
   const idsSelec = [...selec];
 
   return (
@@ -461,13 +460,43 @@ export default function CaptacaoTab({ perfil }) {
         )}
       </div>
 
+      {/* ── ATALHOS DE VISÃO (grupos) ── */}
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 12, padding: '10px 12px', background: '#fbfbfd', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+        <div style={grupoBox}>
+          <span style={grupoTit}>A ABORDAR</span>
+          <div style={grupoLinha}>
+            {bView('pendentes', 'Não analisados', cont[''], '#9ca3af')}
+            {bView('fila', 'Na fila', cont.fila, '#2563eb')}
+          </div>
+        </div>
+        <div style={grupoBox}>
+          <span style={grupoTit}>ABORDADOS</span>
+          <div style={grupoLinha}>
+            {bView('g_abordados', 'Todos', cont.enviado + cont.respondido, '#047857')}
+            {bView('aguardando', 'Aguardando', cont.enviado, '#059669')}
+            {bView('andamento', 'Em andamento', cont.respondido, '#0891b2')}
+          </div>
+        </div>
+        <div style={grupoBox}>
+          <span style={grupoTit}>DESCARTADOS</span>
+          <div style={grupoLinha}>
+            {bView('g_descartados', 'Todos', cont.descartado + cont.optout + cont.corretor + cont.expirado, '#4b5563')}
+            {bView('naocompensa', 'Não compensa', cont.descartado, '#6b7280')}
+            {bView('optout', 'Opt-out', cont.optout, '#b91c1c')}
+            {bView('corretor', 'Corretor', cont.corretor, '#9333ea')}
+            {bView('naoresp', 'Não respondeu', cont.expirado, '#94a3b8')}
+          </div>
+        </div>
+        <div style={grupoBox}>
+          <span style={grupoTit}>&nbsp;</span>
+          <div style={grupoLinha}>{bView('todos', 'Todos os leads', leads.length, '#1a1a2e')}</div>
+        </div>
+      </div>
+
       {/* ── BARRA SUPERIOR ── */}
       <div style={S.barra}>
         <strong style={{ fontSize: 16 }}>📍 Captação OLX</strong>
         <span style={{ color: '#6b7280', fontSize: 13 }}>{ordenados.length} de {leads.length}</span>
-        <select style={{ ...S.selF, width: 'auto', fontSize: 13, padding: '6px 8px' }} value={view} onChange={e => { setView(e.target.value); setSelec(new Set()); }}>
-          {VIEWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
         <button style={{ ...S.btn, background: '#f3f4f6', color: '#1a1a2e' }} onClick={() => { carregar(); carregarCampanha(); }}>🔄 Atualizar</button>
         <button style={{ ...S.btn, background: '#059669', color: '#fff' }} onClick={exportarCSV}>⬇ CSV</button>
         {temFiltro && <button style={{ ...S.btn, background: '#f3f4f6', color: '#1a1a2e' }} onClick={limparFiltros}>limpar filtros</button>}
@@ -539,11 +568,6 @@ export default function CaptacaoTab({ perfil }) {
                     <td style={S.td}>{l.subregiao || '—'}</td>
                     <td style={S.td}>{l.cidade || '—'}</td>
                     <td style={S.td}>{l.setor || '—'}</td>
-                    <td style={S.td}>
-                      <select value={l.status || 'novo'} onChange={e => mudarStatus(l, e.target.value)} style={{ ...S.selF, color: STATUS_COR[l.status] || '#1a1a2e', fontWeight: 600, width: 'auto' }} disabled={l.virou_cliente}>
-                        {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
                     <td style={S.td}><span style={S.chip(CAMP_COR[cs])} title={l.campanha_resposta || ''}>{CAMP_LABEL[cs]}</span>{l.campanha_resposta ? <div style={{ fontSize: 10, color: '#6b7280', maxWidth: 130, whiteSpace: 'normal' }}>“{String(l.campanha_resposta).slice(0, 60)}”</div> : null}</td>
                     <td style={S.td}>
                       <input style={{ ...S.inp, width: 120 }} defaultValue={l.observacoes || ''} placeholder="anotar..." onBlur={e => { if (e.target.value !== (l.observacoes || '')) salvarObs(l, e.target.value); }} />
