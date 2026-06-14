@@ -16,6 +16,7 @@ import ImportacaoTab from './components/ImportacaoTab';
 import ResumoDemandasTab from './components/ResumoDemandasTab';
 import RecebidosTab from './components/RecebidosTab';
 import ClientesTab from './components/ClientesTab';
+import CaptacaoTab from './components/CaptacaoTab';
 
 function splitForm(form) {
   const clienteData = {
@@ -274,6 +275,7 @@ export default function App() {
     ['inativos', 'Finalizadas'],
     ['resumo', '📋 Demandas'],
     ['clientes', '👤 Clientes'],
+    ['captacao', '📍 Captação', 'gerente'],
     ['usuarios', '👥 Usuários', 'gerente'],
     ['importacao', '📥 Importar', 'gerente_corretor'],
     ['config', '⚙️ Config'],
@@ -327,6 +329,7 @@ export default function App() {
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
             {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
+            {tab === 'captacao' && <CaptacaoTab perfil={perfil} />}
             {tab === 'tratativas' && <CRMTab
               data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido && !c.captado) : data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)}
               todosData={data}
