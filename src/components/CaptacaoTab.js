@@ -331,14 +331,14 @@ export default function CaptacaoTab({ perfil }) {
     barra: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 },
     btn: { padding: '7px 12px', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
     btnm: { padding: '4px 7px', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' },
-    th: { textAlign: 'left', padding: '8px 10px', fontSize: 12, color: '#374151', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: '#f9fafb', fontWeight: 700 },
-    thF: { padding: '4px 8px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', verticalAlign: 'top' },
+    th: { textAlign: 'left', padding: '8px 10px', fontSize: 12, color: '#374151', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: '#f9fafb', fontWeight: 700, position: 'sticky', top: 0, zIndex: 4 },
+    thF: { padding: '4px 8px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', verticalAlign: 'top', position: 'sticky', top: 33, zIndex: 4 },
     td: { padding: '8px 10px', fontSize: 13, borderBottom: '1px solid #f1f1f1', verticalAlign: 'top', whiteSpace: 'nowrap' },
     inp: { padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 12, width: '100%', boxSizing: 'border-box' },
     inpN: { padding: '3px 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, width: 48, boxSizing: 'border-box', textAlign: 'right' },
     selF: { padding: '4px 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, width: '100%', background: '#fff', boxSizing: 'border-box' },
     fix: { position: 'sticky', left: 0, zIndex: 2 },
-    fixH: { position: 'sticky', left: 0, zIndex: 3 },
+    fixH: { position: 'sticky', left: 0, zIndex: 6 },
     cardCfg: { border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 12, background: '#fbfbfd' },
     cfgRow: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 8 },
     lab: { fontSize: 12, color: '#6b7280' },
@@ -445,7 +445,7 @@ export default function CaptacaoTab({ perfil }) {
       {carregando && <div style={{ color: '#6b7280' }}>Carregando...</div>}
 
       {!carregando && (
-        <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+        <div style={{ overflow: 'auto', maxHeight: '72vh', border: '1px solid #e5e7eb', borderRadius: 8 }}>
           <table style={{ borderCollapse: 'collapse', background: '#fff', minWidth: 1500 }}>
             <thead>
               <tr>
