@@ -265,11 +265,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     });
   }
 
-  // Imóvel captado (só Venda) — marcar também garante status Ativo (sucesso, igual ao Recebido)
+  // Imóvel captado (só Venda) — captar ENCERRA a tratativa: o imóvel foi
+  // conseguido e vai pra venda nos portais, não se faz mais nada com a tratativa.
+  // Por isso vira inativo (ativo='N') marcado como sucesso (captado=true).
+  // Aparece só no relatório de Captados, não na lista de Inativos.
   function toggleCaptado() {
     setForm(f => {
       const novo = !f.captado;
-      const u = { ...f, captado: novo, ativo: novo ? 'S' : f.ativo };
+      const u = { ...f, captado: novo, ativo: novo ? 'N' : f.ativo };
       if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
       return u;
     });
