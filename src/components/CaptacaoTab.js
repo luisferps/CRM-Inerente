@@ -71,6 +71,8 @@ function MultiSelect({ options, selected, onChange }) {
   }
   const filt = options.filter(o => String(o).toLowerCase().includes(q.toLowerCase()));
   function toggle(v) { const n = new Set(selected); n.has(v) ? n.delete(v) : n.add(v); onChange(n); }
+  const todosMarcados = filt.length > 0 && filt.every(o => selected.has(o));
+  function marcarTodos() { const n = new Set(selected); if (todosMarcados) filt.forEach(o => n.delete(o)); else filt.forEach(o => n.add(o)); onChange(n); }
   return (
     <>
       <button ref={btnRef} onClick={abrir} style={{ width: '100%', padding: '4px 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, background: '#fff', textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -79,8 +81,9 @@ function MultiSelect({ options, selected, onChange }) {
       {open && (
         <div ref={popRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 230, maxHeight: 280, overflow: 'auto', background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', padding: 8 }}>
           <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="filtrar..." style={{ width: '100%', padding: '5px 7px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 12, marginBottom: 6, boxSizing: 'border-box' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontSize: 11, color: '#6b7280' }}>{selected.size} selecionado(s)</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 8 }}>
+            <button onClick={marcarTodos} style={{ fontSize: 11, fontWeight: 600, border: '1px solid #d1d5db', background: '#f9fafb', borderRadius: 5, padding: '2px 6px', color: '#1a1a2e', cursor: 'pointer' }}>{todosMarcados ? '☑ desmarcar todos' : '☐ marcar todos'}</button>
+            <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{selected.size} sel.</span>
             {selected.size > 0 && <button onClick={() => onChange(new Set())} style={{ fontSize: 11, border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer' }}>limpar</button>}
           </div>
           {filt.map(o => (
