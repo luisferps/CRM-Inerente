@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 // ───────────────────────────────────────────────────────────────────────────
 // Aba "📍 Captação" — leads do OLX + campanha de abordagem (SDR outbound).
 // Estados (campanha_status): '' não analisado · fila · enviado (abordado) ·
-// respondido (em andamento) · optout · corretor · expirado (não respondeu) · descartado (não compensa).
+// respondido (em andamento) · optout · corretor · expirado (não respondeu) · descartado (fora do perfil).
 // REGRA DE OURO: nada vira cliente automaticamente (só no botão "→ Virar cliente").
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -12,7 +12,7 @@ const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
 
 const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c' };
-const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 não compensa', optout: '⛔ opt-out' };
+const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 fora do perfil', optout: '⛔ opt-out' };
 
 const COLS = [
   { key: 'telefone', label: 'Telefone', kind: 'texto' },
@@ -481,7 +481,7 @@ export default function CaptacaoTab({ perfil }) {
           <span style={grupoTit}>DESCARTADOS</span>
           <div style={grupoLinha}>
             {bView('g_descartados', 'Todos', cont.descartado + cont.optout + cont.corretor + cont.expirado, '#4b5563')}
-            {bView('naocompensa', 'Não compensa', cont.descartado, '#6b7280')}
+            {bView('naocompensa', 'Fora do perfil', cont.descartado, '#6b7280')}
             {bView('optout', 'Opt-out', cont.optout, '#b91c1c')}
             {bView('corretor', 'Corretor', cont.corretor, '#9333ea')}
             {bView('naoresp', 'Não respondeu', cont.expirado, '#94a3b8')}
@@ -507,7 +507,7 @@ export default function CaptacaoTab({ perfil }) {
         <div style={{ ...S.barra, background: '#eff6ff', padding: 8, borderRadius: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{idsSelec.length} selecionado(s):</span>
           <button style={{ ...S.btnm, background: '#2563eb', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'fila')}>⏳ Adicionar à campanha (fila)</button>
-          <button style={{ ...S.btnm, background: '#6b7280', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'descartado')}>🚫 Não compensa</button>
+          <button style={{ ...S.btnm, background: '#6b7280', color: '#fff' }} onClick={() => mudarCampanha(idsSelec, 'descartado')}>🚫 Fora do perfil</button>
           <button style={{ ...S.btnm, background: '#f3f4f6', color: '#1a1a2e' }} onClick={() => mudarCampanha(idsSelec, null)}>↩ tirar status</button>
           <button style={{ ...S.btnm, background: '#fff', color: '#6b7280', border: '1px solid #d1d5db' }} onClick={() => setSelec(new Set())}>limpar seleção</button>
         </div>
@@ -576,7 +576,7 @@ export default function CaptacaoTab({ perfil }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 130 }}>
                         <button style={{ ...S.btnm, background: cs === 'enviado' || cs === 'optout' ? '#e5e7eb' : '#16a34a', color: cs === 'enviado' || cs === 'optout' ? '#9ca3af' : '#fff' }} disabled={cs === 'enviado' || cs === 'optout' || enviandoId === l.id} onClick={() => abordarAgora(l)}>{enviandoId === l.id ? '...' : '📨 Abordar agora'}</button>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button title="Não compensa (descartar)" style={{ ...S.btnm, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', flex: 1 }} onClick={() => mudarCampanha([l.id], 'descartado')}>🚫 não compensa</button>
+                          <button title="Fora do perfil (não abordar)" style={{ ...S.btnm, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', flex: 1 }} onClick={() => mudarCampanha([l.id], 'descartado')}>🚫 fora do perfil</button>
                           <button title="Excluir de vez" style={{ ...S.btnm, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }} onClick={() => excluir(l)}>🗑</button>
                         </div>
                         <button style={{ ...S.btnm, background: l.virou_cliente ? '#e5e7eb' : '#7c3aed', color: l.virou_cliente ? '#9ca3af' : '#fff' }} disabled={l.virou_cliente || promovendo === l.id} onClick={() => virarCliente(l)}>{l.virou_cliente ? '✓ já é cliente' : (promovendo === l.id ? '...' : '→ Virar cliente')}</button>
