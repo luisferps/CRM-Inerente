@@ -107,6 +107,114 @@ function GraficoEvolucao({ data }) {
   );
 }
 
+// Análise por origem: conversão (recebidos / total) e evolução mensal.
+// "Recebido" = negócio efetivamente ganho (c.recebido && c.ativo === 'S'),
+// mesmo critério da aba Recebidos.
+function OrigemAnalise({ data }) {
+  const cores = ['#2563eb','#059669','#7c3aed','#d97706','#dc2626','#0891b2','#65a30d','#db2777'];
+
+  // Conversão por origem: total de tratativas, quantas viraram recebido, taxa %.
+  const conversao = useMemo(() => {
+    const m = {};
+    data.forEach(c => {
+      const origem = c.origem || 'Sem origem';
+      if (!m[origem]) m[origem] = { origem, total: 0, recebidos: 0 };
+      m[origem].total += 1;
+      if (c.recebido && c.ativo === 'S') m[origem].recebidos += 1;
+    });
+    return Object.values(m)
+      .map(o => ({ ...o, taxa: o.total > 0 ? o.recebidos / o.total : 0 }))
+      .sort((a, b) => b.total - a.total);
+  }, [data]);
+
+  // Top origens (por volume) para a evolução mensal.
+  const topOrigens = useMemo(
+    () => conversao.slice(0, 5).map(o => o.origem).filter(o => o !== 'Sem origem'),
+    [conversao]
+  );
+
+  // Evolução mensal por origem (últimos 12 meses), só das top origens.
+  const evolucao = useMemo(() => {
+    const porMes = {};
+    data.forEach(c => {
+      if (!c.created_at || !c.origem || !topOrigens.includes(c.origem)) return;
+      const d = new Date(c.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      if (!porMes[key]) { porMes[key] = { mes: label }; topOrigens.forEach(o => porMes[key][o] = 0); }
+      porMes[key][c.origem] += 1;
+    });
+    return Object.entries(porMes).sort(([a],[b]) => a.localeCompare(b)).slice(-12).map(([,v]) => v);
+  }, [data, topOrigens]);
+
+  if (conversao.length === 0) return null;
+
+  const maxConv = Math.max(...conversao.map(o => o.total), 1);
+
+  // Geometria do gráfico de linhas (evolução por origem)
+  const W = 520, H = 180, padL = 28, padB = 28, padT = 10, padR = 10;
+  const w = W - padL - padR, h = H - padB - padT;
+  const maxEvo = Math.max(1, ...evolucao.flatMap(m => topOrigens.map(o => m[o] || 0)));
+  const x = i => padL + (evolucao.length > 1 ? (i / (evolucao.length - 1)) * w : 0);
+  const y = v => padT + h - (v / maxEvo) * h;
+
+  return (
+    <div className="dash-section" style={{ marginBottom: 16 }}>
+      <div className="dash-section-title">🎯 Origens — Conversão e Evolução</div>
+
+      {/* Conversão por origem: barras com total, recebidos e taxa */}
+      <div style={{ marginBottom: 20 }}>
+        {conversao.map((o, i) => (
+          <div key={o.origem} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            <div style={{ width: 110, fontSize: 13, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.origem}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>{o.total} tratativa{o.total !== 1 ? 's' : ''} · {o.recebidos} fechada{o.recebidos !== 1 ? 's' : ''}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: o.taxa >= 0.15 ? '#059669' : o.taxa > 0 ? '#d97706' : '#9ca3af' }}>{Math.round(o.taxa * 100)}%</span>
+              </div>
+              <div style={{ background: '#e5e7eb', borderRadius: 99, height: 8, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ width: `${Math.round((o.total / maxConv) * 100)}%`, height: '100%', background: '#e5e7eb', borderRadius: 99 }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, width: `${Math.round((o.recebidos / maxConv) * 100)}%`, height: '100%', background: cores[i % cores.length], borderRadius: 99, transition: 'width 0.4s' }} />
+              </div>
+            </div>
+          </div>
+        ))}
+        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>
+          Barra cheia = total de tratativas · parte colorida = negócios fechados (recebidos)
+        </div>
+      </div>
+
+      {/* Evolução mensal por origem (top origens) */}
+      {evolucao.length >= 2 && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#374151' }}>Tratativas por origem ao longo dos meses</div>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+            {[0,0.25,0.5,0.75,1].map(p => (
+              <line key={p} x1={padL} y1={padT+h*(1-p)} x2={W-padR} y2={padT+h*(1-p)} stroke="#f3f4f6" strokeWidth="1" />
+            ))}
+            {topOrigens.map((origem, oi) => {
+              const pts = evolucao.map((m, i) => `${x(i)},${y(m[origem] || 0)}`).join(' ');
+              return <polyline key={origem} points={pts} fill="none" stroke={cores[oi % cores.length]} strokeWidth="2" strokeLinejoin="round" />;
+            })}
+            {evolucao.map((m, i) => (
+              <text key={i} x={x(i)} y={H-8} textAnchor="middle" fontSize="9" fill="#9ca3af">{m.mes}</text>
+            ))}
+          </svg>
+          {/* Legenda */}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
+            {topOrigens.map((origem, oi) => (
+              <div key={origem} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: cores[oi % cores.length] }} />
+                <span style={{ color: '#374151' }}>{origem}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardTab({ data }) {
   const [periodo, setPeriodo] = useState('mes');
   const filtered = useMemo(() => filtrarPorPeriodo(data, periodo), [data, periodo]);
@@ -191,6 +299,9 @@ export default function DashboardTab({ data }) {
 
       {/* Gráfico de evolução mensal */}
       <GraficoEvolucao data={data} />
+
+      {/* Análise por origem: conversão + evolução mensal */}
+      <OrigemAnalise data={data} />
 
       {/* Gráficos de pizza */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
