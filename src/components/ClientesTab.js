@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 
-const ORIGENS_DEFAULT = ['Carteira','Facebook','Google','Indicação','Instagram','Olx','Zap Imóveis','Corretor'];
+const ORIGENS_DEFAULT = ['Carteira','Facebook','Google','Indicação','Instagram','OLX','Zap Imóveis','Corretor'];
 
 export default function ClientesTab({ clientes, negociacoes, onVerTratativas, onNovaTratativa, onReload }) {
   const [search, setSearch] = useState('');
