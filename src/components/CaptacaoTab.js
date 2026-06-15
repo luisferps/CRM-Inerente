@@ -318,13 +318,13 @@ export default function CaptacaoTab({ perfil }) {
       if (existentes && existentes.length) clienteId = existentes[0].id;
       else {
         const { data: cli, error: e1 } = await supabase.from('clientes')
-          .insert([{ nome: lead.nome || ('Proprietário ' + tel), telefone: tel, entrada: hoje, origem: 'Olx', is_corretor: false }])
+          .insert([{ nome: lead.nome || ('Proprietário ' + tel), telefone: tel, entrada: hoje, origem: 'OLX', is_corretor: false }])
           .select().single();
         if (e1) throw e1;
         clienteId = cli.id;
       }
       const negociacao = {
-        cliente_id: clienteId, modalidade: 'Venda', origem_tratativa: 'Olx',
+        cliente_id: clienteId, modalidade: 'Venda', origem_tratativa: 'OLX',
         imovel: [lead.subtipo || lead.tipo, lead.transacao].filter(Boolean).join(' - ') || 'Imóvel OLX',
         localizacao: [lead.setor, lead.cidade, lead.estado].filter(Boolean).join(', ') || null,
         detalhes: montarResumoImovel(lead), valor: valorNumerico(lead.preco), ativo: 'S', captado: false, ficha: lead.ficha || null,
@@ -335,7 +335,7 @@ export default function CaptacaoTab({ perfil }) {
       const { error: e3 } = await supabase.from('leads_captacao').update({ status: 'virou_cliente', virou_cliente: true, campanha_status: 'respondido' }).eq('id', lead.id);
       if (e3) throw e3;
       setLeads(ls => ls.map(l => l.id === lead.id ? { ...l, status: 'virou_cliente', virou_cliente: true, campanha_status: 'respondido' } : l));
-      alert('✓ Cliente e demanda criados (Tratativas/Funil, origem Olx).');
+      alert('✓ Cliente e demanda criados (Tratativas/Funil, origem OLX).');
     } catch (err) { alert('Não consegui promover.\n\n' + err.message); }
     finally { setPromovendo(null); }
   }
