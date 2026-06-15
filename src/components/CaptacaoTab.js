@@ -319,7 +319,7 @@ export default function CaptacaoTab({ perfil }) {
         cliente_id: clienteId, modalidade: mapModalidade(lead.transacao), origem_tratativa: 'Olx',
         imovel: [lead.subtipo || lead.tipo, lead.transacao].filter(Boolean).join(' - ') || 'Imóvel OLX',
         localizacao: [lead.setor, lead.cidade, lead.estado].filter(Boolean).join(', ') || null,
-        detalhes: montarResumoImovel(lead), valor: valorNumerico(lead.preco), ativo: 'S', captado: false,
+        detalhes: montarResumoImovel(lead), valor: valorNumerico(lead.preco), ativo: 'S', captado: false, ficha: lead.ficha || null,
       };
       if (perfil && perfil.id) { negociacao.corretor_id = perfil.id; negociacao.corretor = perfil.nome; negociacao.corretor_original_id = perfil.id; negociacao.corretor_original = perfil.nome; }
       const { error: e2 } = await supabase.from('negociacoes').insert([negociacao]);
