@@ -368,6 +368,29 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     finally { setOrganizandoIA(false); }
   }
 
+  // Devolve o lead para a Captação (OLX) como "fora do perfil" e remove a tratativa.
+  // Usado quando o lead virou tratativa por engano (era pra ter ficado sem perfil).
+  async function devolverParaCaptacao() {
+    if (!window.confirm('Devolver este lead para a Captação como "fora do perfil" e remover esta tratativa?')) return;
+    setSaving(true);
+    try {
+      const tail = String(form.telefone || '').replace(/\D/g, '').slice(-8);
+      if (tail.length >= 8) {
+        const { data } = await supabase.from('leads_captacao').select('id').ilike('telefone', '%' + tail + '%');
+        const ids = (data || []).map(r => r.id);
+        if (ids.length) {
+          await supabase.from('leads_captacao').update({ campanha_status: 'descartado', virou_cliente: false }).in('id', ids);
+        }
+      }
+      localStorage.removeItem('crm_rascunho');
+      if (onDelete && modal && modal.id) await onDelete(modal.id);
+      onClose();
+    } catch (e) {
+      alert('Erro ao devolver: ' + (e.message || e));
+      setSaving(false);
+    }
+  }
+
   async function handleSave() {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
@@ -820,12 +843,17 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         </div>
         <div className="modal-footer">
           {onDelete && modal && modal.id && !modal.novaNegociacao && (
-            <button className="btn btn-ghost" style={{ color: '#dc2626', marginRight: 'auto' }} onClick={async () => {
-              if (!window.confirm('Excluir esta tratativa? Esta ação não pode ser desfeita.')) return;
-              localStorage.removeItem('crm_rascunho');
-              await onDelete(modal.id);
-              onClose();
-            }}>🗑️ Excluir</button>
+            <div style={{ marginRight: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost" style={{ color: '#dc2626' }} onClick={async () => {
+                if (!window.confirm('Excluir esta tratativa? Esta ação não pode ser desfeita.')) return;
+                localStorage.removeItem('crm_rascunho');
+                await onDelete(modal.id);
+                onClose();
+              }}>🗑️ Excluir</button>
+              {String(form.origem_tratativa || '').toUpperCase() === 'OLX' && (
+                <button className="btn btn-ghost" style={{ color: '#b45309' }} onClick={devolverParaCaptacao} disabled={saving}>↩ Devolver pra Captação</button>
+              )}
+            </div>
           )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
