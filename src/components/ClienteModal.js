@@ -32,7 +32,9 @@ function tipoDisplay(tipos, tipoId, emCondominio) {
 function validarTel(value, intl) {
   if (!value?.trim()) return false;
   if (intl) return value.trim().length >= 8;
-  const d = value.replace(/\D/g, '');
+  let d = value.replace(/\D/g, '');
+  // tolera o código do país: "55" + DDD + número (12-13 dígitos) -> tira o 55
+  if (d.length >= 12 && d.length <= 13 && d.startsWith('55')) d = d.slice(2);
   // Celular brasileiro: 11 dígitos (DDD + 9 + 8 dígitos), 3º dígito = 9
   return d.length === 11 && d[2] === '9';
 }
@@ -121,6 +123,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
         const unicos = [...new Set((data || []).map(d => d.motivo_desistencia).filter(Boolean))].sort();
         setMotivos(unicos);
       });
+  }, []);
+
+  // Lista de corretores (para o gerente poder (re)atribuir a tratativa)
+  const [corretores, setCorretores] = useState([]);
+  useEffect(() => {
+    supabase.from('perfis').select('id, nome').eq('role', 'corretor').order('nome')
+      .then(({ data }) => setCorretores(data || []));
   }, []);
 
   const isEdit = modal && modal.negociacao_id;
@@ -447,7 +456,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
 
           <div>
             <label className="form-label">Corretor</label>
-            <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
+            {isGerente ? (
+              <select value={form.corretor_id || ''} onChange={e => {
+                const id = e.target.value;
+                const c = corretores.find(x => String(x.id) === String(id));
+                setForm(f => ({ ...f, corretor_id: id || null, corretor: c ? c.nome : '' }));
+              }} style={{ width: '100%' }}>
+                <option value="">— selecione —</option>
+                {form.corretor && !corretores.some(c => String(c.id) === String(form.corretor_id)) && (
+                  <option value={form.corretor_id || ''}>{form.corretor} (atual)</option>
+                )}
+                {corretores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            ) : (
+              <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
+            )}
           </div>
 
           <SelectComAdd label="Origem da Tratativa" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
