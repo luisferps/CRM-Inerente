@@ -316,7 +316,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
 
   async function organizarIA() {
     const desc = (form.ficha && form.ficha._descricao) || '';
-    if (!desc.trim()) { alert('Cole a descrição do imóvel no campo abaixo antes de organizar com a IA.'); return; }
+    if (!desc.trim()) { alert('Cole o texto do anúncio no campo antes de organizar com a IA.'); return; }
     setOrganizandoIA(true);
     try {
       const r = await fetch(BACKEND + '/captacao/organizar-ficha', {
@@ -324,8 +324,22 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         body: JSON.stringify({ descricao: desc, ficha: form.ficha || {} })
       });
       const j = await r.json();
-      if (j.ok && j.ficha) { set('ficha', Object.assign({}, j.ficha, { _descricao: desc })); alert('✓ Ficha organizada pela IA. Confira o resumo.'); }
-      else alert('Não consegui organizar: ' + (j.error || 'erro'));
+      if (j.ok && j.ficha) {
+        const fi = Object.assign({}, j.ficha, { _descricao: desc });
+        const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const tEnc = tipos.find(t => norm(t.nome) === norm(fi.tipo))
+          || (norm(fi.tipo) ? tipos.find(t => norm(t.nome).startsWith(norm(fi.tipo)) || norm(fi.tipo).startsWith(norm(t.nome))) : null);
+        const precoNum = Number(String(fi.preco == null ? '' : fi.preco).replace(/[^\d]/g, ''));
+        const loc = [fi.bairro, fi.cidade, fi.estado].filter(Boolean).join(', ');
+        setForm(f => Object.assign({}, f, {
+          ficha: fi,
+          valor: precoNum > 0 ? precoNum : f.valor,
+          tipo_id: tEnc ? tEnc.id : f.tipo_id,
+          localizacao: loc || f.localizacao
+        }));
+        if (precoNum > 0) setValorDisplay(precoNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        alert('✓ Campos preenchidos pela IA. Confira Tipo, Valor e Localização e ajuste o que precisar.');
+      } else alert('Não consegui organizar: ' + (j.error || 'erro'));
     } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
     finally { setOrganizandoIA(false); }
   }
@@ -567,9 +581,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </span>
             )}
             {isVenda && (
-              <div style={{ marginTop: 12, padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb' }}>
+              <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd6fe', borderRadius: 8, background: '#faf5ff' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>🏠 Ficha do imóvel (Estoque)</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9' }}>🤖 Colar anúncio → IA preenche os campos</span>
                   <button type="button" onClick={organizarIA} disabled={organizandoIA}
                     style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoIA ? 'default' : 'pointer',
                       border: '1px solid #7c3aed', background: organizandoIA ? '#ede9fe' : '#7c3aed', color: organizandoIA ? '#7c3aed' : '#fff' }}>
@@ -579,23 +593,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 <textarea
                   value={(form.ficha && form.ficha._descricao) || ''}
                   onChange={e => set('ficha', Object.assign({}, form.ficha || {}, { _descricao: e.target.value }))}
-                  placeholder="Cole aqui a descrição do imóvel (do anúncio ou do proprietário). A IA usa esse texto para preencher a ficha."
-                  style={{ width: '100%', minHeight: 64, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                {form.ficha && (
-                  <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6, marginTop: 8 }}>
-                    {[
-                      form.ficha.tipo,
-                      form.ficha.preco ? ('R$ ' + Number(form.ficha.preco).toLocaleString('pt-BR')) : null,
-                      [form.ficha.bairro, form.ficha.cidade, form.ficha.estado].filter(Boolean).join(', ') || null,
+                  placeholder="Cole aqui o texto do anúncio (do proprietário, OLX, etc.) e clique em Organizar com IA. Ela preenche Tipo, Valor e Localização abaixo."
+                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #ddd6fe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                {form.ficha && (form.ficha.metragemTotal || form.ficha.metragem || form.ficha.quartos || form.ficha.garagens || (form.ficha.condicoes && form.ficha.condicoes.length)) && (
+                  <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.6, marginTop: 8 }}>
+                    Detalhes guardados p/ o Estoque: {[
                       form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
                       form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
                       form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
                       (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
-                    ].filter(Boolean).join('  ·  ') || 'Ficha vazia'}
+                    ].filter(Boolean).join('  ·  ')}
                   </div>
                 )}
                 <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
-                  Ao marcar <b>Captado</b>, o imóvel é criado no Estoque <b>oculto</b>. Você adiciona as fotos lá e publica.
+                  A IA preenche <b>Tipo, Valor e Localização</b> abaixo — confira e ajuste. Ao marcar <b>Captado</b>, o imóvel vai pro Estoque (oculto) com esses detalhes.
                 </p>
               </div>
             )}
