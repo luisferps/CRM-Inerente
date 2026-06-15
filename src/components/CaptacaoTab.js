@@ -332,9 +332,9 @@ export default function CaptacaoTab({ perfil }) {
       if (perfil && perfil.id) { negociacao.corretor_id = perfil.id; negociacao.corretor = perfil.nome; negociacao.corretor_original_id = perfil.id; negociacao.corretor_original = perfil.nome; }
       const { error: e2 } = await supabase.from('negociacoes').insert([negociacao]);
       if (e2) throw e2;
-      const { error: e3 } = await supabase.from('leads_captacao').update({ status: 'virou_cliente', virou_cliente: true }).eq('id', lead.id);
+      const { error: e3 } = await supabase.from('leads_captacao').update({ status: 'virou_cliente', virou_cliente: true, campanha_status: 'respondido' }).eq('id', lead.id);
       if (e3) throw e3;
-      setLeads(ls => ls.map(l => l.id === lead.id ? { ...l, status: 'virou_cliente', virou_cliente: true } : l));
+      setLeads(ls => ls.map(l => l.id === lead.id ? { ...l, status: 'virou_cliente', virou_cliente: true, campanha_status: 'respondido' } : l));
       alert('✓ Cliente e demanda criados (Tratativas/Funil, origem Olx).');
     } catch (err) { alert('Não consegui promover.\n\n' + err.message); }
     finally { setPromovendo(null); }
