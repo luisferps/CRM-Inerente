@@ -367,7 +367,23 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
         const capNome = form.corretor || (perfil && perfil.nome) || '';
         const capTel = (corretorObj && corretorObj.telefone)
           || (perfil && String(form.corretor_id) === String(perfil.id) ? perfil.telefone : '') || '';
+        // campos editados no modal do CRM têm prioridade e sobrescrevem a ficha
+        const tipoNome = (tipos.find(x => String(x.id) === String(form.tipo_id)) || {}).nome || '';
+        const partesLoc = String(form.localizacao || '').split(',').map(x => x.trim()).filter(Boolean);
+        const locBairro = partesLoc[0] || '';
+        const locCidade = partesLoc[1] || '';
+        const locEstado = (partesLoc[2] && partesLoc[2].length <= 3) ? partesLoc[2].toUpperCase() : (partesLoc[2] || '');
+        const nomePlaceholder = /^propriet[áa]rio\s*\d+$/i.test(String(form.nome || '').trim());
         const fichaEnvio = Object.assign({}, form.ficha, {
+          preco: (form.valor !== '' && form.valor != null) ? form.valor : form.ficha.preco,
+          tipo: tipoNome || form.ficha.tipo,
+          transacao: form.modalidade === 'Locação' ? 'Locação' : (form.modalidade === 'Venda' ? 'Venda' : (form.ficha.transacao || 'Venda')),
+          condominio: !!form.em_condominio || !!form.ficha.condominio,
+          bairro: locBairro || form.ficha.bairro,
+          cidade: locCidade || form.ficha.cidade,
+          estado: locEstado || form.ficha.estado,
+          nomeProprietario: nomePlaceholder ? (form.ficha.nomeProprietario || form.nome) : (form.nome || form.ficha.nomeProprietario),
+          telefoneProprietario: form.telefone || form.ficha.telefoneProprietario,
           nomeCaptador: form.ficha.nomeCaptador || capNome,
           telefoneCaptador: form.ficha.telefoneCaptador || capTel
         });
