@@ -370,6 +370,7 @@ export default function App() {
           onSave={handleSave}
           onClose={() => { localStorage.removeItem('crm_rascunho'); setModal(null); }}
           perfil={perfil}
+          onDelete={podeEditar ? handleDelete : null}
         />
       )}
 
