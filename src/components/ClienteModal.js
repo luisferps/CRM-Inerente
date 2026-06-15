@@ -90,6 +90,7 @@ function SelectComAdd({ label, value, onChange, options, setOptions, chave, requ
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={value} onChange={e => onChange(e.target.value)} style={{ flex: 1, ...(errStyle || {}) }}>
             <option value="">Selecionar</option>
+            {value && !options.includes(value) && <option value={value}>{value}</option>}
             {options.map(o => <option key={o}>{o}</option>)}
           </select>
           <button type="button" onClick={() => setAdding(true)} title={isGerente ? 'Adicionar' : 'Sugerir'}
@@ -131,7 +132,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   // Lista de corretores (para o gerente poder (re)atribuir a tratativa)
   const [corretores, setCorretores] = useState([]);
   useEffect(() => {
-    supabase.from('perfis').select('id, nome').eq('role', 'corretor').order('nome')
+    supabase.from('perfis').select('id, nome, telefone').eq('role', 'corretor').order('nome')
       .then(({ data }) => setCorretores(data || []));
   }, []);
 
@@ -361,9 +362,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     const captarAgora = form.captado && !jaCaptadoRef.current && form.ficha;
     if (captarAgora) {
       try {
+        // o corretor da tratativa vira o CAPTADOR no Estoque
+        const corretorObj = corretores.find(c => String(c.id) === String(form.corretor_id));
+        const capNome = form.corretor || (perfil && perfil.nome) || '';
+        const capTel = (corretorObj && corretorObj.telefone)
+          || (perfil && String(form.corretor_id) === String(perfil.id) ? perfil.telefone : '') || '';
+        const fichaEnvio = Object.assign({}, form.ficha, {
+          nomeCaptador: form.ficha.nomeCaptador || capNome,
+          telefoneCaptador: form.ficha.telefoneCaptador || capTel
+        });
         const rEst = await fetch(BACKEND + '/captacao/enviar-estoque', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ficha: form.ficha })
+          body: JSON.stringify({ ficha: fichaEnvio })
         });
         const jEst = await rEst.json();
         if (jEst.ok) { jaCaptadoRef.current = true; alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
