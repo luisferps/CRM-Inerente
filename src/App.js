@@ -244,6 +244,19 @@ export default function App() {
     await load();
   }
 
+  // Devolve um lead da lista direto pra Captação (marca como "fora do perfil") e remove a tratativa.
+  async function handleDevolverCaptacao(c) {
+    if (!podeEditar || !c || !c.id) return;
+    if (!window.confirm('Devolver este lead para a Captação como "fora do perfil" e remover esta tratativa?')) return;
+    const tail = String(c.telefone || '').replace(/\D/g, '').slice(-8);
+    if (tail.length >= 8) {
+      const { data: leads } = await supabase.from('leads_captacao').select('id').ilike('telefone', '%' + tail + '%');
+      const ids = (leads || []).map(r => r.id);
+      if (ids.length) await supabase.from('leads_captacao').update({ campanha_status: 'descartado', virou_cliente: false }).in('id', ids);
+    }
+    await handleDelete(c.id);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     setClientes([]); setNegociacoes([]); setPerfil(null);
@@ -350,7 +363,7 @@ export default function App() {
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
             {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
-            {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} />}
+            {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} onDelete={podeEditar ? handleDelete : null} onDevolverCaptacao={podeEditar ? handleDevolverCaptacao : null} />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N' && !c.captado)} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
