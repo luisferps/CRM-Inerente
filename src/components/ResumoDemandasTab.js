@@ -15,7 +15,7 @@ function formatarPreco(valor) {
   return `Paga até R$ ${n.toLocaleString('pt-BR')}`;
 }
 function formatarLinha(c) {
-  const limpar = p => p.replace(/\.\s*$/, '');
+  const limpar = p => String(p).replace(/\s+/g, ' ').replace(/\.\s*$/, '').trim();
   const imovel = c.imovel ? limpar(capitalize(c.imovel)) : '';
   const local = c.localizacao ? limpar(capitalize(c.localizacao)) : '';
   // Demais partes (observações externas + preço), juntadas com ". "
