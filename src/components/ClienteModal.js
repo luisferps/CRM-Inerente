@@ -3,12 +3,13 @@ import { supabase } from '../supabaseClient';
 import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
 
 const hoje = new Date().toISOString().slice(0, 10);
+const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
 const emptyForm = {
   nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
-  captado: false,
+  captado: false, ficha: null,
   corretor: '', corretor_id: null,
   imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
   origem_tratativa: '',
@@ -113,6 +114,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   const [duplicatas, setDuplicatas] = useState([]);
   const [motivos, setMotivos] = useState([]);
   const [motivoAberto, setMotivoAberto] = useState(false);
+  const [organizandoIA, setOrganizandoIA] = useState(false);
+  const jaCaptadoRef = useRef(false);
   const timerNome = useRef(null);
   const timer = useRef(null);
 
@@ -165,6 +168,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     setOrigemBloqueada(false);
     if (isEdit) {
       setForm({ ...emptyForm, ...modal });
+      jaCaptadoRef.current = !!modal.captado;
       setValorDisplay(modal.valor !== '' && modal.valor !== null && modal.valor !== undefined
         ? Number(modal.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
       setInternacional(isIntl(modal.telefone || ''));
@@ -309,6 +313,23 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     return errs;
   }
 
+  async function organizarIA() {
+    if (!form.ficha) { alert('Este lead não tem ficha (não veio da captação OLX).'); return; }
+    const desc = (form.ficha && form.ficha._descricao) || '';
+    if (!desc.trim()) { alert('Não há descrição do anúncio nesta ficha.\n(Funciona em leads capturados a partir da versão 6.3 do script.)'); return; }
+    setOrganizandoIA(true);
+    try {
+      const r = await fetch(BACKEND + '/captacao/organizar-ficha', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao: desc, ficha: form.ficha })
+      });
+      const j = await r.json();
+      if (j.ok && j.ficha) { set('ficha', j.ficha); alert('✓ Ficha organizada pela IA. Confira o resumo.'); }
+      else alert('Não consegui organizar: ' + (j.error || 'erro'));
+    } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
+    finally { setOrganizandoIA(false); }
+  }
+
   async function handleSave() {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
@@ -334,6 +355,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
           return;
         }
       }
+    }
+
+    // Captado AGORA (acabou de marcar nesta edição) -> cria o imóvel no Estoque (oculto)
+    const captarAgora = form.captado && !jaCaptadoRef.current && form.ficha;
+    if (captarAgora) {
+      try {
+        const rEst = await fetch(BACKEND + '/captacao/enviar-estoque', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ficha: form.ficha })
+        });
+        const jEst = await rEst.json();
+        if (jEst.ok) { jaCaptadoRef.current = true; alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
+        else alert('A tratativa foi salva, mas não consegui criar no Estoque:\n' + (jEst.error || 'erro desconhecido') + '\n\nMe avise para verificar.');
+      } catch (e) { alert('A tratativa foi salva, mas falhou o envio ao Estoque:\n' + e.message); }
     }
 
     const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
@@ -504,6 +539,32 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
               <span style={{ fontSize: 11, color: '#2563eb', marginTop: 4, display: 'block' }}>
                 Imóvel captado — tratativa encerrada com sucesso.
               </span>
+            )}
+            {form.ficha && (
+              <div style={{ marginTop: 12, padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>🏠 Ficha do imóvel (Estoque)</span>
+                  <button type="button" onClick={organizarIA} disabled={organizandoIA}
+                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoIA ? 'default' : 'pointer',
+                      border: '1px solid #7c3aed', background: organizandoIA ? '#ede9fe' : '#7c3aed', color: organizandoIA ? '#7c3aed' : '#fff' }}>
+                    {organizandoIA ? '🤖 organizando…' : '🤖 Organizar com IA'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6 }}>
+                  {[
+                    form.ficha.tipo,
+                    form.ficha.preco ? ('R$ ' + Number(form.ficha.preco).toLocaleString('pt-BR')) : null,
+                    [form.ficha.bairro, form.ficha.cidade, form.ficha.estado].filter(Boolean).join(', ') || null,
+                    form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
+                    form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
+                    form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
+                    (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
+                  ].filter(Boolean).join('  ·  ') || 'Ficha vazia'}
+                </div>
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
+                  Ao marcar <b>Captado</b>, o imóvel é criado no Estoque <b>oculto</b>. Você adiciona as fotos lá e publica.
+                </p>
+              </div>
             )}
           </div>
 
