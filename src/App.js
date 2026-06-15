@@ -59,6 +59,7 @@ function splitForm(form) {
     recebido: form.recebido || false,
     corretor_id: form.corretor_id,
     corretor: form.corretor,
+    ficha: form.ficha || null,
   };
   return { clienteData, negociacaoData };
 }
