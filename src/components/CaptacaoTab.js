@@ -17,6 +17,22 @@ function so11(x) {
   return d;
 }
 
+// Traduz o tipo do anúncio OLX para o tipo_id do cadastro central (alimenta o dropdown "Tipo de Imóvel").
+const _norm = (x) => String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function tipoIdDoLead(lead, tipos) {
+  const t = _norm((lead && (lead.subtipo || lead.tipo)) || '');
+  let alvo = null;
+  if (/(terreno|lote)/.test(t)) alvo = 'lote';
+  else if (/(apart|apto|flat|kitnet|kitinete|studio|studio|cobertura)/.test(t)) alvo = 'apartamento';
+  else if (/(casa|sobrado|geminad)/.test(t)) alvo = 'casa';
+  else if (/(galp|comerc|loja|sala|ponto|industr|barrac|predio|pr[ée]dio)/.test(t)) alvo = 'galpao';
+  else if (/(area|rural|chacara|sitio|fazenda|gleba)/.test(t)) alvo = 'area';
+  if (!alvo) return null;
+  const lista = tipos || [];
+  const found = lista.find(x => _norm(x.nome) === alvo) || lista.find(x => _norm(x.nome).indexOf(alvo) >= 0);
+  return found ? found.id : null;
+}
+
 
 const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c' };
 const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 fora do perfil', optout: '⛔ opt-out' };
@@ -91,7 +107,7 @@ function MultiSelect({ options, selected, onChange }) {
   );
 }
 
-export default function CaptacaoTab({ perfil }) {
+export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [leads, setLeads] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
@@ -99,6 +115,7 @@ export default function CaptacaoTab({ perfil }) {
   const [enviandoId, setEnviandoId] = useState(null);
   const [view, setView] = useState('pendentes');
   const [selec, setSelec] = useState(new Set());
+  const [tiposCRM, setTiposCRM] = useState([]);
 
   // filtros por coluna
   const [multiSel, setMultiSel] = useState({}); // { coluna: Set } — todos os filtros são multi-seleção
@@ -149,7 +166,15 @@ export default function CaptacaoTab({ perfil }) {
     } catch (e) { /* backend offline */ }
   }
 
-  useEffect(() => { carregar(); carregarCampanha(); }, []);
+  async function carregarTipos() {
+    const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'imoveis').single();
+    const v = data && data.valor;
+    const lista = Array.isArray(v && v.tipos) ? v.tipos
+      : (Array.isArray(v) ? v.map(n => ({ id: String(n), nome: String(n) })) : []);
+    setTiposCRM(lista);
+  }
+
+  useEffect(() => { carregar(); carregarCampanha(); carregarTipos(); }, []);
 
   useEffect(() => {
     function medir() { const sc = scrollRef.current; if (sc) { const t = sc.querySelector('table'); if (t) setTableW(t.scrollWidth); } }
@@ -327,6 +352,7 @@ export default function CaptacaoTab({ perfil }) {
         cliente_id: clienteId, modalidade: 'Venda', origem_tratativa: 'OLX',
         imovel: [lead.subtipo || lead.tipo, lead.transacao].filter(Boolean).join(' - ') || 'Imóvel OLX',
         localizacao: [lead.setor, lead.cidade, lead.estado].filter(Boolean).join(', ') || null,
+        tipo_id: tipoIdDoLead(lead, tiposCRM) || null,
         detalhes: montarResumoImovel(lead), valor: valorNumerico(lead.preco), ativo: 'S', captado: false, ficha: lead.ficha || null,
       };
       if (perfil && perfil.id) { negociacao.corretor_id = perfil.id; negociacao.corretor = perfil.nome; negociacao.corretor_original_id = perfil.id; negociacao.corretor_original = perfil.nome; }
@@ -335,6 +361,7 @@ export default function CaptacaoTab({ perfil }) {
       const { error: e3 } = await supabase.from('leads_captacao').update({ status: 'virou_cliente', virou_cliente: true, campanha_status: 'respondido' }).eq('id', lead.id);
       if (e3) throw e3;
       setLeads(ls => ls.map(l => l.id === lead.id ? { ...l, status: 'virou_cliente', virou_cliente: true, campanha_status: 'respondido' } : l));
+      if (onAtualizar) onAtualizar();
       alert('✓ Cliente e demanda criados (Tratativas/Funil, origem OLX).');
     } catch (err) { alert('Não consegui promover.\n\n' + err.message); }
     finally { setPromovendo(null); }
