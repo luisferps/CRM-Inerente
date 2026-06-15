@@ -10,7 +10,7 @@ function getEtapaAtual(c) {
 
 const CORES = ['#1e40af','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#dbeafe','#16a34a'];
 
-export default function VendasTab({ data, onOpenModal }) {
+export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCaptacao }) {
   const [search, setSearch] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterCorretor, setFilterCorretor] = useState('');
@@ -29,6 +29,17 @@ export default function VendasTab({ data, onOpenModal }) {
       (!filterCorretor || c.corretor === filterCorretor)
     );
   }, [vendas, search, filterEtapa, filterCorretor]);
+
+  // Botões de ação por linha: Ver (todos), ↩ Captação (só origem OLX) e Excluir.
+  const Acoes = ({ c, comDevolver }) => (
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
+      {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Ver</button>}
+      {comDevolver && onDevolverCaptacao && String(c.origem_tratativa || '').toUpperCase() === 'OLX' && (
+        <button onClick={() => onDevolverCaptacao(c)} title="Devolve este lead pra Captação como fora do perfil e remove esta tratativa" style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fffbeb', color: '#b45309', fontSize: 12, cursor: 'pointer' }}>↩ Captação</button>
+      )}
+      {onDelete && <button onClick={() => { if (window.confirm('Excluir esta tratativa? Não dá pra desfazer.')) onDelete(c.id); }} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: 12, cursor: 'pointer' }}>Excluir</button>}
+    </div>
+  );
 
   return (
     <div>
@@ -83,7 +94,7 @@ export default function VendasTab({ data, onOpenModal }) {
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.corretor || '—'}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: 12 }}>{c.proxima_acao || '—'}</td>
                   <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
-                    {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Ver</button>}
+                    <Acoes c={c} comDevolver />
                   </td>
                 </tr>
               );
@@ -115,7 +126,7 @@ export default function VendasTab({ data, onOpenModal }) {
                     <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.corretor || '—'}</td>
                     <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
-                      {onOpenModal && <button onClick={() => onOpenModal(c)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: 'pointer' }}>Ver</button>}
+                      <Acoes c={c} />
                     </td>
                   </tr>
                 ))}
