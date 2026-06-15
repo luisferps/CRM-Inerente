@@ -34,8 +34,8 @@ function tipoIdDoLead(lead, tipos) {
 }
 
 
-const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c' };
-const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 fora do perfil', optout: '⛔ opt-out' };
+const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c', qualificando: '#0ea5e9' };
+const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 fora do perfil', optout: '⛔ opt-out', qualificando: '❓ qualificando' };
 
 const COLS = [
   { key: 'telefone', label: 'Telefone', kind: 'texto' },
@@ -114,6 +114,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [promovendo, setPromovendo] = useState(null);
   const [enviandoId, setEnviandoId] = useState(null);
   const [view, setView] = useState('pendentes');
+  const [busca, setBusca] = useState('');
   const [selec, setSelec] = useState(new Set());
   const [tiposCRM, setTiposCRM] = useState([]);
 
@@ -197,7 +198,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   }, [leads]);
 
   const cont = useMemo(() => {
-    const c = { '': 0, fila: 0, enviado: 0, respondido: 0, descartado: 0, optout: 0, corretor: 0, expirado: 0 };
+    const c = { '': 0, fila: 0, enviado: 0, qualificando: 0, respondido: 0, descartado: 0, optout: 0, corretor: 0, expirado: 0 };
     leads.forEach(l => { const st = l.campanha_status || ''; if (c[st] !== undefined) c[st]++; });
     return c;
   }, [leads]);
@@ -205,13 +206,14 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   function passaView(l) {
     const s = l.campanha_status || '';
     if (view === 'g_abordar') return s === '' || s === 'fila';
-    if (view === 'g_abordados') return ['enviado', 'respondido'].includes(s);
+    if (view === 'g_abordados') return ['enviado', 'qualificando', 'respondido'].includes(s);
     if (view === 'g_descartados') return ['descartado', 'optout', 'corretor', 'expirado'].includes(s);
     if (view === 'pendentes') return s === '';
     if (view === 'fila') return s === 'fila';
     if (view === 'naocompensa') return s === 'descartado';
-    if (view === 'abordados') return ['enviado', 'respondido', 'optout', 'corretor', 'expirado'].includes(s);
+    if (view === 'abordados') return ['enviado', 'qualificando', 'respondido', 'optout', 'corretor', 'expirado'].includes(s);
     if (view === 'aguardando') return s === 'enviado';
+    if (view === 'qualificando') return s === 'qualificando';
     if (view === 'andamento') return s === 'respondido';
     if (view === 'descartadas') return ['optout', 'corretor', 'expirado'].includes(s);
     if (view === 'optout') return s === 'optout';
@@ -221,8 +223,15 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   }
 
   const filtrados = useMemo(() => {
+    const bq = busca.trim().toLowerCase();
+    const bdig = bq.replace(/\D/g, '');
     return leads.filter(l => {
       if (!passaView(l)) return false;
+      if (bq) {
+        const tel = String(l.telefone || '').replace(/\D/g, '');
+        const nome = String(l.nome || '').toLowerCase();
+        if (!((bdig && tel.includes(bdig)) || nome.includes(bq))) return false;
+      }
       for (const col of COLS) {
         const ms = multiSel[col.key];
         if (ms && ms.size) {
@@ -232,7 +241,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       }
       return true;
     });
-  }, [leads, view, multiSel]);
+  }, [leads, view, multiSel, busca]);
 
   const numericas = ['preco', 'quartos', 'vagas', 'area'];
   const ordenados = useMemo(() => {
@@ -507,8 +516,9 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         <div style={grupoBox}>
           <span style={grupoTit}>ABORDADOS</span>
           <div style={grupoLinha}>
-            {bView('g_abordados', 'Todos', cont.enviado + cont.respondido, '#047857')}
+            {bView('g_abordados', 'Todos', cont.enviado + cont.qualificando + cont.respondido, '#047857')}
             {bView('aguardando', 'Aguardando', cont.enviado, '#059669')}
+            {bView('qualificando', 'Qualificando', cont.qualificando, '#0ea5e9')}
             {bView('andamento', 'Em andamento', cont.respondido, '#0891b2')}
           </div>
         </div>
@@ -531,6 +541,8 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       {/* ── BARRA SUPERIOR ── */}
       <div style={S.barra}>
         <strong style={{ fontSize: 16 }}>📍 Captação OLX</strong>
+        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar telefone ou nome..." style={{ ...S.inp, width: 240 }} />
+        {busca && <button style={{ ...S.btn, background: '#f3f4f6', color: '#1a1a2e' }} onClick={() => setBusca('')}>✕</button>}
         <span style={{ color: '#6b7280', fontSize: 13 }}>{ordenados.length} de {leads.length}</span>
         <button style={{ ...S.btn, background: '#f3f4f6', color: '#1a1a2e' }} onClick={() => { carregar(); carregarCampanha(); }}>🔄 Atualizar</button>
         <button style={{ ...S.btn, background: '#059669', color: '#fff' }} onClick={exportarCSV}>⬇ CSV</button>
