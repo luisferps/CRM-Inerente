@@ -129,11 +129,35 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       });
   }, []);
 
-  // Lista de corretores (para o gerente poder (re)atribuir a tratativa)
+  // Lista de corretores: junta os do CRM (Supabase perfis) com os do Estoque (Firebase, via backend),
+  // sem duplicar pelo nome. O dropdown trabalha por NOME (que é o que rankings/filtros usam).
   const [corretores, setCorretores] = useState([]);
   useEffect(() => {
-    supabase.from('perfis').select('id, nome, telefone').eq('role', 'corretor').order('nome')
-      .then(({ data }) => setCorretores(data || []));
+    let vivo = true;
+    const normNome = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    (async () => {
+      const mapa = new Map();
+      try {
+        const { data } = await supabase.from('perfis').select('id, nome, telefone').eq('role', 'corretor').order('nome');
+        (data || []).forEach(p => {
+          if (!p.nome) return;
+          mapa.set(normNome(p.nome), { nome: p.nome, telefone: p.telefone || '', supabaseId: p.id, firebaseId: null });
+        });
+      } catch (e) { /* segue só com o Estoque */ }
+      try {
+        const r = await fetch(BACKEND + '/corretores');
+        const j = await r.json();
+        ((j && j.corretores) || []).forEach(c => {
+          if (!c.nome) return;
+          const k = normNome(c.nome);
+          const ex = mapa.get(k);
+          if (ex) { ex.firebaseId = c.id; if (!ex.telefone) ex.telefone = c.telefone || ''; }
+          else mapa.set(k, { nome: c.nome, telefone: c.telefone || '', supabaseId: null, firebaseId: c.id });
+        });
+      } catch (e) { /* segue só com os do CRM */ }
+      if (vivo) setCorretores(Array.from(mapa.values()).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR')));
+    })();
+    return () => { vivo = false; };
   }, []);
 
   const isEdit = modal && modal.negociacao_id;
@@ -376,11 +400,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     if (captarAgora) {
       try {
         const fbase = form.ficha || {};
-        // o corretor da tratativa vira o CAPTADOR no Estoque
-        const corretorObj = corretores.find(c => String(c.id) === String(form.corretor_id));
+        // o corretor da tratativa vira o CAPTADOR no Estoque (casado pelo NOME)
+        const _nc = x => String(x || '').toLowerCase().trim();
+        const corretorObj = corretores.find(c => _nc(c.nome) === _nc(form.corretor));
         const capNome = form.corretor || (perfil && perfil.nome) || '';
         const capTel = (corretorObj && corretorObj.telefone)
-          || (perfil && String(form.corretor_id) === String(perfil.id) ? perfil.telefone : '') || '';
+          || (perfil && _nc(form.corretor) === _nc(perfil.nome) ? perfil.telefone : '') || '';
         // campos editados no modal do CRM têm prioridade e sobrescrevem a ficha
         const tipoNome = (tipos.find(x => String(x.id) === String(form.tipo_id)) || {}).nome || '';
         const partesLoc = String(form.localizacao || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -532,16 +557,16 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           <div>
             <label className="form-label">Corretor</label>
             {isGerente ? (
-              <select value={form.corretor_id || ''} onChange={e => {
-                const id = e.target.value;
-                const c = corretores.find(x => String(x.id) === String(id));
-                setForm(f => ({ ...f, corretor_id: id || null, corretor: c ? c.nome : '' }));
+              <select value={form.corretor || ''} onChange={e => {
+                const nome = e.target.value;
+                const c = corretores.find(x => x.nome === nome);
+                setForm(f => ({ ...f, corretor: nome, corretor_id: (c && c.supabaseId) || null }));
               }} style={{ width: '100%' }}>
                 <option value="">— selecione —</option>
-                {form.corretor && !corretores.some(c => String(c.id) === String(form.corretor_id)) && (
-                  <option value={form.corretor_id || ''}>{form.corretor} (atual)</option>
+                {form.corretor && !corretores.some(c => c.nome === form.corretor) && (
+                  <option value={form.corretor}>{form.corretor} (atual)</option>
                 )}
-                {corretores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                {corretores.map(c => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
               </select>
             ) : (
               <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
