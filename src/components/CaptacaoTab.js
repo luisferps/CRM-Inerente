@@ -10,6 +10,13 @@ import { supabase } from '../supabaseClient';
 
 const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
+// Telefone padrão: 11 dígitos (DDD + número), sem o 55. O 55 entra só no envio ao WhatsApp.
+function so11(x) {
+  let d = String(x == null ? '' : x).replace(/\D/g, '');
+  if (d.length >= 12 && d.length <= 13 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d;
+}
+
 
 const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#059669', respondido: '#0891b2', expirado: '#94a3b8', corretor: '#9333ea', descartado: '#6b7280', optout: '#b91c1c' };
 const CAMP_LABEL = { '': '— não analisado', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 em andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 fora do perfil', optout: '⛔ opt-out' };
@@ -283,7 +290,6 @@ export default function CaptacaoTab({ perfil }) {
   }
 
   // ─── virar cliente ───
-  function mapModalidade(t) { t = (t || '').toLowerCase(); return (t.indexOf('aluguel') >= 0 || t.indexOf('temporada') >= 0 || t.indexOf('loca') >= 0) ? 'Locação' : 'Venda'; }
   function valorNumerico(p) { if (!p) return null; const n = Number(String(p).replace(/\D/g, '')); return isNaN(n) || n === 0 ? null : n; }
   function montarResumoImovel(l) {
     const p = [];
@@ -304,19 +310,21 @@ export default function CaptacaoTab({ perfil }) {
     setPromovendo(lead.id);
     try {
       const hoje = new Date().toISOString().slice(0, 10);
-      const { data: existentes, error: eb } = await supabase.from('clientes').select('id').eq('telefone', lead.telefone).limit(1);
+      const tel = so11(lead.telefone);
+      const tail8 = tel.slice(-8);
+      const { data: existentes, error: eb } = await supabase.from('clientes').select('id').ilike('telefone', '%' + tail8 + '%').limit(1);
       if (eb) throw eb;
       let clienteId;
       if (existentes && existentes.length) clienteId = existentes[0].id;
       else {
         const { data: cli, error: e1 } = await supabase.from('clientes')
-          .insert([{ nome: lead.nome || 'Proprietário OLX', telefone: lead.telefone, entrada: hoje, origem: 'Olx', is_corretor: false }])
+          .insert([{ nome: lead.nome || ('Proprietário ' + tel), telefone: tel, entrada: hoje, origem: 'Olx', is_corretor: false }])
           .select().single();
         if (e1) throw e1;
         clienteId = cli.id;
       }
       const negociacao = {
-        cliente_id: clienteId, modalidade: mapModalidade(lead.transacao), origem_tratativa: 'Olx',
+        cliente_id: clienteId, modalidade: 'Venda', origem_tratativa: 'Olx',
         imovel: [lead.subtipo || lead.tipo, lead.transacao].filter(Boolean).join(' - ') || 'Imóvel OLX',
         localizacao: [lead.setor, lead.cidade, lead.estado].filter(Boolean).join(', ') || null,
         detalhes: montarResumoImovel(lead), valor: valorNumerico(lead.preco), ativo: 'S', captado: false, ficha: lead.ficha || null,
