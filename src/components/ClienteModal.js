@@ -444,7 +444,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 onChange={handleTelChange}
                 placeholder={internacional ? '+1 555 000 0000' : '62999999999'}
                 style={errStyle('telefone')}
-                disabled={isEdit}
+                disabled={isEdit && !isGerente}
                 inputMode="numeric"
               />
               {buscando && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#9ca3af' }}>🔍</span>}
