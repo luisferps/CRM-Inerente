@@ -18,11 +18,18 @@ import RecebidosTab from './components/RecebidosTab';
 import ClientesTab from './components/ClientesTab';
 import CaptacaoTab from './components/CaptacaoTab';
 
+// Telefone padrão: 11 dígitos (DDD + número), sem o 55. O 55 entra só no envio ao WhatsApp.
+function so11(x) {
+  let d = String(x == null ? '' : x).replace(/\D/g, '');
+  if (d.length >= 12 && d.length <= 13 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d || (x == null ? '' : String(x));
+}
+
 function splitForm(form) {
   const clienteData = {
     nome: form.nome,
-    telefone: form.telefone,
-    telefone2: form.telefone2 || null,
+    telefone: so11(form.telefone),
+    telefone2: form.telefone2 ? so11(form.telefone2) : null,
     email: form.email,
     entrada: form.entrada || new Date().toISOString().slice(0, 10),
     origem: form.origem || null,
