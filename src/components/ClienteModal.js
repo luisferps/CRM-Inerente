@@ -101,7 +101,7 @@ function SelectComAdd({ label, value, onChange, options, setOptions, chave, requ
   );
 }
 
-export default function ClienteModal({ modal, onSave, onClose, perfil }) {
+export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -315,17 +315,16 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
   }
 
   async function organizarIA() {
-    if (!form.ficha) { alert('Este lead não tem ficha (não veio da captação OLX).'); return; }
     const desc = (form.ficha && form.ficha._descricao) || '';
-    if (!desc.trim()) { alert('Não há descrição do anúncio nesta ficha.\n(Funciona em leads capturados a partir da versão 6.3 do script.)'); return; }
+    if (!desc.trim()) { alert('Cole a descrição do imóvel no campo abaixo antes de organizar com a IA.'); return; }
     setOrganizandoIA(true);
     try {
       const r = await fetch(BACKEND + '/captacao/organizar-ficha', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descricao: desc, ficha: form.ficha })
+        body: JSON.stringify({ descricao: desc, ficha: form.ficha || {} })
       });
       const j = await r.json();
-      if (j.ok && j.ficha) { set('ficha', j.ficha); alert('✓ Ficha organizada pela IA. Confira o resumo.'); }
+      if (j.ok && j.ficha) { set('ficha', Object.assign({}, j.ficha, { _descricao: desc })); alert('✓ Ficha organizada pela IA. Confira o resumo.'); }
       else alert('Não consegui organizar: ' + (j.error || 'erro'));
     } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
     finally { setOrganizandoIA(false); }
@@ -359,9 +358,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
     }
 
     // Captado AGORA (acabou de marcar nesta edição) -> cria o imóvel no Estoque (oculto)
-    const captarAgora = form.captado && !jaCaptadoRef.current && form.ficha;
+    const captarAgora = form.captado && !jaCaptadoRef.current;
     if (captarAgora) {
       try {
+        const fbase = form.ficha || {};
         // o corretor da tratativa vira o CAPTADOR no Estoque
         const corretorObj = corretores.find(c => String(c.id) === String(form.corretor_id));
         const capNome = form.corretor || (perfil && perfil.nome) || '';
@@ -374,18 +374,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
         const locCidade = partesLoc[1] || '';
         const locEstado = (partesLoc[2] && partesLoc[2].length <= 3) ? partesLoc[2].toUpperCase() : (partesLoc[2] || '');
         const nomePlaceholder = /^propriet[áa]rio\s*\d+$/i.test(String(form.nome || '').trim());
-        const fichaEnvio = Object.assign({}, form.ficha, {
-          preco: (form.valor !== '' && form.valor != null) ? form.valor : form.ficha.preco,
-          tipo: tipoNome || form.ficha.tipo,
-          transacao: form.modalidade === 'Locação' ? 'Locação' : (form.modalidade === 'Venda' ? 'Venda' : (form.ficha.transacao || 'Venda')),
-          condominio: !!form.em_condominio || !!form.ficha.condominio,
-          bairro: locBairro || form.ficha.bairro,
-          cidade: locCidade || form.ficha.cidade,
-          estado: locEstado || form.ficha.estado,
-          nomeProprietario: nomePlaceholder ? (form.ficha.nomeProprietario || form.nome) : (form.nome || form.ficha.nomeProprietario),
-          telefoneProprietario: form.telefone || form.ficha.telefoneProprietario,
-          nomeCaptador: form.ficha.nomeCaptador || capNome,
-          telefoneCaptador: form.ficha.telefoneCaptador || capTel
+        const fichaEnvio = Object.assign({}, fbase, {
+          preco: (form.valor !== '' && form.valor != null) ? form.valor : fbase.preco,
+          tipo: tipoNome || fbase.tipo,
+          transacao: 'Venda',
+          condominio: !!form.em_condominio || !!fbase.condominio,
+          bairro: locBairro || fbase.bairro,
+          cidade: locCidade || fbase.cidade,
+          estado: locEstado || fbase.estado,
+          nomeProprietario: nomePlaceholder ? (fbase.nomeProprietario || form.nome) : (form.nome || fbase.nomeProprietario),
+          telefoneProprietario: form.telefone || fbase.telefoneProprietario,
+          nomeCaptador: fbase.nomeCaptador || capNome,
+          telefoneCaptador: fbase.telefoneCaptador || capTel
         });
         const rEst = await fetch(BACKEND + '/captacao/enviar-estoque', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -566,7 +566,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
                 Imóvel captado — tratativa encerrada com sucesso.
               </span>
             )}
-            {form.ficha && (
+            {isVenda && (
               <div style={{ marginTop: 12, padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>🏠 Ficha do imóvel (Estoque)</span>
@@ -576,17 +576,24 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
                     {organizandoIA ? '🤖 organizando…' : '🤖 Organizar com IA'}
                   </button>
                 </div>
-                <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6 }}>
-                  {[
-                    form.ficha.tipo,
-                    form.ficha.preco ? ('R$ ' + Number(form.ficha.preco).toLocaleString('pt-BR')) : null,
-                    [form.ficha.bairro, form.ficha.cidade, form.ficha.estado].filter(Boolean).join(', ') || null,
-                    form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
-                    form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
-                    form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
-                    (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
-                  ].filter(Boolean).join('  ·  ') || 'Ficha vazia'}
-                </div>
+                <textarea
+                  value={(form.ficha && form.ficha._descricao) || ''}
+                  onChange={e => set('ficha', Object.assign({}, form.ficha || {}, { _descricao: e.target.value }))}
+                  placeholder="Cole aqui a descrição do imóvel (do anúncio ou do proprietário). A IA usa esse texto para preencher a ficha."
+                  style={{ width: '100%', minHeight: 64, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                {form.ficha && (
+                  <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6, marginTop: 8 }}>
+                    {[
+                      form.ficha.tipo,
+                      form.ficha.preco ? ('R$ ' + Number(form.ficha.preco).toLocaleString('pt-BR')) : null,
+                      [form.ficha.bairro, form.ficha.cidade, form.ficha.estado].filter(Boolean).join(', ') || null,
+                      form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
+                      form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
+                      form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
+                      (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
+                    ].filter(Boolean).join('  ·  ') || 'Ficha vazia'}
+                  </div>
+                )}
                 <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
                   Ao marcar <b>Captado</b>, o imóvel é criado no Estoque <b>oculto</b>. Você adiciona as fotos lá e publica.
                 </p>
@@ -776,6 +783,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil }) {
 
         </div>
         <div className="modal-footer">
+          {onDelete && modal && modal.id && !modal.novaNegociacao && (
+            <button className="btn btn-ghost" style={{ color: '#dc2626', marginRight: 'auto' }} onClick={async () => {
+              if (!window.confirm('Excluir esta tratativa? Esta ação não pode ser desfeita.')) return;
+              localStorage.removeItem('crm_rascunho');
+              await onDelete(modal.id);
+              onClose();
+            }}>🗑️ Excluir</button>
+          )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
         </div>
