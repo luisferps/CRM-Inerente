@@ -186,16 +186,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   });
 
   const numericasOpc = ['preco', 'quartos', 'vagas', 'area'];
-  const opcoes = useMemo(() => {
-    const o = {};
-    COLS.forEach(col => {
-      let vals = [...new Set(leads.map(l => (l[col.key] == null ? '' : String(l[col.key]))).filter(v => v !== ''))];
-      if (numericasOpc.includes(col.key)) vals.sort((a, b) => (parseNum(a) || 0) - (parseNum(b) || 0));
-      else vals.sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
-      o[col.key] = vals;
-    });
-    return o;
-  }, [leads]);
+  // (opcoes dos filtros sao montadas mais abaixo, a partir do que esta na tela)
 
   const cont = useMemo(() => {
     const c = { '': 0, fila: 0, enviado: 0, qualificando: 0, respondido: 0, descartado: 0, optout: 0, corretor: 0, expirado: 0 };
@@ -222,7 +213,8 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     return true;
   }
 
-  const filtrados = useMemo(() => {
+  // o que está "na tela" antes dos filtros de coluna: passa a view + a busca
+  const baseTela = useMemo(() => {
     const bq = busca.trim().toLowerCase();
     const bdig = bq.replace(/\D/g, '');
     return leads.filter(l => {
@@ -232,6 +224,36 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         const nome = String(l.nome || '').toLowerCase();
         if (!((bdig && tel.includes(bdig)) || nome.includes(bq))) return false;
       }
+      return true;
+    });
+  }, [leads, view, busca]);
+
+  // opções dos filtros = só os termos que aparecem na tela. Para cada coluna considera
+  // view + busca + os filtros das OUTRAS colunas (não o da própria, pra não sumir as opções dela).
+  const opcoes = useMemo(() => {
+    const o = {};
+    COLS.forEach(col => {
+      const src = baseTela.filter(l => {
+        for (const c of COLS) {
+          if (c.key === col.key) continue;
+          const ms = multiSel[c.key];
+          if (ms && ms.size) {
+            const v = l[c.key] == null ? '' : String(l[c.key]);
+            if (!ms.has(v)) return false;
+          }
+        }
+        return true;
+      });
+      let vals = [...new Set(src.map(l => (l[col.key] == null ? '' : String(l[col.key]))).filter(v => v !== ''))];
+      if (numericasOpc.includes(col.key)) vals.sort((a, b) => (parseNum(a) || 0) - (parseNum(b) || 0));
+      else vals.sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+      o[col.key] = vals;
+    });
+    return o;
+  }, [baseTela, multiSel]);
+
+  const filtrados = useMemo(() => {
+    return baseTela.filter(l => {
       for (const col of COLS) {
         const ms = multiSel[col.key];
         if (ms && ms.size) {
@@ -241,7 +263,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       }
       return true;
     });
-  }, [leads, view, multiSel, busca]);
+  }, [baseTela, multiSel]);
 
   const numericas = ['preco', 'quartos', 'vagas', 'area'];
   const ordenados = useMemo(() => {
