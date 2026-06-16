@@ -179,8 +179,8 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
   );
 }
 
-export default function FunilTab({ data, onOpenModal, onMoverCard }) {
-  const [aba, setAba] = useState('compra');
+export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onSetAbaFunil }) {
+  const aba = abaFunil || 'compra';
   const compras = data.filter(c => c.modalidade === 'Compra');
   const locacoes = data.filter(c => c.modalidade === 'Locação');
 
@@ -188,7 +188,7 @@ export default function FunilTab({ data, onOpenModal, onMoverCard }) {
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         {[['compra','🛒 Compra', compras.filter(c => c.ativo === 'S').length],['locacao','🔑 Locação', locacoes.filter(c => c.ativo === 'S').length]].map(([key, label, count]) => (
-          <button key={key} onClick={() => setAba(key)}
+          <button key={key} onClick={() => onSetAbaFunil && onSetAbaFunil(key)}
             style={{ padding: '8px 20px', borderRadius: 8, border: `2px solid ${aba === key ? (key === 'compra' ? '#059669' : '#7c3aed') : '#e5e7eb'}`,
               background: aba === key ? (key === 'compra' ? '#f0fdf4' : '#f5f3ff') : '#fff',
               color: aba === key ? (key === 'compra' ? '#059669' : '#7c3aed') : '#6b7280',
