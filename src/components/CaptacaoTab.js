@@ -132,6 +132,8 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [msgForm, setMsgForm] = useState({ msg1: '', msg2intro: '' });
   const [testeNum, setTesteNum] = useState('');
   const [painelAberto, setPainelAberto] = useState(false);
+  const [funil, setFunil] = useState(null);
+  const [funilDias, setFunilDias] = useState(30);
 
   // rolagem horizontal: barra de cima sincronizada com a tabela
   const scrollRef = useRef(null);
@@ -176,6 +178,12 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   }
 
   useEffect(() => { carregar(); carregarCampanha(); carregarTipos(); }, []);
+  useEffect(() => {
+    let vivo = true;
+    fetch(BACKEND + '/captacao/painel-dados?dias=' + funilDias)
+      .then(r => r.json()).then(d => { if (vivo && d && d.ok) setFunil(d); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [funilDias]);
 
   useEffect(() => {
     function medir() { const sc = scrollRef.current; if (sc) { const t = sc.querySelector('table'); if (t) setTableW(t.scrollWidth); } }
@@ -481,6 +489,64 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
 
   return (
     <div style={S.wrap}>
+      {/* ── FUNIL DA CAPTAÇÃO (métricas) ── */}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <strong style={{ fontSize: 15 }}>📊 Funil da captação</strong>
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+            {[7, 30, 90].map(dd => (
+              <button key={dd} onClick={() => setFunilDias(dd)}
+                style={{ padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (funilDias === dd ? '#7c3aed' : '#d1d5db'), background: funilDias === dd ? '#7c3aed' : '#fff', color: funilDias === dd ? '#fff' : '#374151' }}>
+                {dd} dias
+              </button>
+            ))}
+          </div>
+        </div>
+        {!funil ? (
+          <div style={{ fontSize: 13, color: '#9ca3af' }}>Carregando métricas…</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8 }}>
+              {[
+                ['Captados', funil.total, ''],
+                ['Abordados', funil.enviados, ''],
+                ['Responderam', funil.responderam, funil.taxaResposta + '% dos abordados'],
+                ['Repassados', funil.repassados, funil.taxaRepasse + '% dos que responderam'],
+                ['Descartados', funil.descartados, ''],
+                ['Opt-out', funil.optout, ''],
+                ['Na fila', funil.naFila, ''],
+                ['Tempo médio p/ repasse', funil.tempoMedioRepasseMin == null ? '—' : funil.tempoMedioRepasseMin + ' min', ''],
+              ].map((x, i) => (
+                <div key={i} style={{ background: '#f9fafb', border: '1px solid #eef0f3', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#1a1a2e' }}>{x[1]}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{x[0]}</div>
+                  {x[2] ? <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>{x[2]}</div> : null}
+                </div>
+              ))}
+            </div>
+            {funil.serieDias && funil.serieDias.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', marginBottom: 6 }}>POR DIA (roxo = captados · verde = repassados)</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {(() => {
+                    const mx = Math.max(1, ...funil.serieDias.map(s => s.captados));
+                    return funil.serieDias.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#6b7280' }}>
+                        <span style={{ width: 52, flex: 'none' }}>{s.dia.slice(8, 10)}/{s.dia.slice(5, 7)}</span>
+                        <span style={{ flex: 1, background: '#f1f3f6', borderRadius: 6, height: 16, position: 'relative', overflow: 'hidden' }}>
+                          <span style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: (Math.round(s.captados / mx * 100)) + '%', background: '#c4b5fd' }} />
+                          <span style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: (Math.round(s.repassados / mx * 100)) + '%', background: '#16a34a' }} />
+                        </span>
+                        <span style={{ width: 110, flex: 'none', textAlign: 'right', color: '#374151' }}>{s.captados} cap · {s.repassados} rep</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
       {/* ── PAINEL DE CAMPANHA ── */}
       <div style={S.cardCfg}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
