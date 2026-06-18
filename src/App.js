@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import CRMTab from './components/CRMTab';
 import FunilTab from './components/FunilTab';
 import VendasTab from './components/VendasTab';
+import SecretariaTab from './components/SecretariaTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
 import InativosTab from './components/InativosTab';
@@ -291,6 +292,7 @@ export default function App() {
     ['tratativas', 'Tratativas'],
     ['funil', 'Funil'],
     ['vendas', '🏠 Vendas'],
+    ['secretaria', '📊 Secretaria', 'gerente'],
     ['dash', 'Dashboard'],
     ['recebidos', '💰 Recebidos'],
     ['inativos', 'Finalizadas'],
@@ -364,6 +366,7 @@ export default function App() {
             />}
             {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} onDelete={podeEditar ? handleDelete : null} onDevolverCaptacao={podeEditar ? handleDevolverCaptacao : null} />}
+            {tab === 'secretaria' && <SecretariaTab />}
             {tab === 'dash' && <DashboardTab data={data} />}
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N' && !c.captado)} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
