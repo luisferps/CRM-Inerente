@@ -119,6 +119,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const jaCaptadoRef = useRef(false);
   const timerNome = useRef(null);
   const timer = useRef(null);
+  const fundoMouseDown = useRef(false); // true só quando o clique começa no fundo escuro (não em texto selecionado)
 
   // Buscar motivos já usados no banco
   useEffect(() => {
@@ -479,7 +480,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const waHref = waDigits ? `https://wa.me/${internacional ? waDigits : (waDigits.startsWith('55') ? waDigits : '55' + waDigits)}` : null;
 
   return (
-    <div className="modal-overlay" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>
+    <div className="modal-overlay"
+      onMouseDown={e => { fundoMouseDown.current = e.target === e.currentTarget; }}
+      onClick={e => { if (e.target === e.currentTarget && fundoMouseDown.current) { localStorage.removeItem('crm_rascunho'); onClose(); } }}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{titulo}</span>
