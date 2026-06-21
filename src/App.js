@@ -8,7 +8,6 @@ import SecretariaTab from './components/SecretariaTab';
 import DashboardTab from './components/DashboardTab';
 import ConfigTab from './components/ConfigTab';
 import InativosTab from './components/InativosTab';
-import UsuariosTab from './components/UsuariosTab';
 import LoginScreen from './components/LoginScreen';
 import ClienteModal from './components/ClienteModal';
 import PerfilTab from './components/PerfilTab';
@@ -302,7 +301,6 @@ export default function App() {
     ['resumo', '📋 Demandas'],
     ['clientes', '👤 Clientes'],
     ['captacao', '📍 Captação', 'diretor'],
-    ['usuarios', '👥 Usuários', 'diretor'],
     ['importacao', '📥 Importar', 'diretor'],
     ['config', '⚙️ Config'],
     ['backup', '💾 Backup', 'diretor'],
@@ -375,7 +373,6 @@ export default function App() {
             {tab === 'recebidos' && <RecebidosTab data={data} onOpenModal={podeEditar ? setModal : null} onDevolver={podeEditar ? handleDevolver : null} />}
             {tab === 'inativos' && <InativosTab data={data.filter(c => c.ativo === 'N' && !c.captado)} onOpenModal={podeEditar ? setModal : null} onDelete={podeEditar ? handleDelete : null} />}
             {tab === 'resumo' && <ResumoDemandasTab data={data} darkMode={darkMode} perfil={perfil} onToggleParceria={(id, val) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, solicitar_parceria: val } : neg))} />}
-            {tab === 'usuarios' && isGerente && <UsuariosTab />}
             {tab === 'importacao' && (isGerente || isCorretor) && <ImportacaoTab perfil={perfil} darkMode={darkMode} onImportSuccess={load} />}
             {tab === 'config' && <ConfigTab perfil={perfil} />}
             {tab === 'backup' && isGerente && <BackupTab />}
