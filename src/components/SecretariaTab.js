@@ -21,7 +21,6 @@ export default function SecretariaTab() {
     if (error) setErro(error.message); else setVendas(data || []);
     setLoading(false);
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { carregar(); }, []);
 
   const anos = useMemo(() => [...new Set(vendas.map(v => String(v.data).slice(0, 4)))].sort().reverse(), [vendas]);
