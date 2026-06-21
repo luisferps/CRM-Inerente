@@ -174,10 +174,11 @@ export default function App() {
   }, [clientes, negociacoes]);
 
   // Permissões baseadas nas funções
+  const isDiretor = perfil?.is_diretor;
   const isGerente = perfil?.is_gerente;
   const isCorretor = perfil?.is_corretor;
   const isEscritorio = perfil?.is_escritorio;
-  const podeEditar = isGerente || isCorretor; // escritório só visualiza
+  const podeEditar = isDiretor || isGerente || isCorretor; // escritório só visualiza
 
   async function handleSave(form) {
     if (!podeEditar) return alert('Sem permissão para editar.');
@@ -300,23 +301,24 @@ export default function App() {
     ['inativos', 'Finalizadas'],
     ['resumo', '📋 Demandas'],
     ['clientes', '👤 Clientes'],
-    ['captacao', '📍 Captação', 'gerente'],
-    ['usuarios', '👥 Usuários', 'gerente'],
-    ['importacao', '📥 Importar', 'gerente_corretor'],
+    ['captacao', '📍 Captação', 'diretor'],
+    ['usuarios', '👥 Usuários', 'diretor'],
+    ['importacao', '📥 Importar', 'diretor'],
     ['config', '⚙️ Config'],
-    ['backup', '💾 Backup', 'gerente'],
+    ['backup', '💾 Backup', 'diretor'],
     ['perfil', '👤 Perfil'],
   ];
 
   const tabs = todasAbas.filter(([, , acesso]) => {
     if (!acesso) return true;
-    if (acesso === 'gerente') return isGerente;
-    if (acesso === 'gerente_corretor') return isGerente || isCorretor;
+    if (acesso === 'diretor') return isDiretor;
+    if (acesso === 'gerente') return isDiretor || isGerente;
+    if (acesso === 'gerente_corretor') return isDiretor || isGerente || isCorretor;
     return true;
   });
 
-  const funcaoLabel = isGerente ? 'Gerente' : isCorretor ? 'Corretor' : isEscritorio ? 'Escritório' : '';
-  const funcaoCor = isGerente ? '#2563eb' : isCorretor ? '#059669' : '#7c3aed';
+  const funcaoLabel = isDiretor ? 'Diretor' : isGerente ? 'Gerente' : isCorretor ? 'Corretor' : isEscritorio ? 'Escritório' : '';
+  const funcaoCor = isDiretor ? '#dc2626' : isGerente ? '#2563eb' : isCorretor ? '#059669' : '#7c3aed';
 
   return (
     <div className="app-shell">
