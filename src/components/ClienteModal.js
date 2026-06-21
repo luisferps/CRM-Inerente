@@ -117,6 +117,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [motivoAberto, setMotivoAberto] = useState(false);
   const [organizandoIA, setOrganizandoIA] = useState(false);
   const jaCaptadoRef = useRef(false);
+  const [transfAberto, setTransfAberto] = useState(false);
+  const [transfDestino, setTransfDestino] = useState('');
+  const [transfObs, setTransfObs] = useState('');
+  const [transfMsg, setTransfMsg] = useState('');
+  const [transfEnviando, setTransfEnviando] = useState(false);
   const timerNome = useRef(null);
   const timer = useRef(null);
   const fundoMouseDown = useRef(false); // true só quando o clique começa no fundo escuro (não em texto selecionado)
@@ -389,6 +394,32 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     } catch (e) {
       alert('Erro ao devolver: ' + (e.message || e));
       setSaving(false);
+    }
+  }
+
+  async function solicitarTransferencia() {
+    setTransfMsg('');
+    if (!transfDestino) { setTransfMsg('Escolha o corretor de destino.'); return; }
+    if (!modal || !modal.negociacao_id) { setTransfMsg('Salve a tratativa antes de transferir.'); return; }
+    setTransfEnviando(true);
+    try {
+      const cliente_id = modal.cliente_real_id || modal.cliente?.id || form.cliente_real_id || null;
+      const { error } = await supabase.from('transferencias').insert({
+        cliente_id,
+        negociacao_id: modal.negociacao_id,
+        de_corretor_id: form.corretor_id || perfil.id,
+        para_corretor_id: transfDestino,
+        status: 'pendente_origem',
+        observacao: transfObs || null,
+      });
+      if (error) { setTransfMsg('Erro: ' + error.message); setTransfEnviando(false); return; }
+      setTransfMsg('✅ Solicitação enviada! Aguarda aprovação do gerente de origem e do destino.');
+      setTransfEnviando(false);
+      setTransfDestino(''); setTransfObs('');
+      setTimeout(() => { setTransfAberto(false); setTransfMsg(''); }, 2500);
+    } catch (e) {
+      setTransfMsg('Erro: ' + (e.message || e));
+      setTransfEnviando(false);
     }
   }
 
@@ -856,12 +887,42 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               {String(form.origem_tratativa || '').toUpperCase() === 'OLX' && (
                 <button className="btn btn-ghost" style={{ color: '#b45309' }} onClick={devolverParaCaptacao} disabled={saving}>↩ Devolver pra Captação</button>
               )}
+              {(form.corretor_id === perfil?.id || perfil?.is_diretor || perfil?.is_gerente) && (
+                <button className="btn btn-ghost" style={{ color: '#7c3aed' }} onClick={() => setTransfAberto(true)}>🔄 Transferir cliente</button>
+              )}
             </div>
           )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
         </div>
       </div>
+      {transfAberto && (
+        <div onClick={() => setTransfAberto(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 'min(440px, 92vw)', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 700, margin: '0 0 4px' }}>🔄 Transferir cliente</h3>
+            <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 16px' }}>
+              A transferência precisa de dupla aprovação: o gerente de origem libera a saída e o destino (ou o gerente dele) aceita.
+            </p>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Transferir para</label>
+            <select value={transfDestino} onChange={e => setTransfDestino(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, marginBottom: 14, background: '#fff' }}>
+              <option value="">— selecione o corretor —</option>
+              {corretores.filter(c => c.id && c.id !== (form.corretor_id || perfil?.id)).map(c => (
+                <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </select>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Observação (opcional)</label>
+            <textarea value={transfObs} onChange={e => setTransfObs(e.target.value)} rows={2}
+              placeholder="Motivo da transferência…"
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, marginBottom: 14, resize: 'vertical', boxSizing: 'border-box' }} />
+            {transfMsg && <div style={{ fontSize: 13, padding: '8px 12px', borderRadius: 8, marginBottom: 12, background: transfMsg.startsWith('✅') ? '#d1fae5' : '#fee2e2', color: transfMsg.startsWith('✅') ? '#059669' : '#dc2626' }}>{transfMsg}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setTransfAberto(false); setTransfMsg(''); }} style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={solicitarTransferencia} disabled={transfEnviando} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{transfEnviando ? 'Enviando…' : 'Solicitar transferência'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
