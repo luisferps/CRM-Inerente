@@ -207,7 +207,9 @@ export default function App() {
         const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: editClienteId });
         if (e2) return alert('Erro ao inserir tratativa: ' + e2.message);
       } else {
-        const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clienteData).select().single();
+        // O cliente novo herda o dono (corretor_id) da negociação, para o RLS saber de quem ele é.
+        const clientePayload = { ...clienteData, corretor_id: negociacaoData.corretor_id || perfil.id };
+        const { data: novoCliente, error: e1 } = await supabase.from('clientes').insert(clientePayload).select().single();
         if (e1) return alert('Erro ao inserir cliente: ' + e1.message);
         const { error: e2 } = await supabase.from('negociacoes').insert({ ...negociacaoData, cliente_id: novoCliente.id });
         if (e2) return alert('Erro ao inserir tratativa: ' + e2.message);
