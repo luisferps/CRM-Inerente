@@ -14,6 +14,7 @@ import PerfilTab from './components/PerfilTab';
 import BackupTab from './components/BackupTab';
 import ImportacaoTab from './components/ImportacaoTab';
 import ResumoDemandasTab from './components/ResumoDemandasTab';
+import TransferenciasTab from './components/TransferenciasTab';
 import RecebidosTab from './components/RecebidosTab';
 import ClientesTab from './components/ClientesTab';
 import CaptacaoTab from './components/CaptacaoTab';
@@ -316,6 +317,7 @@ export default function App() {
     ['recebidos', '💰 Recebidos'],
     ['inativos', 'Finalizadas'],
     ['resumo', '📋 Demandas'],
+    ['transferencias', '🔄 Transferências'],
     ['clientes', '👤 Clientes'],
     ['captacao', '📍 Captação', 'diretor'],
     ['importacao', '📥 Importar', 'diretor'],
@@ -394,6 +396,7 @@ export default function App() {
             {tab === 'config' && <ConfigTab perfil={perfil} />}
             {tab === 'backup' && isGerente && <BackupTab />}
             {tab === 'perfil' && <PerfilTab perfil={perfil} onUpdate={setPerfil} />}
+            {tab === 'transferencias' && <TransferenciasTab perfil={perfil} />}
           </>
         )}
       </main>
