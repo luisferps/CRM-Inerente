@@ -98,25 +98,42 @@ export default function App() {
   }
 
   useEffect(() => {
-    // ── Mini-SSO: se veio ?sso=token do painel, faz login automático antes de tudo ──
+    // ── Mini-SSO: entra com a conta REAL do usuário (JWT do Portal) ──
+    // 1) Se veio ?jwt= e ?refresh= do Portal, assume a sessão Supabase do próprio usuário
+    //    (setSession) — assim o RLS por usuário funciona (cada um vê o que lhe cabe).
+    // 2) Senão, cai no método antigo (?sso= → login/senha) como rede de segurança.
     async function tentarSSO() {
       const params = new URLSearchParams(window.location.search);
+      const jwt = params.get('jwt');
+      const refresh = params.get('refresh');
       const token = params.get('sso');
-      if (!token) return false;
-      // limpa o token da URL na hora (não fica no histórico)
+      if (!jwt && !token) return false;
+      // limpa os tokens da URL na hora (não ficam no histórico)
       const urlLimpa = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', urlLimpa);
-      try {
-        const resp = await fetch('https://agentes-de-whatsapp-production.up.railway.app/painel/sso-resgatar', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, sistema: 'crm' })
-        });
-        const data = await resp.json();
-        if (data && data.ok && data.login && data.senha) {
-          const { error } = await supabase.auth.signInWithPassword({ email: data.login, password: data.senha });
-          if (!error) return true; // logou — o onAuthStateChange cuida do resto
-        }
-      } catch (e) { /* falha silenciosa: cai no login normal */ }
+
+      // 1) Caminho novo: JWT direto do Supabase (conta do próprio usuário)
+      if (jwt && refresh) {
+        try {
+          const { error } = await supabase.auth.setSession({ access_token: jwt, refresh_token: refresh });
+          if (!error) return true;
+        } catch (e) { /* tenta o fallback abaixo */ }
+      }
+
+      // 2) Fallback: método antigo (login/senha compartilhada guardada no backend)
+      if (token) {
+        try {
+          const resp = await fetch('https://agentes-de-whatsapp-production.up.railway.app/painel/sso-resgatar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, sistema: 'crm' })
+          });
+          const data = await resp.json();
+          if (data && data.ok && data.login && data.senha) {
+            const { error } = await supabase.auth.signInWithPassword({ email: data.login, password: data.senha });
+            if (!error) return true;
+          }
+        } catch (e) { /* falha silenciosa: cai no login normal */ }
+      }
       return false;
     }
 
