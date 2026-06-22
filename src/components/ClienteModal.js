@@ -1037,8 +1037,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <select value={transfDestino} onChange={e => setTransfDestino(e.target.value)}
               style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, marginBottom: 14, background: '#fff' }}>
               <option value="">— selecione o corretor —</option>
-              {corretores.filter(c => c.id && c.id !== (form.corretor_id || perfil?.id)).map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
+              {corretores.filter(c => c.supabaseId && c.supabaseId !== (form.corretor_id || perfil?.id)).map(c => (
+                <option key={c.supabaseId} value={c.supabaseId}>{c.nome}</option>
               ))}
             </select>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Observação (opcional)</label>
