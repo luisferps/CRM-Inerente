@@ -118,7 +118,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [organizandoIA, setOrganizandoIA] = useState(false);
   const [conversaComprador, setConversaComprador] = useState('');
   const [organizandoComprador, setOrganizandoComprador] = useState(false);
+  // Texto que o corretor ACRESCENTA às observações internas (além do trecho protegido do bot).
+  const [detalhesAdicional, setDetalhesAdicional] = useState('');
   const jaCaptadoRef = useRef(false);
+  // Guarda o texto que JÁ estava nas Observações Internas ao abrir a tratativa (ex.: o que o
+  // bot/SDR gravou na captação). Esse trecho é PROTEGIDO: o corretor pode acrescentar, mas nunca apagar.
+  const detalhesBloqueadoRef = useRef('');
   const [transfAberto, setTransfAberto] = useState(false);
   const [transfDestino, setTransfDestino] = useState('');
   const [transfObs, setTransfObs] = useState('');
@@ -202,6 +207,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     if (isEdit) {
       setForm({ ...emptyForm, ...modal });
       jaCaptadoRef.current = !!modal.captado;
+      // o que já estava nas observações internas vira o trecho PROTEGIDO (não pode ser apagado)
+      detalhesBloqueadoRef.current = (modal.detalhes || '').trim();
+      setDetalhesAdicional('');
       setValorDisplay(modal.valor !== '' && modal.valor !== null && modal.valor !== undefined
         ? Number(modal.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
       setInternacional(isIntl(modal.telefone || ''));
@@ -408,10 +416,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           em_condominio: typeof d.em_condominio === 'boolean' ? d.em_condominio : f.em_condominio,
           valor: valorNum > 0 ? valorNum : f.valor,
           localizacao: (d.localizacao && String(d.localizacao).trim()) ? d.localizacao : f.localizacao,
-          detalhes: (d.detalhes && String(d.detalhes).trim())
-            ? (f.detalhes ? (f.detalhes + '\n' + d.detalhes) : d.detalhes)
-            : f.detalhes,
         }));
+        // a IA acrescenta nas observações ADICIONAIS (nunca toca no trecho protegido do bot)
+        if (d.detalhes && String(d.detalhes).trim()) {
+          setDetalhesAdicional(prev => prev ? (prev + '\n' + d.detalhes) : d.detalhes);
+        }
         if (valorNum > 0) setValorDisplay(valorNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         const quartosTxt = (d.quartos && String(d.quartos).trim()) ? ('\nQuartos desejados: ' + d.quartos) : '';
         alert('✓ Campos preenchidos pela IA a partir da conversa. Confira e ajuste o que precisar.' + quartosTxt);
@@ -538,7 +547,19 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     }
 
     const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
-    await onSave({ ...form, imovel: imovelStr, cliente_real_id: idVinculado });
+    // Observações internas: o trecho PROTEGIDO (do bot/captação) sempre é preservado no topo;
+    // o que o corretor acrescentou entra embaixo. Assim nada que o bot gravou se perde.
+    const protegido = (detalhesBloqueadoRef.current || '').trim();
+    const adicional = (detalhesAdicional || '').trim();
+    let detalhesFinal;
+    if (protegido) {
+      detalhesFinal = adicional ? (protegido + '\n' + adicional) : protegido;
+    } else {
+      // tratativa sem trecho protegido (ex.: criada manualmente): usa o que estiver no campo + adicional
+      const base = (form.detalhes || '').trim();
+      detalhesFinal = [base, adicional].filter(Boolean).join('\n');
+    }
+    await onSave({ ...form, detalhes: detalhesFinal, imovel: imovelStr, cliente_real_id: idVinculado });
     setSaving(false);
   }
 
@@ -869,9 +890,25 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <label className="form-label">
               Observações Internas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
             </label>
-            <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
-              placeholder="Anotações internas, perfil do cliente, situação financeira..."
-              style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+            {detalhesBloqueadoRef.current ? (
+              <>
+                <div style={{ position: 'relative', marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', display: 'inline-block', padding: '2px 7px', borderRadius: '6px 6px 0 0', border: '1px solid #fde68a', borderBottom: 'none' }}>
+                    🔒 Registrado na captação — não pode ser apagado
+                  </div>
+                  <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: '#374151', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '0 6px 6px 6px', padding: '8px 10px', maxHeight: 140, overflowY: 'auto' }}>
+                    {detalhesBloqueadoRef.current}
+                  </div>
+                </div>
+                <textarea rows={2} value={detalhesAdicional} onChange={e => setDetalhesAdicional(e.target.value)}
+                  placeholder="Acrescentar mais observações internas... (o texto acima fica preservado)"
+                  style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+              </>
+            ) : (
+              <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
+                placeholder="Anotações internas, perfil do cliente, situação financeira..."
+                style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+            )}
           </div>
 
           <div className="field-full">
