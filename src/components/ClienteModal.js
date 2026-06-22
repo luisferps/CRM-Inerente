@@ -335,12 +335,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     if (!form.nome.trim()) errs.nome = true;
     if (!validarTel(form.telefone, internacional)) errs.telefone = true;
     if (!form.modalidade) errs.modalidade = true;
+    // Etapa inicial: lead recém-chegado (ex.: vindo do SDR / Canal Pro / Chaves na Mão) que ainda
+    // está só em "Tratativa" e não avançou no funil. Nesse momento o corretor ainda nem conversou
+    // com o lead, então não faz sentido exigir tipo de imóvel, localização e valor — esses campos
+    // só passam a ser obrigatórios quando a tratativa avança para Pesquisa ou além.
+    const etapasMarcadas = ETAPAS_FUNIL_COMPLETO.filter(e => form[e]);
+    const soNaTratativa = etapasMarcadas.length === 0 || (etapasMarcadas.length === 1 && form.tratativa);
     if (!isVenda) {
-      if (!form.tipo_id) errs.tipo_id = true;
+      if (!soNaTratativa && !form.tipo_id) errs.tipo_id = true;
       if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
     }
-    if (!form.localizacao.trim()) errs.localizacao = true;
-    if (form.valor === '' || form.valor === null || form.valor === undefined) errs.valor = true;
+    if (!soNaTratativa && !form.localizacao.trim()) errs.localizacao = true;
+    if (!soNaTratativa && (form.valor === '' || form.valor === null || form.valor === undefined)) errs.valor = true;
     return errs;
   }
 
