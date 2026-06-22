@@ -164,6 +164,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         pausaMin: Math.round(c.pausaMin / 60), pausaMax: Math.round(c.pausaMax / 60),
         longaMin: Math.round(c.longaMin / 60), longaMax: Math.round(c.longaMax / 60),
         longaCada: c.longaCada, horaIni: c.horaIni, horaFim: c.horaFim, instancia: c.instancia || '', expiraHoras: c.expiraHoras || 48,
+        diasSemana: Array.isArray(c.diasSemana) ? c.diasSemana : [1, 2, 3, 4, 5, 6],
       });
       setMsgForm({ msg1: c.msg1 || '', msg2intro: c.msg2intro || '' });
     } catch (e) { /* backend offline */ }
@@ -433,6 +434,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       maxDia: Number(form.maxDia), pausaMin: Number(form.pausaMin) * 60, pausaMax: Number(form.pausaMax) * 60,
       longaMin: Number(form.longaMin) * 60, longaMax: Number(form.longaMax) * 60,
       longaCada: Number(form.longaCada), horaIni: Number(form.horaIni), horaFim: Number(form.horaFim), instancia: form.instancia, expiraHoras: Number(form.expiraHoras),
+      diasSemana: Array.isArray(form.diasSemana) ? form.diasSemana : [1, 2, 3, 4, 5, 6],
     });
     alert('Antiban salvo.');
   }
@@ -467,6 +469,18 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     chip: (c) => ({ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, color: '#fff', background: c }),
   };
   const setF = (k, v) => setForm(o => ({ ...o, [k]: v }));
+
+  // Dias da semana (0=Dom ... 6=Sáb) para o seletor do Antiban.
+  const DIAS_LABEL = [['Dom', 0], ['Seg', 1], ['Ter', 2], ['Qua', 3], ['Qui', 4], ['Sex', 5], ['Sáb', 6]];
+  function toggleDia(n) {
+    setForm(o => {
+      const atual = Array.isArray(o.diasSemana) ? o.diasSemana.slice() : [1, 2, 3, 4, 5, 6];
+      const i = atual.indexOf(n);
+      if (i >= 0) atual.splice(i, 1); else atual.push(n);
+      atual.sort((a, b) => a - b);
+      return { ...o, diasSemana: atual };
+    });
+  }
 
   function celulaFiltro(col) {
     const cur = multiSel[col.key] || new Set();
@@ -574,6 +588,29 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
               <label style={S.lab}>Sem resposta vira descarte em (h) <input style={{ ...S.inpN, width: 50 }} type="number" value={form.expiraHoras} onChange={e => setF('expiraHoras', e.target.value)} /></label>
               <label style={S.lab}>Instância de envio <input style={{ ...S.inp, width: 160, display: 'inline-block' }} value={form.instancia || ''} onChange={e => setF('instancia', e.target.value)} placeholder="vazio = SDR/imobiliária" /></label>
               <button style={{ ...S.btnm, background: '#2563eb', color: '#fff' }} onClick={salvarAntiban}>💾 salvar antiban</button>
+            </div>
+            <div style={{ ...S.cfgRow, marginTop: 2, padding: '8px 10px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 13 }}>🗓️ Dias de envio</span>
+              <span style={{ ...S.lab, marginRight: 4 }}>marque os dias em que pode disparar:</span>
+              {DIAS_LABEL.map(([rotulo, n]) => {
+                const marcado = Array.isArray(form.diasSemana) && form.diasSemana.indexOf(n) >= 0;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => toggleDia(n)}
+                    style={{
+                      padding: '5px 11px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      border: '1px solid ' + (marcado ? '#059669' : '#d1d5db'),
+                      background: marcado ? '#059669' : '#fff',
+                      color: marcado ? '#fff' : '#9ca3af',
+                    }}
+                  >
+                    {rotulo}
+                  </button>
+                );
+              })}
+              <span style={{ ...S.lab, marginLeft: 4 }}>(clique em "💾 salvar antiban" para aplicar)</span>
             </div>
             <div style={{ marginTop: 10 }}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>Mensagem 1 (texto da abordagem)</div>
