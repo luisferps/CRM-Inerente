@@ -116,6 +116,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [motivos, setMotivos] = useState([]);
   const [motivoAberto, setMotivoAberto] = useState(false);
   const [organizandoIA, setOrganizandoIA] = useState(false);
+  const [conversaComprador, setConversaComprador] = useState('');
+  const [organizandoComprador, setOrganizandoComprador] = useState(false);
   const jaCaptadoRef = useRef(false);
   const [transfAberto, setTransfAberto] = useState(false);
   const [transfDestino, setTransfDestino] = useState('');
@@ -378,6 +380,44 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       } else alert('Não consegui organizar: ' + (j.error || 'erro'));
     } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
     finally { setOrganizandoIA(false); }
+  }
+
+  // IA do COMPRADOR: lê a conversa colada do WhatsApp e preenche os campos da tratativa
+  // (modalidade, tipo, valor/orçamento, localização desejada, quartos e observações).
+  async function organizarConversaComprador() {
+    const txt = (conversaComprador || '').trim();
+    if (!txt) { alert('Cole a conversa do WhatsApp com o cliente antes de organizar com a IA.'); return; }
+    setOrganizandoComprador(true);
+    try {
+      const r = await fetch(BACKEND + '/crm/organizar-conversa', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversa: txt, tipos: tipos || [] })
+      });
+      const j = await r.json();
+      if (j.ok && j.dados) {
+        const d = j.dados;
+        const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const tEnc = d.tipo ? (tipos.find(t => norm(t.nome) === norm(d.tipo))
+          || tipos.find(t => norm(t.nome).startsWith(norm(d.tipo)) || norm(d.tipo).startsWith(norm(t.nome)))) : null;
+        const valorNum = Number(String(d.valor == null ? '' : d.valor).replace(/[^\d]/g, ''));
+        const modValida = ['Compra', 'Locação', 'Venda'].includes(d.modalidade) ? d.modalidade
+          : (norm(d.modalidade) === 'locacao' ? 'Locação' : (norm(d.modalidade) === 'compra' ? 'Compra' : ''));
+        setForm(f => Object.assign({}, f, {
+          modalidade: modValida || f.modalidade,
+          tipo_id: tEnc ? tEnc.id : f.tipo_id,
+          em_condominio: typeof d.em_condominio === 'boolean' ? d.em_condominio : f.em_condominio,
+          valor: valorNum > 0 ? valorNum : f.valor,
+          localizacao: (d.localizacao && String(d.localizacao).trim()) ? d.localizacao : f.localizacao,
+          detalhes: (d.detalhes && String(d.detalhes).trim())
+            ? (f.detalhes ? (f.detalhes + '\n' + d.detalhes) : d.detalhes)
+            : f.detalhes,
+        }));
+        if (valorNum > 0) setValorDisplay(valorNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        const quartosTxt = (d.quartos && String(d.quartos).trim()) ? ('\nQuartos desejados: ' + d.quartos) : '';
+        alert('✓ Campos preenchidos pela IA a partir da conversa. Confira e ajuste o que precisar.' + quartosTxt);
+      } else alert('Não consegui organizar: ' + (j.error || 'erro'));
+    } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
+    finally { setOrganizandoComprador(false); }
   }
 
   // Devolve o lead para a Captação (OLX) como "fora do perfil" e remove a tratativa.
@@ -695,6 +735,26 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 )}
                 <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
                   A IA preenche <b>Tipo, Valor e Localização</b> abaixo — confira e ajuste. Ao marcar <b>Captado</b>, o imóvel vai pro Estoque (oculto) com esses detalhes.
+                </p>
+              </div>
+            )}
+            {!isVenda && (
+              <div style={{ marginTop: 12, padding: 12, border: '1px solid #bfdbfe', borderRadius: 8, background: '#eff6ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>🤖 Colar conversa do cliente → IA preenche os campos</span>
+                  <button type="button" onClick={organizarConversaComprador} disabled={organizandoComprador}
+                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoComprador ? 'default' : 'pointer',
+                      border: '1px solid #2563eb', background: organizandoComprador ? '#dbeafe' : '#2563eb', color: organizandoComprador ? '#2563eb' : '#fff' }}>
+                    {organizandoComprador ? '🤖 organizando…' : '🤖 Organizar com IA'}
+                  </button>
+                </div>
+                <textarea
+                  value={conversaComprador}
+                  onChange={e => setConversaComprador(e.target.value)}
+                  placeholder="Cole aqui a conversa do WhatsApp com o cliente (o que ele procura) e clique em Organizar com IA. Ela preenche Modalidade, Tipo, Valor (orçamento) e Localização abaixo."
+                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #bfdbfe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
+                  A IA lê o que o cliente <b>procura</b> e preenche <b>Modalidade, Tipo, Valor e Localização</b> — confira e ajuste o que precisar.
                 </p>
               </div>
             )}
