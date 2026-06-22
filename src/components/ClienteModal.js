@@ -151,9 +151,16 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     (async () => {
       const mapa = new Map();
       try {
-        const { data } = await supabase.from('perfis').select('id, nome, telefone').eq('role', 'corretor').order('nome');
+        // A tabela perfis usa campos booleanos de papel (is_corretor, is_gerente, is_diretor),
+        // não um campo "role" de texto. Listamos todos que atendem cliente (corretor/gerente/diretor).
+        const { data } = await supabase
+          .from('perfis')
+          .select('id, nome, telefone, is_corretor, is_gerente, is_diretor, aprovado')
+          .or('is_corretor.eq.true,is_gerente.eq.true,is_diretor.eq.true')
+          .order('nome');
         (data || []).forEach(p => {
           if (!p.nome) return;
+          if (p.aprovado === false) return; // não lista perfil não aprovado
           mapa.set(normNome(p.nome), { nome: p.nome, telefone: p.telefone || '', supabaseId: p.id, firebaseId: null });
         });
       } catch (e) { /* segue só com o Estoque */ }
@@ -410,12 +417,32 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         const valorNum = Number(String(d.valor == null ? '' : d.valor).replace(/[^\d]/g, ''));
         const modValida = ['Compra', 'Locação', 'Venda'].includes(d.modalidade) ? d.modalidade
           : (norm(d.modalidade) === 'locacao' ? 'Locação' : (norm(d.modalidade) === 'compra' ? 'Compra' : ''));
+        // Nome: a IA preenche se estiver vazio OU se o atual for claramente um placeholder
+        // ("Lead 6299...", "Proprietário 12"). Se o atual já parece um nome real e a IA sugere
+        // OUTRO diferente, pergunta antes de trocar (evita sobrescrever por engano).
+        const nomeIA = (d.nome && String(d.nome).trim()) ? String(d.nome).trim() : '';
+        const nomeAtual = (form.nome || '').trim();
+        const ehPlaceholder = !nomeAtual || /^(lead|propriet[áa]rio|cliente|contato)\s*\d*$/i.test(nomeAtual);
+        let nomeFinal = nomeAtual;
+        if (nomeIA) {
+          if (ehPlaceholder) {
+            nomeFinal = nomeIA;
+          } else if (norm(nomeIA) !== norm(nomeAtual)) {
+            if (window.confirm('A IA identificou o nome "' + nomeIA + '", diferente do atual "' + nomeAtual + '".\n\nSubstituir pelo nome identificado na conversa?')) {
+              nomeFinal = nomeIA;
+            }
+          }
+        }
         setForm(f => Object.assign({}, f, {
+          nome: nomeFinal,
+          email: (d.email && String(d.email).trim() && !(f.email || '').trim()) ? String(d.email).trim() : f.email,
+          telefone2: (d.telefone2 && String(d.telefone2).trim() && !(f.telefone2 || '').trim()) ? String(d.telefone2).trim() : f.telefone2,
           modalidade: modValida || f.modalidade,
           tipo_id: tEnc ? tEnc.id : f.tipo_id,
           em_condominio: typeof d.em_condominio === 'boolean' ? d.em_condominio : f.em_condominio,
           valor: valorNum > 0 ? valorNum : f.valor,
           localizacao: (d.localizacao && String(d.localizacao).trim()) ? d.localizacao : f.localizacao,
+          proxima_acao: (d.proxima_acao && String(d.proxima_acao).trim() && !(f.proxima_acao || '').trim()) ? String(d.proxima_acao).trim() : f.proxima_acao,
         }));
         // a IA acrescenta nas observações ADICIONAIS (nunca toca no trecho protegido do bot)
         if (d.detalhes && String(d.detalhes).trim()) {
