@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 import DetailPanel from './DetailPanel';
+import BotaoFecharContrato from './BotaoFecharContrato';
 
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL.length - 1; i >= 0; i--) {
@@ -98,7 +99,7 @@ function FunilInline({ cliente, onToggleFunil, podeEditar }) {
   );
 }
 
-export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, filtroClienteNome, onLimparFiltro }) {
+export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, podeContrato, filtroClienteNome, onLimparFiltro }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
   const [filterModalidade, setFilterModalidade] = useState([]);
@@ -294,7 +295,8 @@ export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggl
                         )}
                       </td>
                       <td onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <BotaoFecharContrato neg={c} podeContrato={podeContrato} variant="row" />
                           {onOpenModal && <button className="btn btn-ghost btn-sm" onClick={() => onOpenModal(c)}>Editar</button>}
                           {onDelete && <button className="btn btn-danger btn-sm btn-icon" onClick={() => setConfirmDelete(c.id)}>✕</button>}
                           {c.telefone && (
