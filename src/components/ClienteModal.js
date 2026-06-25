@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
+import BotaoFecharContrato from './BotaoFecharContrato';
 import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
 
 const hoje = new Date().toISOString().slice(0, 10);
@@ -1021,6 +1022,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 <button className="btn btn-ghost" style={{ color: '#7c3aed' }} onClick={() => setTransfAberto(true)}>🔄 Transferir cliente</button>
               )}
             </div>
+          )}
+          {modal && modal.id && (
+            <BotaoFecharContrato
+              neg={{ id: modal.id, nome: form.nome, telefone: form.telefone, email: form.email, imovel: form.imovel, valor: form.valor, modalidade: form.modalidade, corretor: form.corretor, contrato: form.contrato }}
+              podeContrato={!!(perfil?.is_diretor || perfil?.is_gerente)}
+              variant="modal" />
           )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
