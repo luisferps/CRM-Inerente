@@ -56,7 +56,8 @@ export default function BotaoFecharContrato({ neg, podeContrato, variant = 'row'
   function rotuloOferta(o) {
     const local = [o.condominio, o.bairro, o.cidade].filter(Boolean).join(', ');
     const preco = o.preco ? ' — R$ ' + Number(o.preco).toLocaleString('pt-BR') : '';
-    return [o.titulo, local].filter(Boolean).join(' · ') + preco;
+    const ref = o.codigo ? ('Cód. ' + o.codigo) : (o.titulo || 'Imóvel');
+    return [ref, local].filter(Boolean).join(' · ') + preco;
   }
 
   async function confirmar(e) {
