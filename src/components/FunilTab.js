@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
 import { supabase } from '../supabaseClient';
+import BotaoFecharContrato from './BotaoFecharContrato';
 
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL.length - 1; i >= 0; i--) {
@@ -43,7 +44,7 @@ function whatsappLink(phone) {
   return `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}`;
 }
 
-function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
+function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard, podeContrato }) {
   const ativos = data.filter(c => c.ativo === 'S' && !c.recebido);
   const porEtapa = {};
   ETAPAS_FUNIL.forEach(e => { porEtapa[e] = []; });
@@ -149,6 +150,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
                         )}
                         {c.proxima_acao && <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 4, padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {c.proxima_acao}</div>}
                         <div style={{ marginTop: 4, fontSize: 9, color: '#d1d5db', textAlign: 'right' }}>⠿ arrastar</div>
+                        <BotaoFecharContrato neg={c} podeContrato={podeContrato} variant="card" />
                       </div>
                     );})}
                   </div>
@@ -179,7 +181,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard }) {
   );
 }
 
-export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onSetAbaFunil }) {
+export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onSetAbaFunil, podeContrato }) {
   const aba = abaFunil || 'compra';
   const compras = data.filter(c => c.modalidade === 'Compra');
   const locacoes = data.filter(c => c.modalidade === 'Locação');
@@ -197,8 +199,8 @@ export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onS
           </button>
         ))}
       </div>
-      {aba === 'compra' && <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} onMoverCard={onMoverCard} />}
-      {aba === 'locacao' && <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} onMoverCard={onMoverCard} />}
+      {aba === 'compra' && <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} onMoverCard={onMoverCard} podeContrato={podeContrato} />}
+      {aba === 'locacao' && <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} onMoverCard={onMoverCard} podeContrato={podeContrato} />}
     </div>
   );
 }
