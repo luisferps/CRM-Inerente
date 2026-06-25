@@ -72,8 +72,8 @@ export default function BotaoFecharContrato({ neg, podeContrato, variant = 'row'
         tipo: ehLocacao ? 'Locação' : 'Venda',
         cliente: neg.nome || '',
         imovel: imovel,
-        vgv: ehLocacao ? null : (neg.valor != null && neg.valor !== '' ? Number(neg.valor) : null),
-        comissao: null,
+        vgv: ehLocacao ? 0 : (neg.valor != null && neg.valor !== '' ? Number(neg.valor) : 0),
+        comissao: 0,
         corretor: neg.corretor || '',
         observacao: 'Criado pelo CRM a partir da tratativa de ' + (neg.nome || 'cliente') + '.',
       };
