@@ -196,6 +196,7 @@ export default function App() {
   const isCorretor = perfil?.is_corretor;
   const isEscritorio = perfil?.is_escritorio;
   const podeEditar = isDiretor || isGerente || isCorretor; // escritório só visualiza
+  const podeContrato = isDiretor || isGerente; // quem pode fechar venda / gerar contrato
 
   async function handleSave(form) {
     if (!podeEditar) return alert('Sem permissão para editar.');
@@ -382,10 +383,11 @@ export default function App() {
               onToggleFunil={handleToggleFunil}
               onNovaNegociacao={podeEditar ? handleNovaNegociacao : null}
               isGerente={isGerente}
+              podeContrato={podeContrato}
               filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
-            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} />}
+            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} podeContrato={podeContrato} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} onDelete={podeEditar ? handleDelete : null} onDevolverCaptacao={podeEditar ? handleDevolverCaptacao : null} />}
             {tab === 'secretaria' && <SecretariaTab />}
             {tab === 'dash' && <DashboardTab data={data} />}
