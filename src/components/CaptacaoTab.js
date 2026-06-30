@@ -20,6 +20,14 @@ function so11(x) {
 }
 
 const _norm = (x) => String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// ── Ágio: lê o booleano da ficha (capturado na captação) + reforço por texto ──
+function leadEhAgio(l) {
+  if (!l) return false;
+  const f = l.ficha && typeof l.ficha === 'object' ? l.ficha : {};
+  if (f.agio === true || l.agio === true) return true;
+  const txt = _norm([f._descricao, f.descricao, l.observacoes, l.tipo, l.subtipo].filter(Boolean).join(' '));
+  return /\bagio\b|assumir financiamento|cessao de direito|transferencia de financiamento/.test(txt);
+}
 function tipoIdDoLead(lead, tipos) {
   const t = _norm((lead && (lead.subtipo || lead.tipo)) || '');
   let alvo = null;
@@ -62,6 +70,109 @@ const CAMP_COR = { '': '#9ca3af', fila: '#2563eb', enviado: '#138a52', respondid
 const CAMP_LABEL = { '': '— pendente', fila: '⏳ na fila', enviado: '📨 abordado', respondido: '💬 andamento', expirado: '⌛ não respondeu', corretor: '👔 corretor', descartado: '🚫 fora do perfil', optout: '⛔ opt-out', qualificando: '❓ qualificando' };
 const CAMP_BG = { '': '#f0f0f3', fila: '#e8efff', enviado: '#e3f6ec', respondido: '#e4f4f8', expirado: '#eef0f3', corretor: '#f3e8ff', descartado: '#f0f0f3', optout: '#fde8e8', qualificando: '#e2f4fb' };
 
+// ──────────────────────────── GRÁFICOS (SVG puro, sem libs) ────────────────────────────
+function GraficoFunil({ funil, C }) {
+  const etapas = [
+    { nome: 'Captados', v: Number(funil.total) || 0, cor: '#3b82f6' },
+    { nome: 'Abordados', v: Number(funil.enviados) || 0, cor: '#8b5cf6' },
+    { nome: 'Responderam', v: Number(funil.responderam) || 0, cor: '#f59e0b' },
+    { nome: 'Repassados', v: Number(funil.repassados) || 0, cor: '#16a34a' },
+  ];
+  const max = Math.max(1, ...etapas.map(e => e.v));
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink2, marginBottom: 10 }}>Funil de conversão</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {etapas.map((e, i) => {
+          const w = Math.round((e.v / max) * 100);
+          const ant = i > 0 ? etapas[i - 1].v : null;
+          const pct = ant && ant > 0 ? Math.round((e.v / ant) * 100) : null;
+          return (
+            <div key={e.nome} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 92, flex: 'none', fontSize: 12, color: C.ink2, fontWeight: 600 }}>{e.nome}</span>
+              <div style={{ flex: 1, background: '#f0f0f3', borderRadius: 8, height: 26, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ width: w + '%', height: '100%', background: e.cor, borderRadius: 8, transition: 'width .4s', minWidth: 2 }} />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: w > 18 ? '#fff' : C.ink }}>{e.v}</span>
+              </div>
+              <span style={{ width: 58, flex: 'none', textAlign: 'right', fontSize: 11.5, color: C.ink3 }}>{pct != null ? pct + '%' : ''}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GraficoPorDia({ serie, C }) {
+  const s = (serie || []).slice(-21);
+  if (!s.length) return <div style={{ fontSize: 12.5, color: C.ink3 }}>Sem dados no período.</div>;
+  const W = 560, H = 150, pad = 24;
+  const max = Math.max(1, ...s.map(d => Math.max(Number(d.captados) || 0, Number(d.repassados) || 0)));
+  const x = i => pad + (s.length === 1 ? (W - 2 * pad) / 2 : (i * (W - 2 * pad)) / (s.length - 1));
+  const y = v => H - pad - ((Number(v) || 0) / max) * (H - 2 * pad);
+  const linha = key => s.map((d, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(d[key]).toFixed(1)).join(' ');
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink2, marginBottom: 4 }}>Por dia <span style={{ fontWeight: 500, color: C.ink3 }}>· <span style={{ color: '#8b5cf6' }}>captados</span> × <span style={{ color: '#16a34a' }}>repassados</span></span></div>
+      <svg viewBox={'0 0 ' + W + ' ' + H} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e5e5ea" strokeWidth="1" />
+        <path d={linha('captados')} fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={linha('repassados')} fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {s.map((d, i) => <circle key={'c' + i} cx={x(i)} cy={y(d.captados)} r="2.5" fill="#8b5cf6" />)}
+        {s.map((d, i) => <circle key={'r' + i} cx={x(i)} cy={y(d.repassados)} r="2.5" fill="#16a34a" />)}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: C.ink3, marginTop: 2 }}>
+        <span>{s[0].dia ? s[0].dia.slice(8, 10) + '/' + s[0].dia.slice(5, 7) : ''}</span>
+        <span>{s[s.length - 1].dia ? s[s.length - 1].dia.slice(8, 10) + '/' + s[s.length - 1].dia.slice(5, 7) : ''}</span>
+      </div>
+    </div>
+  );
+}
+
+function GraficoDistribuicao({ funil, C }) {
+  const partes = [
+    { nome: 'Na fila', v: Number(funil.naFila) || 0, cor: '#3b82f6' },
+    { nome: 'Abordados', v: Number(funil.enviados) || 0, cor: '#8b5cf6' },
+    { nome: 'Responderam', v: Number(funil.responderam) || 0, cor: '#f59e0b' },
+    { nome: 'Descartados', v: Number(funil.descartados) || 0, cor: '#9ca3af' },
+    { nome: 'Opt-out', v: Number(funil.optout) || 0, cor: '#dc2626' },
+  ].filter(p => p.v > 0);
+  const total = partes.reduce((a, b) => a + b.v, 0);
+  if (!total) return <div style={{ fontSize: 12.5, color: C.ink3 }}>Sem dados.</div>;
+  const R = 56, r = 34, cx = 64, cy = 64;
+  let ang = -Math.PI / 2;
+  const arcos = partes.map(p => {
+    const frac = p.v / total, a0 = ang, a1 = ang + frac * 2 * Math.PI; ang = a1;
+    const big = frac > 0.5 ? 1 : 0;
+    const x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0);
+    const x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
+    const xi1 = cx + r * Math.cos(a1), yi1 = cy + r * Math.sin(a1);
+    const xi0 = cx + r * Math.cos(a0), yi0 = cy + r * Math.sin(a0);
+    const d = 'M ' + x0.toFixed(2) + ' ' + y0.toFixed(2) + ' A ' + R + ' ' + R + ' 0 ' + big + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' L ' + xi1.toFixed(2) + ' ' + yi1.toFixed(2) + ' A ' + r + ' ' + r + ' 0 ' + big + ' 0 ' + xi0.toFixed(2) + ' ' + yi0.toFixed(2) + ' Z';
+    return { d, cor: p.cor };
+  });
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink2, marginBottom: 10 }}>Distribuição da base</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <svg viewBox="0 0 128 128" style={{ width: 128, height: 128, flex: 'none' }}>
+          {arcos.map((a, i) => <path key={i} d={a.d} fill={a.cor} />)}
+          <text x="64" y="60" textAnchor="middle" fontSize="20" fontWeight="800" fill={C.ink}>{total}</text>
+          <text x="64" y="76" textAnchor="middle" fontSize="9" fill={C.ink3}>leads</text>
+        </svg>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {partes.map(p => (
+            <div key={p.nome} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: C.ink2 }}>
+              <span style={{ width: 11, height: 11, borderRadius: 3, background: p.cor, flex: 'none' }} />
+              {p.nome} <b style={{ color: C.ink }}>{p.v}</b> <span style={{ color: C.ink3 }}>({Math.round(p.v / total * 100)}%)</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [leads, setLeads] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -75,6 +186,12 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [busca, setBusca] = useState('');
   const [precoMin, setPrecoMin] = useState('');
   const [precoMax, setPrecoMax] = useState('');
+  const [fTipo, setFTipo] = useState('');
+  const [fModal, setFModal] = useState('');
+  const [fQuartos, setFQuartos] = useState('');
+  const [fCidade, setFCidade] = useState('');
+  const [fSetor, setFSetor] = useState('');
+  const [soAgio, setSoAgio] = useState(false);
   const [selec, setSelec] = useState(new Set());
   const [tiposCRM, setTiposCRM] = useState([]);
   const [detalheId, setDetalheId] = useState(null);  // drawer aberto
@@ -157,6 +274,28 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     return true; // 'todos'
   }
 
+  // opções das listas (montadas a partir dos leads carregados)
+  const opcoes = useMemo(() => {
+    const tipo = new Set(), cidade = new Set(), setor = new Set(), quartos = new Set();
+    let modalVenda = false, modalLoc = false;
+    leads.forEach(l => {
+      const t = (l.subtipo || l.tipo || '').trim(); if (t) tipo.add(t);
+      const c = (l.cidade || '').trim(); if (c) cidade.add(c);
+      const se = (l.setor || '').trim(); if (se) setor.add(se);
+      const q = parseNum(l.quartos); if (q != null) quartos.add(q);
+      const tr = _norm(l.transacao || '');
+      if (/loca|alug/.test(tr)) modalLoc = true; else if (/vend/.test(tr)) modalVenda = true;
+    });
+    const ord = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
+    return {
+      tipo: [...tipo].sort(ord),
+      cidade: [...cidade].sort(ord),
+      setor: [...setor].sort(ord),
+      quartos: [...quartos].sort((a, b) => a - b),
+      modalVenda, modalLoc,
+    };
+  }, [leads]);
+
   const filtrados = useMemo(() => {
     const bq = busca.trim().toLowerCase();
     const bdig = bq.replace(/\D/g, '');
@@ -169,6 +308,12 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         if (min != null && p < min) return false;
         if (max != null && p > max) return false;
       }
+      if (fTipo) { const t = (l.subtipo || l.tipo || '').trim(); if (t !== fTipo) return false; }
+      if (fModal) { const tr = _norm(l.transacao || ''); if (fModal === 'venda' && !/vend/.test(tr)) return false; if (fModal === 'locacao' && !/loca|alug/.test(tr)) return false; }
+      if (fQuartos) { const q = parseNum(l.quartos); if (fQuartos === '4') { if (q == null || q < 4) return false; } else if (String(q) !== fQuartos) return false; }
+      if (fCidade) { if ((l.cidade || '').trim() !== fCidade) return false; }
+      if (fSetor) { if ((l.setor || '').trim() !== fSetor) return false; }
+      if (soAgio && !leadEhAgio(l)) return false;
       if (bq) {
         // busca na fila: telefone, nome, tipo, subtipo, cidade, setor, transação
         const tel = String(l.telefone || '').replace(/\D/g, '');
@@ -179,7 +324,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       }
       return true;
     });
-  }, [leads, view, busca, precoMin, precoMax]);
+  }, [leads, view, busca, precoMin, precoMax, fTipo, fModal, fQuartos, fCidade, fSetor, soAgio]);
 
   const numericas = ['preco', 'quartos', 'vagas', 'area', 'data_captura'];
   const ordenados = useMemo(() => {
@@ -435,6 +580,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     card: { background: C.card, border: '1px solid ' + C.line, borderRadius: 18, boxShadow: SHADOW, overflow: 'hidden' },
     toolbar: { background: C.card, border: '1px solid ' + C.line, borderRadius: 18, padding: 14, boxShadow: SHADOW, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 },
     inp: { border: '1px solid ' + C.line, background: '#fafafd', borderRadius: 11, padding: '10px 12px', font: 'inherit', fontSize: 13.5, color: C.ink, boxSizing: 'border-box' },
+    sel: { border: '1px solid ' + C.line, background: '#fafafd', borderRadius: 11, padding: '9px 11px', font: 'inherit', fontSize: 13, fontWeight: 600, color: C.ink, cursor: 'pointer', boxSizing: 'border-box' },
     th: { textAlign: 'left', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: C.ink3, padding: '13px 16px', borderBottom: '1px solid ' + C.line, whiteSpace: 'nowrap', background: '#fbfbfd', cursor: 'pointer', userSelect: 'none' },
     td: { padding: '14px 16px', borderBottom: '1px solid ' + C.line2, fontSize: 13.5, verticalAlign: 'middle' },
     btn: (bg, fg) => ({ border: 0, borderRadius: 12, padding: '11px 14px', font: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }),
@@ -491,16 +637,44 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
                 <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar na fila — bairro, tipo, telefone…  ex: terreno Jardim Marselha"
                   style={{ ...S.inp, width: '100%', paddingLeft: 38, background: '#fafafd' }} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.ink2, fontSize: 13, fontWeight: 600 }}>
-                Preço
-                <input value={precoMin} onChange={e => setPrecoMin(e.target.value)} placeholder="mín" style={{ ...S.inp, width: 104 }} />
-                <span style={{ color: C.ink3 }}>—</span>
-                <input value={precoMax} onChange={e => setPrecoMax(e.target.value)} placeholder="máx" style={{ ...S.inp, width: 104 }} />
-              </div>
               <button style={S.btnSm('#f0f0f3', C.ink)} onClick={() => { carregar(); carregarCampanha(); }}>🔄 Atualizar</button>
               <button style={S.btnSm('#f0f0f3', C.ink)} onClick={exportarCSV}>⬇ CSV</button>
-              {(busca || precoMin || precoMax) && <button style={{ border: 0, background: 'none', color: C.red, font: 'inherit', fontWeight: 600, fontSize: 13, cursor: 'pointer' }} onClick={() => { setBusca(''); setPrecoMin(''); setPrecoMax(''); }}>limpar</button>}
               <span style={{ color: C.ink3, fontSize: 13 }}>{ordenados.length} de {leads.length}</span>
+            </div>
+
+            <div style={S.toolbar}>
+              <select value={fTipo} onChange={e => setFTipo(e.target.value)} style={S.sel}>
+                <option value="">Tipo: todos</option>
+                {opcoes.tipo.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <select value={fModal} onChange={e => setFModal(e.target.value)} style={S.sel}>
+                <option value="">Modalidade: todas</option>
+                {opcoes.modalVenda && <option value="venda">Venda</option>}
+                {opcoes.modalLoc && <option value="locacao">Locação</option>}
+              </select>
+              <select value={fQuartos} onChange={e => setFQuartos(e.target.value)} style={S.sel}>
+                <option value="">Quartos: todos</option>
+                {opcoes.quartos.filter(q => q <= 3).map(q => <option key={q} value={String(q)}>{q} quarto{q > 1 ? 's' : ''}</option>)}
+                {opcoes.quartos.some(q => q >= 4) && <option value="4">4+ quartos</option>}
+              </select>
+              <select value={fCidade} onChange={e => setFCidade(e.target.value)} style={S.sel}>
+                <option value="">Cidade: todas</option>
+                {opcoes.cidade.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={fSetor} onChange={e => setFSetor(e.target.value)} style={S.sel}>
+                <option value="">Setor: todos</option>
+                {opcoes.setor.map(se => <option key={se} value={se}>{se}</option>)}
+              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.ink2, fontSize: 13, fontWeight: 600 }}>
+                Preço
+                <input value={precoMin} onChange={e => setPrecoMin(e.target.value)} placeholder="De" style={{ ...S.inp, width: 110 }} />
+                <span style={{ color: C.ink3 }}>—</span>
+                <input value={precoMax} onChange={e => setPrecoMax(e.target.value)} placeholder="Até" style={{ ...S.inp, width: 110 }} />
+              </div>
+              <button onClick={() => setSoAgio(v => !v)} style={S.chip(soAgio)}>🏦 Só ágio</button>
+              {(busca || precoMin || precoMax || fTipo || fModal || fQuartos || fCidade || fSetor || soAgio) &&
+                <button style={{ border: 0, background: 'none', color: C.red, font: 'inherit', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                  onClick={() => { setBusca(''); setPrecoMin(''); setPrecoMax(''); setFTipo(''); setFModal(''); setFQuartos(''); setFCidade(''); setFSetor(''); setSoAgio(false); }}>limpar tudo</button>}
             </div>
 
             {/* barra de seleção */}
@@ -549,7 +723,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
                           </td>
                           <td style={S.td}>{idade(l)}</td>
                           <td style={S.td}>
-                            <div style={{ fontWeight: 700, color: C.ink }}>{pri && <span style={{ color: C.amber }}>★ </span>}{l.tipo || '—'}{l.subtipo ? ' · ' + l.subtipo : ''}</div>
+                            <div style={{ fontWeight: 700, color: C.ink }}>{pri && <span style={{ color: C.amber }}>★ </span>}{l.tipo || '—'}{l.subtipo ? ' · ' + l.subtipo : ''}{leadEhAgio(l) && <span style={{ marginLeft: 6, background: '#fff3e0', color: '#b45309', borderRadius: 6, padding: '1px 7px', fontSize: 10.5, fontWeight: 700, verticalAlign: 'middle' }}>ÁGIO</span>}</div>
                             <div style={{ fontWeight: 500, color: C.ink3, fontSize: 11.5, marginTop: 1 }}>{l.transacao || ''}</div>
                           </td>
                           <td style={{ ...S.td, fontWeight: 700, whiteSpace: 'nowrap' }}>{l.preco || '—'}</td>
@@ -682,6 +856,19 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
                         {x[2] ? <div style={{ fontSize: 11, color: C.ink3, marginTop: 3 }}>{x[2]}</div> : null}
                       </div>
                     ))}
+                  </div>
+                  <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
+                    <div style={{ background: '#fafafd', border: '1px solid ' + C.line2, borderRadius: 14, padding: '16px 18px' }}>
+                      <GraficoFunil funil={funil} C={C} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
+                      <div style={{ background: '#fafafd', border: '1px solid ' + C.line2, borderRadius: 14, padding: '16px 18px' }}>
+                        <GraficoPorDia serie={funil.serieDias} C={C} />
+                      </div>
+                      <div style={{ background: '#fafafd', border: '1px solid ' + C.line2, borderRadius: 14, padding: '16px 18px' }}>
+                        <GraficoDistribuicao funil={funil} C={C} />
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
