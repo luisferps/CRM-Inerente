@@ -173,6 +173,45 @@ function GraficoDistribuicao({ funil, C }) {
   );
 }
 
+// Dropdown de filtro com múltipla seleção (checkbox). value = array de chaves selecionadas.
+function MultiFiltro({ id, rotulo, itens, value, onChange, aberto, setAberto, C, S }) {
+  const isOpen = aberto === id;
+  const n = value.length;
+  const texto = n === 0 ? (rotulo + ': todos') : n === 1
+    ? (itens.find(it => it.key === value[0]) || {}).label || (rotulo + ': 1')
+    : (rotulo + ': ' + n + ' selecionados');
+  const toggle = k => onChange(value.includes(k) ? value.filter(x => x !== k) : [...value, k]);
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setAberto(isOpen ? '' : id)}
+        style={{ ...S.sel, display: 'flex', alignItems: 'center', gap: 8, minWidth: 150, maxWidth: 230, borderColor: n ? C.red : C.line, color: n ? C.red : C.ink, background: n ? '#fdf3f2' : '#fafafd' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{texto}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, opacity: .6 }}>▾</span>
+      </button>
+      {isOpen && (
+        <>
+          <div onClick={() => setAberto('')} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 41, background: '#fff', border: '1px solid ' + C.line, borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.14)', minWidth: 200, maxWidth: 280, maxHeight: 320, overflowY: 'auto', padding: 6 }}>
+            {n > 0 && (
+              <button onClick={() => onChange([])} style={{ width: '100%', textAlign: 'left', border: 0, background: 'none', color: C.red, font: 'inherit', fontSize: 12.5, fontWeight: 700, padding: '7px 10px', cursor: 'pointer', borderRadius: 8 }}>✕ limpar seleção</button>
+            )}
+            {itens.length === 0 && <div style={{ padding: '8px 10px', color: C.ink3, fontSize: 12.5 }}>nenhum valor</div>}
+            {itens.map(it => {
+              const on = value.includes(it.key);
+              return (
+                <label key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: C.ink, background: on ? '#fdf3f2' : 'transparent' }}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(it.key)} style={{ width: 15, height: 15, accentColor: C.red, cursor: 'pointer' }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [leads, setLeads] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -186,12 +225,13 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [busca, setBusca] = useState('');
   const [precoMin, setPrecoMin] = useState('');
   const [precoMax, setPrecoMax] = useState('');
-  const [fTipo, setFTipo] = useState('');
-  const [fModal, setFModal] = useState('');
-  const [fQuartos, setFQuartos] = useState('');
-  const [fCidade, setFCidade] = useState('');
-  const [fSetor, setFSetor] = useState('');
+  const [fTipo, setFTipo] = useState([]);
+  const [fModal, setFModal] = useState([]);
+  const [fQuartos, setFQuartos] = useState([]);
+  const [fCidade, setFCidade] = useState([]);
+  const [fSetor, setFSetor] = useState([]);
   const [soAgio, setSoAgio] = useState(false);
+  const [filtroAberto, setFiltroAberto] = useState('');  // qual dropdown de checkbox está aberto
   const [selec, setSelec] = useState(new Set());
   const [tiposCRM, setTiposCRM] = useState([]);
   const [detalheId, setDetalheId] = useState(null);  // drawer aberto
@@ -251,6 +291,17 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   }
 
   useEffect(() => { carregar(); carregarCampanha(); carregarTipos(); }, []);
+
+  // Esc fecha: primeiro um dropdown de filtro aberto, senão o detalhe do lead.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (filtroAberto) { setFiltroAberto(''); return; }
+      if (detalheId) { setDetalheId(null); return; }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [filtroAberto, detalheId]);
   useEffect(() => {
     let vivo = true;
     fetch(BACKEND + '/captacao/painel-dados?dias=' + funilDias)
@@ -275,22 +326,43 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   }
 
   // opções das listas (montadas a partir dos leads carregados)
+  // Agrupa valores equivalentes (acento/maiúscula/espaço): 'Chacara' e 'Chácara' viram 1 opção.
+  // chave = forma normalizada (pra agrupar/filtrar); rótulo = forma mais bonita pra exibir.
   const opcoes = useMemo(() => {
-    const tipo = new Set(), cidade = new Set(), setor = new Set(), quartos = new Set();
+    // escolhe o melhor rótulo entre variantes (prefere com acento e Capitalizado)
+    const melhorRotulo = (atual, novo) => {
+      if (!atual) return novo;
+      const temAcento = x => /[áàâãéêíóôõúç]/i.test(x);
+      if (temAcento(novo) && !temAcento(atual)) return novo;
+      if (temAcento(atual) && !temAcento(novo)) return atual;
+      const cap = x => x && x[0] === x[0].toUpperCase();
+      if (cap(novo) && !cap(atual)) return novo;
+      return atual;
+    };
+    const agrupar = (valores) => {
+      const m = new Map(); // chaveNorm -> rótulo
+      valores.forEach(v => {
+        const val = String(v == null ? '' : v).trim(); if (!val) return;
+        const k = _norm(val).replace(/\s+/g, ' ').trim();
+        m.set(k, melhorRotulo(m.get(k), val));
+      });
+      return [...m.entries()].map(([key, label]) => ({ key, label }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true }));
+    };
+    const tipoV = [], cidadeV = [], setorV = [], quartos = new Set();
     let modalVenda = false, modalLoc = false;
     leads.forEach(l => {
-      const t = (l.subtipo || l.tipo || '').trim(); if (t) tipo.add(t);
-      const c = (l.cidade || '').trim(); if (c) cidade.add(c);
-      const se = (l.setor || '').trim(); if (se) setor.add(se);
+      const t = (l.subtipo || l.tipo || '').trim(); if (t) tipoV.push(t);
+      const c = (l.cidade || '').trim(); if (c) cidadeV.push(c);
+      const se = (l.setor || '').trim(); if (se) setorV.push(se);
       const q = parseNum(l.quartos); if (q != null) quartos.add(q);
       const tr = _norm(l.transacao || '');
       if (/loca|alug/.test(tr)) modalLoc = true; else if (/vend/.test(tr)) modalVenda = true;
     });
-    const ord = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
     return {
-      tipo: [...tipo].sort(ord),
-      cidade: [...cidade].sort(ord),
-      setor: [...setor].sort(ord),
+      tipo: agrupar(tipoV),
+      cidade: agrupar(cidadeV),
+      setor: agrupar(setorV),
       quartos: [...quartos].sort((a, b) => a - b),
       modalVenda, modalLoc,
     };
@@ -308,11 +380,12 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         if (min != null && p < min) return false;
         if (max != null && p > max) return false;
       }
-      if (fTipo) { const t = (l.subtipo || l.tipo || '').trim(); if (t !== fTipo) return false; }
-      if (fModal) { const tr = _norm(l.transacao || ''); if (fModal === 'venda' && !/vend/.test(tr)) return false; if (fModal === 'locacao' && !/loca|alug/.test(tr)) return false; }
-      if (fQuartos) { const q = parseNum(l.quartos); if (fQuartos === '4') { if (q == null || q < 4) return false; } else if (String(q) !== fQuartos) return false; }
-      if (fCidade) { if ((l.cidade || '').trim() !== fCidade) return false; }
-      if (fSetor) { if ((l.setor || '').trim() !== fSetor) return false; }
+      const knorm = x => _norm(String(x == null ? '' : x).trim()).replace(/\s+/g, ' ').trim();
+      if (fTipo.length) { const t = knorm(l.subtipo || l.tipo || ''); if (!fTipo.includes(t)) return false; }
+      if (fModal.length) { const tr = _norm(l.transacao || ''); const eVenda = /vend/.test(tr), eLoc = /loca|alug/.test(tr); const ok = (fModal.includes('venda') && eVenda) || (fModal.includes('locacao') && eLoc); if (!ok) return false; }
+      if (fQuartos.length) { const q = parseNum(l.quartos); const bate = fQuartos.some(fq => fq === '4' ? (q != null && q >= 4) : String(q) === fq); if (!bate) return false; }
+      if (fCidade.length) { if (!fCidade.includes(knorm(l.cidade || ''))) return false; }
+      if (fSetor.length) { if (!fSetor.includes(knorm(l.setor || ''))) return false; }
       if (soAgio && !leadEhAgio(l)) return false;
       if (bq) {
         // busca na fila: telefone, nome, tipo, subtipo, cidade, setor, transação
@@ -648,28 +721,11 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
             </div>
 
             <div style={S.toolbar}>
-              <select value={fTipo} onChange={e => setFTipo(e.target.value)} style={S.sel}>
-                <option value="">Tipo: todos</option>
-                {opcoes.tipo.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <select value={fModal} onChange={e => setFModal(e.target.value)} style={S.sel}>
-                <option value="">Modalidade: todas</option>
-                {opcoes.modalVenda && <option value="venda">Venda</option>}
-                {opcoes.modalLoc && <option value="locacao">Locação</option>}
-              </select>
-              <select value={fQuartos} onChange={e => setFQuartos(e.target.value)} style={S.sel}>
-                <option value="">Quartos: todos</option>
-                {opcoes.quartos.filter(q => q <= 3).map(q => <option key={q} value={String(q)}>{q} quarto{q > 1 ? 's' : ''}</option>)}
-                {opcoes.quartos.some(q => q >= 4) && <option value="4">4+ quartos</option>}
-              </select>
-              <select value={fCidade} onChange={e => setFCidade(e.target.value)} style={S.sel}>
-                <option value="">Cidade: todas</option>
-                {opcoes.cidade.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={fSetor} onChange={e => setFSetor(e.target.value)} style={S.sel}>
-                <option value="">Setor: todos</option>
-                {opcoes.setor.map(se => <option key={se} value={se}>{se}</option>)}
-              </select>
+              <MultiFiltro id="tipo" rotulo="Tipo" itens={opcoes.tipo} value={fTipo} onChange={setFTipo} aberto={filtroAberto} setAberto={setFiltroAberto} C={C} S={S} />
+              <MultiFiltro id="modal" rotulo="Modalidade" itens={[...(opcoes.modalVenda ? [{ key: 'venda', label: 'Venda' }] : []), ...(opcoes.modalLoc ? [{ key: 'locacao', label: 'Locação' }] : [])]} value={fModal} onChange={setFModal} aberto={filtroAberto} setAberto={setFiltroAberto} C={C} S={S} />
+              <MultiFiltro id="quartos" rotulo="Quartos" itens={[...opcoes.quartos.filter(q => q <= 3).map(q => ({ key: String(q), label: q + ' quarto' + (q > 1 ? 's' : '') })), ...(opcoes.quartos.some(q => q >= 4) ? [{ key: '4', label: '4+ quartos' }] : [])]} value={fQuartos} onChange={setFQuartos} aberto={filtroAberto} setAberto={setFiltroAberto} C={C} S={S} />
+              <MultiFiltro id="cidade" rotulo="Cidade" itens={opcoes.cidade} value={fCidade} onChange={setFCidade} aberto={filtroAberto} setAberto={setFiltroAberto} C={C} S={S} />
+              <MultiFiltro id="setor" rotulo="Setor" itens={opcoes.setor} value={fSetor} onChange={setFSetor} aberto={filtroAberto} setAberto={setFiltroAberto} C={C} S={S} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.ink2, fontSize: 13, fontWeight: 600 }}>
                 Preço
                 <input value={precoMin} onChange={e => setPrecoMin(e.target.value)} placeholder="De" style={{ ...S.inp, width: 110 }} />
@@ -677,9 +733,9 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
                 <input value={precoMax} onChange={e => setPrecoMax(e.target.value)} placeholder="Até" style={{ ...S.inp, width: 110 }} />
               </div>
               <button onClick={() => setSoAgio(v => !v)} style={S.chip(soAgio)}>🏦 Só ágio</button>
-              {(busca || precoMin || precoMax || fTipo || fModal || fQuartos || fCidade || fSetor || soAgio) &&
+              {(busca || precoMin || precoMax || fTipo.length || fModal.length || fQuartos.length || fCidade.length || fSetor.length || soAgio) &&
                 <button style={{ border: 0, background: 'none', color: C.red, font: 'inherit', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-                  onClick={() => { setBusca(''); setPrecoMin(''); setPrecoMax(''); setFTipo(''); setFModal(''); setFQuartos(''); setFCidade(''); setFSetor(''); setSoAgio(false); }}>limpar tudo</button>}
+                  onClick={() => { setBusca(''); setPrecoMin(''); setPrecoMax(''); setFTipo([]); setFModal([]); setFQuartos([]); setFCidade([]); setFSetor([]); setSoAgio(false); }}>limpar tudo</button>}
             </div>
 
             {/* barra de seleção */}
