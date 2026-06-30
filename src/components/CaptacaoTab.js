@@ -452,7 +452,12 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         body: JSON.stringify({ numero, url: dispUrl || '' }),
       });
       const j = await r.json();
-      if (j.ok) { alert('✓ Disparo enviado!'); setDispNum(''); setDispUrl(''); }
+      if (j.ok) {
+        alert('✓ Disparo enviado!' + (j.marcado_abordado ? '\nO lead foi marcado como abordado e saiu da fila.' : ''));
+        setDispNum(''); setDispUrl('');
+        if (j.marcado_abordado) carregar();   // atualiza a lista (lead virou 'enviado')
+        carregarCampanha();
+      }
       else if (j.motivo === 'optout') alert('Esse número pediu opt-out — não enviei.');
       else if (j.motivo === 'sem_numero') alert('Número inválido.');
       else alert('Não enviou (' + (j.motivo || 'erro') + ').');
