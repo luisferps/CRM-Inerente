@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'; 
+import { useState, useEffect, useMemo, useRef } from 'react';
 import './index.css';
 import { supabase } from './supabaseClient';
 import CRMTab from './components/CRMTab';
@@ -75,7 +75,10 @@ function splitForm(form) {
 export default function App() {
   const [tab, setTab] = useState(() => {
     try { const t = new URLSearchParams(window.location.search).get('tab'); if (t) return t; } catch (e) {}
-    return localStorage.getItem('crm_tab') || 'tratativas';
+    // 'captacao' não é mais aba normal do CRM: só abre via ?tab=captacao (card do Portal).
+    // Ignora um crm_tab='captacao' antigo gravado antes da aba ser removida.
+    const saved = localStorage.getItem('crm_tab');
+    return (saved && saved !== 'captacao') ? saved : 'tratativas';
   });
   const [clientes, setClientes] = useState([]);
   const [negociacoes, setNegociacoes] = useState([]);
