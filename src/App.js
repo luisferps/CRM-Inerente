@@ -74,9 +74,14 @@ function splitForm(form) {
 
 export default function App() {
   const [tab, setTab] = useState(() => {
-    try { const t = new URLSearchParams(window.location.search).get('tab'); if (t) return t; } catch (e) {}
-    // 'captacao' não é mais aba normal do CRM: só abre via ?tab=captacao (card do Portal).
-    // Ignora um crm_tab='captacao' antigo gravado antes da aba ser removida.
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      if (t === 'captacao') { localStorage.setItem('cap_modo', '1'); return 'captacao'; } // marca o modo p/ sobreviver ao F5
+      if (t) return t;
+      // F5 dentro da captação: a URL já foi limpa pelo SSO, mas o marcador reabre a tela.
+      if (localStorage.getItem('cap_modo') === '1') return 'captacao';
+    } catch (e) {}
+    // 'captacao' não é aba normal do CRM: só via ?tab=captacao ou marcador. Ignora crm_tab='captacao' antigo.
     const saved = localStorage.getItem('crm_tab');
     return (saved && saved !== 'captacao') ? saved : 'tratativas';
   });
@@ -347,6 +352,11 @@ export default function App() {
   // Vira módulo próprio quando aberto pelo card 'Captação OLX' (?tab=captacao).
   const modoCaptacao = tab === 'captacao' && isDiretor;
 
+  // Identifica o módulo: no modo captação, o título da aba do navegador vira 'Captação OLX'.
+  useEffect(() => {
+    document.title = modoCaptacao ? 'Captação OLX — Inerente' : 'CRM Imobiliário — Inerente';
+  }, [modoCaptacao]);
+
   return (
     <div className="app-shell">
       {!modoCaptacao && (<>
@@ -354,7 +364,7 @@ export default function App() {
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
           {tabs.map(([t, l]) => (
-            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); localStorage.setItem('crm_tab', t); setFiltroClienteId(null); }}>{l}</button>
+            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); localStorage.setItem('crm_tab', t); localStorage.removeItem('cap_modo'); setFiltroClienteId(null); }}>{l}</button>
           ))}
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
