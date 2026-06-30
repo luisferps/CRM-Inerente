@@ -813,6 +813,15 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     <div style={S.page}>
       <div style={S.wrap}>
 
+        {/* cabeçalho do módulo (identifica como Captação OLX) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: C.red, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flex: 'none' }}>📍</div>
+          <div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: C.ink, letterSpacing: '-.4px', lineHeight: 1.1 }}>Captação OLX</div>
+            <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 1 }}>Leads de proprietários no OLX</div>
+          </div>
+        </div>
+
         {/* sub-telas */}
         <div style={S.seg}>
           <button style={S.segBtn(subtela === 'olx')} onClick={() => setSubtela('olx')}>📍 Leads do OLX</button>
