@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -20,6 +20,9 @@ function so11(x) {
 }
 
 const _norm = (x) => String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Links rápidos do lead
+function linkWa(l) { const d = so11(l && l.telefone); return d ? ('https://wa.me/55' + d) : ''; }
+function linkAnuncio(l) { const u = (l && l.url) ? String(l.url).trim() : ''; if (!u) return ''; return /^https?:\/\//i.test(u) ? u : ('https://' + u); }
 // ── Ágio: lê o booleano da ficha (capturado na captação) + reforço por texto ──
 function leadEhAgio(l) {
   if (!l) return false;
@@ -173,6 +176,27 @@ function GraficoDistribuicao({ funil, C }) {
   );
 }
 
+// Barras horizontais simples para relatórios (label + quantidade + barra proporcional).
+function RelBarras({ itens, C, cor, ordenar = true }) {
+  let lista = (itens || []).filter(x => (x.n || 0) > 0);
+  if (ordenar) lista = lista.slice().sort((a, b) => b.n - a.n);
+  if (!lista.length) return <div style={{ fontSize: 12.5, color: C.ink3, paddingTop: 8 }}>Sem dados.</div>;
+  const max = Math.max(1, ...lista.map(x => x.n));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
+      {lista.map((x, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 120, flex: 'none', fontSize: 12, color: C.ink2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={x.label}>{x.label}</span>
+          <div style={{ flex: 1, background: '#f0f0f3', borderRadius: 7, height: 20, overflow: 'hidden' }}>
+            <div style={{ width: Math.round(x.n / max * 100) + '%', height: '100%', background: cor, borderRadius: 7, minWidth: 2 }} />
+          </div>
+          <span style={{ width: 38, flex: 'none', textAlign: 'right', fontSize: 12, fontWeight: 700, color: C.ink }}>{x.n}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Dropdown de filtro com múltipla seleção (checkbox). value = array de chaves selecionadas.
 function MultiFiltro({ id, rotulo, itens, value, onChange, aberto, setAberto, C, S }) {
   const isOpen = aberto === id;
@@ -215,6 +239,11 @@ function MultiFiltro({ id, rotulo, itens, value, onChange, aberto, setAberto, C,
 export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [leads, setLeads] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+  const [temMais, setTemMais] = useState(true);
+  const [totalBanco, setTotalBanco] = useState(null);   // total real de leads no banco
+  const [contagens, setContagens] = useState(null);     // COUNT por status (banco inteiro)
+
   const [erro, setErro] = useState('');
   const [promovendo, setPromovendo] = useState(null);
   const [enviandoId, setEnviandoId] = useState(null);
@@ -254,14 +283,53 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [dispUrl, setDispUrl] = useState('');
   const [disparando, setDisparando] = useState(false);
 
+  const PAGINA = 1000; // tamanho do lote (limite do Supabase por request)
+
   async function carregar() {
     setCarregando(true);
     setErro('');
     const { data, error } = await supabase
-      .from('leads_captacao').select('*').order('data_captura', { ascending: false });
+      .from('leads_captacao').select('*')
+      .order('data_captura', { ascending: false })
+      .range(0, PAGINA - 1);
     if (error) setErro(error.message);
-    else setLeads(data || []);
+    else { setLeads(data || []); setTemMais((data || []).length === PAGINA); }
     setCarregando(false);
+    contarNoBanco(); // contadores reais (banco inteiro), em paralelo
+  }
+
+  // Carrega o próximo lote (scroll infinito).
+  async function carregarMais() {
+    if (carregandoMais || !temMais || carregando) return;
+    setCarregandoMais(true);
+    const ini = leads.length;
+    const { data, error } = await supabase
+      .from('leads_captacao').select('*')
+      .order('data_captura', { ascending: false })
+      .range(ini, ini + PAGINA - 1);
+    if (!error && data) {
+      setLeads(prev => prev.concat(data));
+      setTemMais(data.length === PAGINA);
+    }
+    setCarregandoMais(false);
+  }
+
+  // Contadores REAIS: total do banco + COUNT por campanha_status (não depende do que carregou).
+  async function contarNoBanco() {
+    try {
+      const { count: total } = await supabase
+        .from('leads_captacao').select('id', { count: 'exact', head: true });
+      setTotalBanco(typeof total === 'number' ? total : null);
+      const statuses = ['', 'fila', 'enviado', 'qualificando', 'respondido', 'descartado', 'optout', 'corretor', 'expirado'];
+      const res = {};
+      await Promise.all(statuses.map(async (st) => {
+        let q = supabase.from('leads_captacao').select('id', { count: 'exact', head: true });
+        q = st === '' ? q.or('campanha_status.is.null,campanha_status.eq.') : q.eq('campanha_status', st);
+        const { count } = await q;
+        res[st] = typeof count === 'number' ? count : 0;
+      }));
+      setContagens(res);
+    } catch (e) { /* silencioso: cai no fallback de contar o carregado */ }
   }
 
   async function carregarCampanha() {
@@ -302,6 +370,18 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [filtroAberto, detalheId]);
+
+  // Scroll infinito: quando o sentinela no fim da lista aparece, carrega o próximo lote.
+  const sentinelaRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelaRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0] && entries[0].isIntersecting) carregarMais();
+    }, { rootMargin: '400px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [temMais, carregandoMais, carregando, leads.length]);
   useEffect(() => {
     let vivo = true;
     fetch(BACKEND + '/captacao/painel-dados?dias=' + funilDias)
@@ -328,8 +408,24 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   // opções das listas (montadas a partir dos leads carregados)
   // Agrupa valores equivalentes (acento/maiúscula/espaço): 'Chacara' e 'Chácara' viram 1 opção.
   // chave = forma normalizada (pra agrupar/filtrar); rótulo = forma mais bonita pra exibir.
+  // chave normalizada (agrupa acento/maiúscula/espaço)
+  const _knorm = (x) => _norm(String(x == null ? '' : x).trim()).replace(/\s+/g, ' ').trim();
+
+  // Aplica os filtros de seleção a um lead, podendo IGNORAR um deles (pra encadear as listas).
+  // 'exceto' = nome do filtro a pular ('tipo'|'modal'|'quartos'|'cidade'|'setor').
+  const passaFiltrosSelec = (l, exceto) => {
+    if (exceto !== 'tipo' && fTipo.length) { if (!fTipo.includes(_knorm(l.subtipo || l.tipo || ''))) return false; }
+    if (exceto !== 'modal' && fModal.length) { const tr = _norm(l.transacao || ''); const eVenda = /vend/.test(tr), eLoc = /loca|alug/.test(tr); if (!((fModal.includes('venda') && eVenda) || (fModal.includes('locacao') && eLoc))) return false; }
+    if (exceto !== 'quartos' && fQuartos.length) { const q = parseNum(l.quartos); if (!fQuartos.some(fq => fq === '4' ? (q != null && q >= 4) : String(q) === fq)) return false; }
+    if (exceto !== 'cidade' && fCidade.length) { if (!fCidade.includes(_knorm(l.cidade || ''))) return false; }
+    if (exceto !== 'setor' && fSetor.length) { if (!fSetor.includes(_knorm(l.setor || ''))) return false; }
+    if (soAgio && !leadEhAgio(l)) return false;
+    return true;
+  };
+
+  // Opções de cada filtro = só o que ainda pode dar resultado (encadeado: cada lista
+  // é calculada sobre os leads que passam por TODOS os outros filtros, menos o próprio).
   const opcoes = useMemo(() => {
-    // escolhe o melhor rótulo entre variantes (prefere com acento e Capitalizado)
     const melhorRotulo = (atual, novo) => {
       if (!atual) return novo;
       const temAcento = x => /[áàâãéêíóôõúç]/i.test(x);
@@ -340,11 +436,10 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       return atual;
     };
     const agrupar = (valores) => {
-      const m = new Map(); // chaveNorm -> rótulo
+      const m = new Map();
       valores.forEach(v => {
         const val = String(v == null ? '' : v).trim(); if (!val) return;
-        const k = _norm(val).replace(/\s+/g, ' ').trim();
-        m.set(k, melhorRotulo(m.get(k), val));
+        m.set(_knorm(val), melhorRotulo(m.get(_knorm(val)), val));
       });
       return [...m.entries()].map(([key, label]) => ({ key, label }))
         .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true }));
@@ -352,12 +447,11 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     const tipoV = [], cidadeV = [], setorV = [], quartos = new Set();
     let modalVenda = false, modalLoc = false;
     leads.forEach(l => {
-      const t = (l.subtipo || l.tipo || '').trim(); if (t) tipoV.push(t);
-      const c = (l.cidade || '').trim(); if (c) cidadeV.push(c);
-      const se = (l.setor || '').trim(); if (se) setorV.push(se);
-      const q = parseNum(l.quartos); if (q != null) quartos.add(q);
-      const tr = _norm(l.transacao || '');
-      if (/loca|alug/.test(tr)) modalLoc = true; else if (/vend/.test(tr)) modalVenda = true;
+      if (passaFiltrosSelec(l, 'tipo')) { const t = (l.subtipo || l.tipo || '').trim(); if (t) tipoV.push(t); }
+      if (passaFiltrosSelec(l, 'cidade')) { const c = (l.cidade || '').trim(); if (c) cidadeV.push(c); }
+      if (passaFiltrosSelec(l, 'setor')) { const se = (l.setor || '').trim(); if (se) setorV.push(se); }
+      if (passaFiltrosSelec(l, 'quartos')) { const q = parseNum(l.quartos); if (q != null) quartos.add(q); }
+      if (passaFiltrosSelec(l, 'modal')) { const tr = _norm(l.transacao || ''); if (/loca|alug/.test(tr)) modalLoc = true; else if (/vend/.test(tr)) modalVenda = true; }
     });
     return {
       tipo: agrupar(tipoV),
@@ -366,7 +460,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       quartos: [...quartos].sort((a, b) => a - b),
       modalVenda, modalLoc,
     };
-  }, [leads]);
+  }, [leads, fTipo, fModal, fQuartos, fCidade, fSetor, soAgio]);
 
   const filtrados = useMemo(() => {
     const bq = busca.trim().toLowerCase();
@@ -679,13 +773,40 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   }
 
   // chips de status
+  // contadores: usa o COUNT real do banco; se ainda não chegou, cai no que está carregado
+  const cc = contagens || cont;
+  // ── Dados dos Relatórios (cidade/tipo/preço/ágio calculados sobre os leads carregados) ──
+  const relat = useMemo(() => {
+    const porChave = (getter) => {
+      const m = new Map();
+      leads.forEach(l => { const v = (getter(l) || '').trim(); if (!v) return; const k = _knorm(v); const cur = m.get(k) || { label: v, n: 0 }; cur.n++; m.set(k, cur); });
+      return [...m.values()].sort((a, b) => b.n - a.n);
+    };
+    const cidades = porChave(l => l.cidade).slice(0, 12);
+    const tipos = porChave(l => l.subtipo || l.tipo).slice(0, 12);
+    // faixas de preço
+    const faixas = [
+      { label: 'até 100 mil', min: 0, max: 100000, n: 0 },
+      { label: '100–200 mil', min: 100000, max: 200000, n: 0 },
+      { label: '200–300 mil', min: 200000, max: 300000, n: 0 },
+      { label: '300–500 mil', min: 300000, max: 500000, n: 0 },
+      { label: '500 mil–1 mi', min: 500000, max: 1000000, n: 0 },
+      { label: 'acima de 1 mi', min: 1000000, max: Infinity, n: 0 },
+    ];
+    let semPreco = 0;
+    leads.forEach(l => { const p = parseNum(l.preco); if (p == null) { semPreco++; return; } const f = faixas.find(x => p >= x.min && p < x.max); if (f) f.n++; });
+    // ágio
+    let agio = 0; leads.forEach(l => { if (leadEhAgio(l)) agio++; });
+    return { cidades, tipos, faixas, semPreco, agio, totalCarregado: leads.length };
+  }, [leads]);
+
   const CHIPS = [
-    ['pendentes', 'Pendentes', cont['']],
-    ['fila', 'Na fila', cont.fila],
-    ['g_abordados', 'Abordados', cont.enviado + cont.qualificando + cont.respondido],
-    ['andamento', 'Em andamento', cont.respondido],
-    ['g_descartados', 'Descartados', cont.descartado + cont.optout + cont.corretor + cont.expirado],
-    ['todos', 'Todos', leads.length],
+    ['pendentes', 'Pendentes', cc['']],
+    ['fila', 'Na fila', cc.fila],
+    ['g_abordados', 'Abordados', (cc.enviado || 0) + (cc.qualificando || 0) + (cc.respondido || 0)],
+    ['andamento', 'Em andamento', cc.respondido],
+    ['g_descartados', 'Descartados', (cc.descartado || 0) + (cc.optout || 0) + (cc.corretor || 0) + (cc.expirado || 0)],
+    ['todos', 'Todos', (totalBanco != null ? totalBanco : leads.length)],
   ];
 
   return (
@@ -696,6 +817,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
         <div style={S.seg}>
           <button style={S.segBtn(subtela === 'olx')} onClick={() => setSubtela('olx')}>📍 Leads do OLX</button>
           <button style={S.segBtn(subtela === 'camp')} onClick={() => setSubtela('camp')}>📣 Campanha de abordagem</button>
+          <button style={S.segBtn(subtela === 'rel')} onClick={() => setSubtela('rel')}>📊 Relatórios</button>
         </div>
 
         {/* ════════════════════ TELA OLX ════════════════════ */}
@@ -717,7 +839,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
               </div>
               <button style={S.btnSm('#f0f0f3', C.ink)} onClick={() => { carregar(); carregarCampanha(); }}>🔄 Atualizar</button>
               <button style={S.btnSm('#f0f0f3', C.ink)} onClick={exportarCSV}>⬇ CSV</button>
-              <span style={{ color: C.ink3, fontSize: 13 }}>{ordenados.length} de {leads.length}</span>
+              <span style={{ color: C.ink3, fontSize: 13 }}>{ordenados.length} de {totalBanco != null ? totalBanco : leads.length}{temMais ? ' (rolar p/ carregar mais)' : ''}</span>
             </div>
 
             <div style={S.toolbar}>
@@ -791,13 +913,21 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
                           <td style={{ ...S.td, color: C.ink2 }}>{l.quartos || '—'}</td>
                           <td style={{ ...S.td, color: C.ink2 }}>{l.cidade || '—'}<br /><span style={{ fontSize: 12 }}>{l.setor || ''}</span></td>
                           <td style={S.td}>{badge(cs)}</td>
-                          <td style={{ ...S.td, color: C.ink3, textAlign: 'right' }}>›</td>
+                          <td style={{ ...S.td, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                            {linkAnuncio(l) && <a href={linkAnuncio(l)} target="_blank" rel="noreferrer" title="Abrir anúncio" style={{ textDecoration: 'none', fontSize: 16, marginRight: 8 }}>🔗</a>}
+                            {linkWa(l) && <a href={linkWa(l)} target="_blank" rel="noreferrer" title="Abrir WhatsApp" style={{ textDecoration: 'none', fontSize: 16, marginRight: 8 }}>💬</a>}
+                            <span style={{ color: C.ink3 }}>›</span>
+                          </td>
                         </tr>
                       );
                     })}
                     {!ordenados.length && <tr><td colSpan={8} style={{ ...S.td, textAlign: 'center', color: C.ink3, padding: 28 }}>Nenhum lead nesta visão.</td></tr>}
                   </tbody>
                 </table>
+                {/* sentinela do scroll infinito */}
+                <div ref={sentinelaRef} style={{ height: 1 }} />
+                {carregandoMais && <div style={{ textAlign: 'center', color: C.ink3, fontSize: 13, padding: '12px 0' }}>Carregando mais…</div>}
+                {!temMais && leads.length > 0 && <div style={{ textAlign: 'center', color: C.ink3, fontSize: 12, padding: '10px 0' }}>— fim da lista —</div>}
               </div>
             )}
             <p style={{ fontSize: 12, color: C.ink3, marginTop: 12 }}>A grade mostra só o essencial. <strong>Nome, sub-região, observação e a mensagem gerada</strong> aparecem ao clicar no anúncio. 🔴 = lead com +5 dias (anúncio pode já ter saído do ar — confirme antes de abordar).</p>
@@ -936,6 +1066,84 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
             </div>
           </>
         )}
+
+        {/* ════════════════════ TELA RELATÓRIOS ════════════════════ */}
+        {subtela === 'rel' && (
+          <>
+            {/* FUNIL / CONVERSÃO + PRODUTIVIDADE (dados do backend) */}
+            <div style={{ ...S.card, padding: '18px 20px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.ink }}>Funil de conversão</h3>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[7, 30, 90].map(dd => (
+                    <button key={dd} onClick={() => setFunilDias(dd)} style={{ padding: '6px 12px', borderRadius: 9, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (funilDias === dd ? C.ink : C.line), background: funilDias === dd ? C.ink : C.card, color: funilDias === dd ? '#fff' : C.ink2 }}>{dd} dias</button>
+                  ))}
+                </div>
+              </div>
+              {funil ? (
+                <>
+                  <GraficoFunil funil={funil} C={C} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginTop: 16 }}>
+                    {[
+                      ['Taxa de resposta', (funil.taxaResposta != null ? funil.taxaResposta + '%' : '—'), 'dos abordados'],
+                      ['Taxa de repasse', (funil.taxaRepasse != null ? funil.taxaRepasse + '%' : '—'), 'dos que responderam'],
+                      ['Repasse geral', (funil.taxaRepasseGeral != null ? funil.taxaRepasseGeral + '%' : '—'), 'dos abordados'],
+                      ['Tempo até repasse', (funil.tempoMedioRepasseMin == null ? '—' : funil.tempoMedioRepasseMin + ' min'), 'média'],
+                    ].map((m, i) => (
+                      <div key={i} style={{ background: '#fafafd', border: '1px solid ' + C.line2, borderRadius: 12, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 11.5, color: C.ink3, fontWeight: 600 }}>{m[0]}</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: C.ink, marginTop: 4 }}>{m[1]}</div>
+                        <div style={{ fontSize: 11, color: C.ink3, marginTop: 2 }}>{m[2]}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 18 }}><GraficoPorDia serie={funil.serieDias} C={C} /></div>
+                </>
+              ) : <div style={{ color: C.ink3, fontSize: 13 }}>Carregando dados do funil… (se não aparecer, o backend pode estar offline)</div>}
+            </div>
+
+            {/* POR CIDADE e POR TIPO */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16, marginBottom: 16 }}>
+              <div style={{ ...S.card, padding: '18px 20px' }}>
+                <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>Por cidade</h3>
+                <RelBarras itens={relat.cidades} C={C} cor="#3b82f6" />
+              </div>
+              <div style={{ ...S.card, padding: '18px 20px' }}>
+                <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>Por tipo de imóvel</h3>
+                <RelBarras itens={relat.tipos} C={C} cor="#8b5cf6" />
+              </div>
+            </div>
+
+            {/* FAIXA DE PREÇO + ÁGIO */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16, marginBottom: 16 }}>
+              <div style={{ ...S.card, padding: '18px 20px' }}>
+                <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>Faixa de preço</h3>
+                <RelBarras itens={relat.faixas.map(f => ({ label: f.label, n: f.n }))} C={C} cor="#16a34a" ordenar={false} />
+                {relat.semPreco > 0 && <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 8 }}>{relat.semPreco} sem preço informado</div>}
+              </div>
+              <div style={{ ...S.card, padding: '18px 20px' }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800 }}>Ágio</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                  <div style={{ flex: 'none', width: 96, height: 96, borderRadius: '50%', background: 'conic-gradient(#b45309 0 ' + (relat.totalCarregado ? Math.round(relat.agio / relat.totalCarregado * 360) : 0) + 'deg, #f0f0f3 0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 64, height: 64, borderRadius: '50%', background: C.card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.ink }}>{relat.agio}</div>
+                      <div style={{ fontSize: 9, color: C.ink3 }}>de ágio</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.7 }}>
+                    <div><b style={{ color: '#b45309' }}>{relat.agio}</b> imóveis de ágio</div>
+                    <div><b>{relat.totalCarregado - relat.agio}</b> sem ágio</div>
+                    <div style={{ color: C.ink3, fontSize: 11.5 }}>{relat.totalCarregado ? Math.round(relat.agio / relat.totalCarregado * 100) : 0}% do carregado</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 11.5, color: C.ink3, textAlign: 'center', paddingBottom: 8 }}>
+              Cidade, tipo, preço e ágio são calculados sobre os {relat.totalCarregado} leads já carregados. Role a aba "Leads do OLX" para carregar mais e ter números mais completos.
+            </div>
+          </>
+        )}
       </div>
 
       {/* ════════════════════ DRAWER DE DETALHE ════════════════════ */}
@@ -978,7 +1186,10 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
                     <span style={{ fontWeight: 600, textAlign: 'right' }}>{kv[1] || '—'}</span>
                   </div>
                 ))}
-                {det.url && <div style={{ paddingTop: 10 }}><a href={det.url} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none', fontWeight: 600, fontSize: 13.5 }}>abrir anúncio no OLX ↗</a></div>}
+                <div style={{ display: 'flex', gap: 8, paddingTop: 12, flexWrap: 'wrap' }}>
+                  {linkAnuncio(det) && <a href={linkAnuncio(det)} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 130, textAlign: 'center', textDecoration: 'none', background: '#eef2ff', color: '#3730a3', borderRadius: 11, padding: '10px 12px', fontWeight: 700, fontSize: 13.5 }}>🔗 Abrir anúncio</a>}
+                  {linkWa(det) && <a href={linkWa(det)} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 130, textAlign: 'center', textDecoration: 'none', background: '#dcfce7', color: '#166534', borderRadius: 11, padding: '10px 12px', fontWeight: 700, fontSize: 13.5 }}>💬 Abrir WhatsApp</a>}
+                </div>
               </div>
 
               <div style={{ marginTop: 16 }}>
