@@ -343,8 +343,13 @@ export default function App() {
   const funcaoLabel = isDiretor ? 'Diretor' : isGerente ? 'Gerente' : isCorretor ? 'Corretor' : isEscritorio ? 'Escritório' : '';
   const funcaoCor = isDiretor ? '#dc2626' : isGerente ? '#2563eb' : isCorretor ? '#059669' : '#7c3aed';
 
+  // Modo captação: tela cheia, sem a moldura do CRM (header/abas/stats).
+  // Vira módulo próprio quando aberto pelo card 'Captação OLX' (?tab=captacao).
+  const modoCaptacao = tab === 'captacao' && isDiretor;
+
   return (
     <div className="app-shell">
+      {!modoCaptacao && (<>
       <header className="header">
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
@@ -372,6 +377,7 @@ export default function App() {
         <div className="stat-item"><span className="stat-label">Vendas</span><span className="stat-value stat-orange">{stats.vendas}</span></div>
         <div className="stat-item"><span className="stat-label">Contratos</span><span className="stat-value stat-green">{stats.contratos}</span></div>
       </div>
+      </>)}
 
       {error && <div className="error-banner">⚠️ Erro de conexão: {error}</div>}
 
@@ -419,7 +425,7 @@ export default function App() {
       )}
 
       {/* Botão flutuante global — Nova Tratativa */}
-      {podeEditar && modal === null && (
+      {!modoCaptacao && podeEditar && modal === null && (
         <button
           onClick={() => setModal('new')}
           title="Nova Tratativa"
