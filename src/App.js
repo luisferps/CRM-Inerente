@@ -205,6 +205,13 @@ export default function App() {
   const isDiretor = perfil?.is_diretor;
   const isGerente = perfil?.is_gerente;
   const isCorretor = perfil?.is_corretor;
+
+  // Identifica o módulo na aba do navegador. Calculado aqui (antes de qualquer return
+  // condicional) para não violar a ordem dos hooks do React.
+  useEffect(() => {
+    const ehCaptacao = tab === 'captacao' && !!(perfil && perfil.is_diretor);
+    document.title = ehCaptacao ? 'Captação OLX — Inerente' : 'CRM Imobiliário — Inerente';
+  }, [tab, perfil]);
   const isEscritorio = perfil?.is_escritorio;
   const podeEditar = isDiretor || isGerente || isCorretor; // escritório só visualiza
   const podeContrato = isDiretor || isGerente; // quem pode fechar venda / gerar contrato
@@ -351,11 +358,6 @@ export default function App() {
   // Modo captação: tela cheia, sem a moldura do CRM (header/abas/stats).
   // Vira módulo próprio quando aberto pelo card 'Captação OLX' (?tab=captacao).
   const modoCaptacao = tab === 'captacao' && isDiretor;
-
-  // Identifica o módulo: no modo captação, o título da aba do navegador vira 'Captação OLX'.
-  useEffect(() => {
-    document.title = modoCaptacao ? 'Captação OLX — Inerente' : 'CRM Imobiliário — Inerente';
-  }, [modoCaptacao]);
 
   return (
     <div className="app-shell">
