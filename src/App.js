@@ -73,7 +73,10 @@ function splitForm(form) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState(() => localStorage.getItem('crm_tab') || 'tratativas');
+  const [tab, setTab] = useState(() => {
+    try { const t = new URLSearchParams(window.location.search).get('tab'); if (t) return t; } catch (e) {}
+    return localStorage.getItem('crm_tab') || 'tratativas';
+  });
   const [clientes, setClientes] = useState([]);
   const [negociacoes, setNegociacoes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -320,7 +323,6 @@ export default function App() {
     ['resumo', '📋 Demandas'],
     ['transferencias', '🔄 Transferências'],
     ['clientes', '👤 Clientes'],
-    ['captacao', '📍 Captação', 'diretor'],
     ['importacao', '📥 Importar', 'diretor'],
     ['config', '⚙️ Config'],
     ['backup', '💾 Backup', 'diretor'],
@@ -374,7 +376,7 @@ export default function App() {
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
             {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
-            {tab === 'captacao' && <CaptacaoTab perfil={perfil} onAtualizar={load} />}
+            {tab === 'captacao' && isDiretor && <CaptacaoTab perfil={perfil} onAtualizar={load} />}
             {tab === 'tratativas' && <CRMTab
               data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido && !c.captado) : data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)}
               todosData={data}
