@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react'; 
 import './index.css';
 import { supabase } from './supabaseClient';
 import CRMTab from './components/CRMTab';
