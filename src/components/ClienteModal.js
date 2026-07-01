@@ -12,6 +12,7 @@ const emptyForm = {
   ativo: 'S', motivo_desistencia: '',
   captado: false, ficha: null,
   corretor: '', corretor_id: null,
+  tratativa_divisao: [], tratativa_dono_edicao: null,
   imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
   origem_tratativa: '',
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
@@ -186,6 +187,55 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const isGerente = perfil?.is_gerente;
   const isVenda = form.modalidade === 'Venda';
 
+  // ─── DIVISÃO DE COMISSÃO DA TRATATIVA (100% interno, sem externo) ───
+  // Mesmo sistema da captação de imóveis: cada corretor dono da própria fatia,
+  // trava sistêmica (só o dono ou diretor/gerente altera), estrela de dono da edição.
+  const meuId = perfil?.id || null;
+  const ehAlcadaSuperior = !!(perfil?.is_diretor || perfil?.is_gerente);
+  const divisao = form.tratativa_divisao || [];
+  const donoEdicaoId = form.tratativa_dono_edicao || null;
+  const podeEditarFatiaTrat = (item) => ehAlcadaSuperior || (!!meuId && item.id === meuId);
+  const souDonoEdicaoTrat = !!meuId && meuId === donoEdicaoId;
+  const podeTransferirEdicaoTrat = souDonoEdicaoTrat || ehAlcadaSuperior;
+  const somaPctTrat = divisao.reduce((s, c) => s + (Number(c.pct) || 0), 0);
+  const addCorretorDivisao = (cid) => {
+    const c = corretores.find(x => (x.supabaseId || x.id) === cid);
+    if (!c) return;
+    const idReal = c.supabaseId || c.id;
+    if (divisao.some(d => d.id === idReal)) return;
+    setForm(f => {
+      const det = [...(f.tratativa_divisao || []), { id: idReal, nome: c.nome, pct: 0 }];
+      const eq = Math.floor(100 / det.length);
+      det.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (det.length - 1)) : eq; });
+      const dono = f.tratativa_dono_edicao && det.some(d => d.id === f.tratativa_dono_edicao)
+        ? f.tratativa_dono_edicao : det[0].id;
+      return { ...f, tratativa_divisao: det, tratativa_dono_edicao: dono };
+    });
+  };
+  const removerCorretorDivisao = (idx, item) => {
+    if (!podeEditarFatiaTrat(item)) return;
+    setForm(f => {
+      const det = (f.tratativa_divisao || []).filter((_, i) => i !== idx);
+      if (det.length > 0) {
+        const eq = Math.floor(100 / det.length);
+        det.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (det.length - 1)) : eq; });
+      }
+      const dono = det.some(d => d.id === f.tratativa_dono_edicao) ? f.tratativa_dono_edicao : (det[0]?.id || null);
+      return { ...f, tratativa_divisao: det, tratativa_dono_edicao: dono };
+    });
+  };
+  const setPctDivisao = (idx, val) => {
+    setForm(f => {
+      const det = [...(f.tratativa_divisao || [])];
+      det[idx] = { ...det[idx], pct: Number(val) || 0 };
+      return { ...f, tratativa_divisao: det };
+    });
+  };
+  const definirDonoEdicaoTrat = (item) => {
+    if (!podeTransferirEdicaoTrat) return;
+    setForm(f => ({ ...f, tratativa_dono_edicao: item.id }));
+  };
+
   useEffect(() => {
     function handleEsc(e) {
       if (e.key === 'Escape') { localStorage.removeItem('crm_rascunho'); onClose(); }
@@ -225,7 +275,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     } else if (isNovaNeg) {
       const c = modal.cliente;
       const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: 'Carteira', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
-      if (perfil) { initial.corretor = perfil.nome; initial.corretor_id = perfil.id; }
+      if (perfil) {
+      initial.corretor = perfil.nome; initial.corretor_id = perfil.id;
+      // Tratativa nasce 100% de quem registra; ele já é o dono da edição.
+      if (perfil.id) {
+        initial.tratativa_divisao = [{ id: perfil.id, nome: perfil.nome, pct: 100 }];
+        initial.tratativa_dono_edicao = perfil.id;
+      }
+    }
       setForm(initial);
       setOrigemBloqueada(true);
       setInternacional(isIntl(c.telefone || ''));
@@ -245,7 +302,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
 
   function resetForm() {
     const initial = { ...emptyForm };
-    if (perfil) { initial.corretor = perfil.nome; initial.corretor_id = perfil.id; }
+    if (perfil) {
+      initial.corretor = perfil.nome; initial.corretor_id = perfil.id;
+      // Tratativa nasce 100% de quem registra; ele já é o dono da edição.
+      if (perfil.id) {
+        initial.tratativa_divisao = [{ id: perfil.id, nome: perfil.nome, pct: 100 }];
+        initial.tratativa_dono_edicao = perfil.id;
+      }
+    }
     setForm(initial);
     setValorDisplay('');
     setInternacional(false);
@@ -509,6 +573,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   async function handleSave() {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
+    // Trava da divisão de comissão: se há divisão definida, precisa fechar 100%.
+    if ((form.tratativa_divisao || []).length > 0) {
+      const soma = (form.tratativa_divisao || []).reduce((s, c) => s + (Number(c.pct) || 0), 0);
+      if (soma !== 100) { alert(`A divisão de comissão da tratativa precisa somar 100%. Atualmente soma ${soma}%.`); return; }
+    }
     setSaving(true);
 
     // Bloqueio de duplicata: só para cliente NOVO (sem vínculo). Se o telefone já existe
@@ -722,6 +791,62 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </select>
             ) : (
               <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
+            )}
+          </div>
+
+          {/* DIVISÃO DE COMISSÃO DA TRATATIVA (100% interno) */}
+          <div className="field-full" style={{ marginTop: 4 }}>
+            <label className="form-label">Divisão de comissão (tratativa)</label>
+            <select value="" onChange={e => { if (e.target.value) { addCorretorDivisao(e.target.value); e.target.value = ''; } }} style={{ width: '100%', marginBottom: 8 }}>
+              <option value="">+ Adicionar corretor à divisão...</option>
+              {corretores
+                .filter(c => (c.supabaseId || c.id) && !divisao.some(d => d.id === (c.supabaseId || c.id)))
+                .map(c => <option key={c.supabaseId || c.id} value={c.supabaseId || c.id}>{c.nome}</option>)}
+            </select>
+
+            {divisao.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {divisao.map((item, idx) => {
+                  const posso = podeEditarFatiaTrat(item);
+                  const ehDono = item.id === donoEdicaoId;
+                  return (
+                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: '8px 12px', border: '1px solid #e5e7eb' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            onClick={() => definirDonoEdicaoTrat(item)}
+                            title={ehDono ? 'Dono da edição (comanda a tratativa)' : (podeTransferirEdicaoTrat ? 'Passar o dono da edição para este corretor' : 'Só o dono atual ou diretor/gerente transfere')}
+                            style={{ fontSize: 15, lineHeight: 1, cursor: (podeTransferirEdicaoTrat && !ehDono) ? 'pointer' : 'default', opacity: ehDono ? 1 : (podeTransferirEdicaoTrat ? 0.35 : 0.2), userSelect: 'none' }}>
+                            {ehDono ? '⭐' : '☆'}
+                          </span>
+                          {item.nome}
+                          {!posso && <span style={{ fontSize: 10.5, color: '#9ca3af', fontWeight: 500 }}>🔒</span>}
+                        </div>
+                      </div>
+                      {divisao.length > 1 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input type="number" min="0" max="100" step="1" value={item.pct} disabled={!posso}
+                            onChange={e => setPctDivisao(idx, e.target.value)}
+                            style={{ width: 60, textAlign: 'center', padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db', opacity: posso ? 1 : 0.55, cursor: posso ? 'auto' : 'not-allowed', background: posso ? '#fff' : '#f3f4f6' }} />
+                          <span style={{ fontSize: 12, color: '#9ca3af' }}>%</span>
+                        </div>
+                      )}
+                      <button type="button" disabled={!posso} title={posso ? 'Remover' : 'Só o dono ou diretor/gerente remove'}
+                        onClick={() => removerCorretorDivisao(idx, item)}
+                        style={{ background: 'none', border: 'none', color: posso ? '#9ca3af' : '#e5e7eb', cursor: posso ? 'pointer' : 'not-allowed', fontSize: 18, lineHeight: 1, padding: '0 4px' }}>×</button>
+                    </div>
+                  );
+                })}
+                {divisao.length > 1 && (
+                  <div style={{ fontSize: 11, color: '#9ca3af', paddingLeft: 4 }}>
+                    Total: {somaPctTrat}%
+                    {somaPctTrat !== 100 && <span style={{ color: '#dc2626', marginLeft: 6 }}>⚠ deve somar 100%</span>}
+                  </div>
+                )}
+                <div style={{ fontSize: 10.5, color: '#9ca3af', paddingLeft: 4 }}>
+                  ⭐ = dono da edição. {podeTransferirEdicaoTrat ? 'Clique na ☆ para passar a posse.' : 'Só o dono atual ou diretor/gerente transfere.'}
+                </div>
+              </div>
             )}
           </div>
 
