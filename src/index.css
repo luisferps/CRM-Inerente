@@ -505,3 +505,80 @@ body.dark .error-banner { background: #7f1d1d; color: #fca5a5; }
   .kanban-col { min-width: 140px; }
   .origem-grid { grid-template-columns: 1fr; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   TEMA INERENTE (Apple-style) — escopado ao Modal de Tratativa
+   Mesma identidade do inerente.com.br (Estoque). Não afeta o resto do CRM.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --ine-primary: #C0392B; --ine-primary-dark: #922B21; --ine-primary-light: #FADBD8; --ine-primary-border: #E59A94;
+  --ine-card: #ffffff; --ine-section: #fdf5f5; --ine-input: #ffffff;
+  --ine-text: #1d1d1f; --ine-text-soft: #6e6e73; --ine-text-mut: #a1a1a6;
+  --ine-border: #e8e8ed; --ine-border-soft: #d2d2d7;
+  --ine-shadow-card: 0 20px 60px rgba(0,0,0,0.14);
+}
+body.dark {
+  --ine-primary: #E74C3C; --ine-primary-dark: #C0392B; --ine-primary-light: #3d2020; --ine-primary-border: #8b3a30;
+  --ine-card: #1e2335; --ine-section: #252a3d; --ine-input: #242a3d;
+  --ine-text: #e8e8ed; --ine-text-soft: #a1a1a6; --ine-text-mut: #8a8a8e;
+  --ine-border: #2a3050; --ine-border-soft: #374151;
+  --ine-shadow-card: 0 20px 60px rgba(0,0,0,0.55);
+}
+
+.modal {
+  border-radius: 16px;
+  box-shadow: var(--ine-shadow-card);
+  background: var(--ine-card);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+.modal-header {
+  border-bottom: 1px solid var(--ine-border);
+  background: var(--ine-card);
+  border-radius: 16px 16px 0 0;
+}
+.modal-title { font-size: 18px; font-weight: 600; color: var(--ine-text); letter-spacing: -0.01em; }
+.modal-body { background: var(--ine-card); }
+.modal-footer { border-top: 1px solid var(--ine-border); background: var(--ine-card); border-radius: 0 0 16px 16px; }
+
+/* Inputs no estilo Apple, só dentro do modal */
+.modal input, .modal select, .modal textarea {
+  border-radius: 10px !important;
+  border: 1px solid var(--ine-border-soft) !important;
+  background: var(--ine-input) !important;
+  color: var(--ine-text) !important;
+  font-size: 14px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.modal input:focus, .modal select:focus, .modal textarea:focus {
+  outline: none;
+  border-color: var(--ine-primary) !important;
+  box-shadow: 0 0 0 3px var(--ine-primary-light) !important;
+}
+.modal .form-label { color: var(--ine-text-soft); font-weight: 500; font-size: 12.5px; }
+
+/* Botão Salvar do modal → vermelho Inerente (não mexe no azul do resto do CRM) */
+.modal-footer .btn-primary { background: var(--ine-primary); }
+.modal-footer .btn-primary:hover { background: var(--ine-primary-dark); }
+
+/* ── Cartões de seção (usados na reorganização — metade 2 da Fase 1) ── */
+.tsec {
+  background: var(--ine-section);
+  border: 1px solid var(--ine-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.tsec:last-child { margin-bottom: 0; }
+.tsec-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--ine-text);
+  margin-bottom: 14px; letter-spacing: -0.01em;
+}
+.tsec-head .ic { color: var(--ine-primary); font-size: 17px; }
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.tgrid .col-2 { grid-column: 1 / -1; }
+.tstatus-bar { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+
+@media (max-width: 640px) {
+  .tgrid { grid-template-columns: 1fr; }
+}
