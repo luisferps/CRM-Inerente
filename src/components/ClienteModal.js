@@ -1592,15 +1592,6 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             )}
           </div>
           )}
-          {isEdit && modal && modal.id && (form.corretor_id === perfil?.id || perfil?.is_diretor || perfil?.is_gerente) && (
-            <div className="field-full" style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
-              <button type="button" onClick={() => setTransfAberto(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                🔄 Transferir cliente para outro corretor
-              </button>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 5 }}>Diferente da divisão acima: aqui o cliente passa INTEIRO pra outro corretor (com aprovação dos dois).</div>
-            </div>
-          )}
           </div>
 
           <div className="tsec">
