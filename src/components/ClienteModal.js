@@ -116,6 +116,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [buscando, setBuscando] = useState(false);
   const [clienteEncontrado, setClienteEncontrado] = useState(null);
   const [cadastrandoCli, setCadastrandoCli] = useState(false);
+  const [countdownSalvar, setCountdownSalvar] = useState(null);
+  const countdownRef = useRef(null);
   const [origemBloqueada, setOrigemBloqueada] = useState(false);
   const [duplicatas, setDuplicatas] = useState([]);
   const [motivos, setMotivos] = useState([]);
@@ -845,9 +847,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           tipo: tipoNome || fbase.tipo,
           transacao: isLocacao ? 'Locação' : 'Venda',
           condominio: !!form.em_condominio || !!fbase.condominio,
-          bairro: locBairro || fbase.bairro,
-          cidade: locCidade || fbase.cidade,
-          estado: locEstado || fbase.estado,
+          bairro: fbase.bairro || locBairro,
+          cidade: fbase.cidade || locCidade,
+          estado: fbase.estado || locEstado,
+          agio: !!fbase._agio,
           nomeProprietario: nomePlaceholder ? (fbase.nomeProprietario || form.nome) : (form.nome || fbase.nomeProprietario),
           telefoneProprietario: form.telefone || fbase.telefoneProprietario,
           nomeCaptador: fbase.nomeCaptador || capNome,
@@ -896,8 +899,73 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Salvar com contagem regressiva de 3s cancelável (evita clique errado)
+  function iniciarSalvamento() {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
+    setCountdownSalvar(3);
+    countdownRef.current = setInterval(() => {
+      setCountdownSalvar(c => {
+        if (c <= 1) { clearInterval(countdownRef.current); countdownRef.current = null; setTimeout(() => handleSave(), 0); return null; }
+        return c - 1;
+      });
+    }, 1000);
+  }
+  function cancelarSalvamento() {
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    setCountdownSalvar(null);
+  }
+  useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
+
   const errStyle = k => errors[k] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
   const clienteLocked = (isNovaNeg || !!clienteEncontrado) && !isEdit;
+
+  // ── Fase 3: campos do imóvel guardados em form.ficha (migram pro Estoque ao captar) ──
+  const ficha = form.ficha || {};
+  function setFicha(campo, valor) {
+    setForm(f => {
+      const nf = { ...(f.ficha || {}), [campo]: valor };
+      const u = { ...f, ficha: nf };
+      // mantém a Localização (texto) sincronizada, p/ validação e listagem no CRM
+      if (campo === 'bairro' || campo === 'cidade') u.localizacao = [nf.bairro, nf.cidade].filter(Boolean).join(', ');
+      if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
+      return u;
+    });
+  }
+  const tipoNomeSel = (tipos.find(t => t.id === form.tipo_id) || {}).nome || '';
+  const ehTerreno = /lote|terreno|[áa]rea|gleba|ch[áa]cara|s[íi]tio|fazenda/i.test(tipoNomeSel);
+  const vazioVal = v => v === undefined || v === null || String(v).trim() === '';
+  // Radar: campos que o CLIENTE passa e ainda faltam (só captação — Vendedor/Locador)
+  const radarFaltando = (() => {
+    if (!isCaptacao) return [];
+    const f = [];
+    if (vazioVal(form.valor)) f.push('Valor');
+    if (vazioVal(ficha.bairro)) f.push('Bairro');
+    if (vazioVal(ficha.cidade)) f.push('Cidade');
+    if (ehTerreno) {
+      if (vazioVal(ficha.metragemTotal)) f.push('Metragem do terreno');
+      if (vazioVal(ficha.frente)) f.push('Frente');
+    } else {
+      if (vazioVal(ficha.quartos)) f.push('Nº de quartos');
+      if (vazioVal(ficha.banheiros)) f.push('Banheiros');
+      if (vazioVal(ficha.metragem)) f.push('Metragem construída');
+    }
+    if (form.em_condominio && vazioVal(ficha.valorCondominio)) f.push('Valor do condomínio');
+    return f;
+  })();
+  // Campo que grava dentro da ficha, com ✓ verde quando preenchido
+  const fichaInput = (label, campo, opts = {}) => {
+    const ok = !vazioVal(ficha[campo]);
+    return (
+      <div className={opts.full ? 'col-2' : undefined}>
+        <label className="form-label">{label} {ok && <span style={{ color: '#1D9E75' }}>✓</span>}</label>
+        <input type={opts.type || 'text'} inputMode={opts.type === 'number' ? 'numeric' : undefined}
+          value={ficha[campo] ?? ''} onChange={e => setFicha(campo, e.target.value)} placeholder={opts.ph || ''}
+          style={ok ? {} : { borderColor: '#E59A94' }} />
+      </div>
+    );
+  };
+
   const titulo = isNovaNeg ? `Nova Tratativa — ${modal.cliente?.nome}` : isEdit ? 'Editar Tratativa' : 'Nova Tratativa';
   const waDigits = (form.telefone || '').replace(/\D/g, '');
   const waHref = waDigits ? `https://wa.me/${internacional ? waDigits : (waDigits.startsWith('55') ? waDigits : '55' + waDigits)}` : null;
@@ -919,8 +987,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <label className="form-label">Modalidade *</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                ['Compra','🛒','#059669','#dcfce7','#065f46'],
-                ['Venda','🏷️','#2563eb','#dbeafe','#1d4ed8'],
+                ['Comprador','🛒','#059669','#dcfce7','#065f46'],
+                ['Vendedor','🏷️','#2563eb','#dbeafe','#1d4ed8'],
                 ['Locador','🔑','#d97706','#fef3c7','#92400e'],
                 ['Locatário','🚪','#7c3aed','#ede9fe','#5b21b6'],
               ].map(([m, icon, border, bg, text]) => (
@@ -1091,12 +1159,19 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           </div>
 
           <div className="tsec">
+          {isCaptacao && radarFaltando.length > 0 && (
+            <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#fdeceb', borderLeft: '3px solid #C0392B', borderRadius: '0 8px 8px 0', padding: '8px 11px', marginBottom: 12 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: '#922B21', marginBottom: 2 }}>📡 Ainda falta perguntar ({radarFaltando.length})</div>
+              <div style={{ fontSize: 12.5, color: '#6e6e73' }}>{radarFaltando.join(' · ')}</div>
+            </div>
+          )}
+          {isCaptacao && form.modalidade && radarFaltando.length === 0 && (
+            <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#eafaf1', borderLeft: '3px solid #1D9E75', borderRadius: '0 8px 8px 0', padding: '8px 11px', marginBottom: 12, fontSize: 12.5, color: '#0F6E56', fontWeight: 600 }}>✓ Todas as informações do cliente foram coletadas.</div>
+          )}
           <div className="tsec-head">{!form.modalidade ? '🏠 Imóvel / interesse' : isCaptacao ? '🏠 Imóvel' : '🔎 Interesse'}</div>
-          {/* Captação (Venda ou Locador) */}
           {isCaptacao && (
-            <div className="field-full" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '12px 14px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>🏠 Captação</div>
-              <div style={{ fontSize: 12, color: '#3b82f6' }}>Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'}. Preencha localização e observações.</div>
+            <div className="field-full" style={{ background: '#eef4fb', border: '1px solid #b5d4f4', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#185FA5', marginBottom: 4 }}>
+              🏠 Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'} — migra pro Estoque ao captar. O que exige pesquisa (CEP, descrição, fotos) fica pro Estoque.
             </div>
           )}
           <div className="tgrid">
@@ -1137,20 +1212,86 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             );
           })()}
           <div>
-            <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
+            <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>{isLocacao && isCaptacao ? 'Valor do aluguel (R$)' : 'Valor (R$)'} *</label>
             <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" style={errStyle('valor')} />
           </div>
-          <div>
-            <label className="form-label">Localização *</label>
-            <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
-          </div>
-          {!isCaptacao && (
+          {isCaptacao ? (<>
+            {fichaInput('Endereço', 'endereco', { full: true, ph: 'Rua, número, complemento' })}
+            {fichaInput('Bairro / setor', 'bairro')}
+            {fichaInput('Cidade', 'cidade')}
+            {fichaInput('Estado (UF)', 'estado', { ph: 'GO' })}
+            {!ehTerreno ? (<>
+              {fichaInput('Quartos', 'quartos', { type: 'number' })}
+              {fichaInput('Suítes', 'suites', { type: 'number' })}
+              {fichaInput('Banheiros', 'banheiros', { type: 'number' })}
+              {fichaInput('Vagas de garagem', 'garagens', { type: 'number' })}
+              {fichaInput('Metragem construída (m²)', 'metragem', { type: 'number' })}
+              {fichaInput('Metragem do terreno (m²)', 'metragemTotal', { type: 'number' })}
+              <div>
+                <label className="form-label">Estado do imóvel {!vazioVal(ficha.estadoImovel) && <span style={{ color: '#1D9E75' }}>✓</span>}</label>
+                <select value={ficha.estadoImovel ?? ''} onChange={e => setFicha('estadoImovel', e.target.value)}>
+                  <option value="">Selecionar</option>
+                  <option>Imóvel Novo</option><option>Seminovo</option><option>Usado</option><option>Em construção</option><option>Na planta</option>
+                </select>
+              </div>
+            </>) : (<>
+              {fichaInput('Metragem do terreno (m²)', 'metragemTotal', { type: 'number' })}
+              {fichaInput('Frente (m)', 'frente', { type: 'number' })}
+              {fichaInput('Laterais / fundos', 'laterais')}
+              <div>
+                <label className="form-label">Declive {!vazioVal(ficha.declive) && <span style={{ color: '#1D9E75' }}>✓</span>}</label>
+                <select value={ficha.declive ?? ''} onChange={e => setFicha('declive', e.target.value)}>
+                  <option value="">Selecionar</option><option>Plano</option><option>Aclive</option><option>Declive</option>
+                </select>
+              </div>
+              <div className="col-2" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4 }}>
+                {[['Muro','muro'],['Esquina','esquina'],['Asfalto','asfalto'],['Água','agua'],['Esgoto','esgoto']].map(([lbl, ck]) => (
+                  <label key={ck} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!ficha[ck]} onChange={e => setFicha(ck, e.target.checked)} style={{ width: 'auto', margin: 0 }} /> {lbl}
+                  </label>
+                ))}
+              </div>
+            </>)}
+            {form.em_condominio && (<>
+              {fichaInput('Nome do condomínio', 'nomeCondominio', { full: true })}
+              {fichaInput('Valor do condomínio (R$)', 'valorCondominio', { type: 'number' })}
+            </>)}
+            {isLocacao && fichaInput('IPTU (R$)', 'valorIPTU', { type: 'number' })}
+            <div>
+              <label className="form-label">Aceita permuta? {!vazioVal(ficha.permuta) && <span style={{ color: '#1D9E75' }}>✓</span>}</label>
+              <select value={ficha.permuta ?? ''} onChange={e => setFicha('permuta', e.target.value)}>
+                <option value="">Não informado</option><option>Sim</option><option>Não</option>
+              </select>
+            </div>
+          </>) : (<>
+            <div>
+              <label className="form-label">Localização *</label>
+              <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
+            </div>
             <div>
               <label className="form-label">Imóveis Visitados</label>
               <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
             </div>
-          )}
+          </>)}
           </div>
+          {isCaptacao && (
+            <div className="field-full" style={{ marginTop: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1d1d1f', cursor: 'pointer', fontWeight: 500 }}>
+                <input type="checkbox" checked={!!ficha._agio} onChange={e => setFicha('_agio', e.target.checked)} style={{ width: 16, height: 16, margin: 0 }} />
+                Imóvel de ágio (assumir financiamento)
+              </label>
+              {ficha._agio && (
+                <div className="tgrid" style={{ marginTop: 10, gridTemplateColumns: '1fr 1fr 1fr' }}>
+                  {fichaInput('Parcela (R$)', 'agioParcela', { type: 'number' })}
+                  {fichaInput('Prazo (meses)', 'agioPrazo', { type: 'number' })}
+                  {fichaInput('Saldo devedor (R$)', 'agioSaldoDevedor', { type: 'number' })}
+                  <div className="col-2" style={{ fontSize: 11.5, color: '#922B21' }}>
+                    Valor total (ágio + saldo): {((Number(form.valor) || 0) + (Number(ficha.agioSaldoDevedor) || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {!isCaptacao && (
             <div className="field-full">
               <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
@@ -1420,33 +1561,43 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
           <div className="tstatus-bar">
             <label className="form-label" style={{ marginBottom: 2 }}>Status</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-              {['S','N'].map(v => (
-                <button key={v} type="button" onClick={() => setStatus(v)}
+            {isCaptacao ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => { if (form.captado) toggleCaptado(); }}
                   style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${form.ativo === v ? (v === 'S' ? '#059669' : '#dc2626') : '#d1d5db'}`,
-                    background: form.ativo === v ? (v === 'S' ? '#d1fae5' : '#fee2e2') : '#fff',
-                    color: form.ativo === v ? (v === 'S' ? '#065f46' : '#991b1b') : '#6b7280' }}>
-                  {v === 'S' ? '✓ Ativo' : '✕ Inativo'}
+                    border: `1px solid ${!form.captado ? '#d97706' : '#d1d5db'}`,
+                    background: !form.captado ? '#fef3c7' : '#fff',
+                    color: !form.captado ? '#92400e' : '#6b7280' }}>
+                  🔄 Em captação
                 </button>
-              ))}
-              {isCaptacao && (
-                <button type="button" onClick={toggleCaptado}
-                  title="Marca a captação como encerrada com sucesso: o imóvel foi captado"
+                <button type="button" onClick={() => { if (!form.captado) toggleCaptado(); }}
+                  title="Marca a captação como concluída: o imóvel foi captado e vai pro Estoque"
                   style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${form.captado ? '#2563eb' : '#d1d5db'}`,
-                    background: form.captado ? '#dbeafe' : '#fff',
-                    color: form.captado ? '#1d4ed8' : '#6b7280' }}>
+                    border: `1px solid ${form.captado ? '#059669' : '#d1d5db'}`,
+                    background: form.captado ? '#d1fae5' : '#fff',
+                    color: form.captado ? '#065f46' : '#6b7280' }}>
                   🏠 Captado
                 </button>
-              )}
-            </div>
-                        {isCaptacao && form.captado && (
-              <span style={{ fontSize: 11, color: '#2563eb', marginTop: 4, display: 'block' }}>
-                Imóvel captado — tratativa encerrada com sucesso.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['S','N'].map(v => (
+                  <button key={v} type="button" onClick={() => setStatus(v)}
+                    style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: `1px solid ${form.ativo === v ? (v === 'S' ? '#059669' : '#dc2626') : '#d1d5db'}`,
+                      background: form.ativo === v ? (v === 'S' ? '#d1fae5' : '#fee2e2') : '#fff',
+                      color: form.ativo === v ? (v === 'S' ? '#065f46' : '#991b1b') : '#6b7280' }}>
+                    {v === 'S' ? '✓ Ativo' : '✕ Inativo'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isCaptacao && form.captado && (
+              <span style={{ fontSize: 11, color: '#059669', marginTop: 4, display: 'block' }}>
+                Imóvel captado — vai pro Estoque ao salvar.
               </span>
             )}
-            {form.ativo === 'N' && (
+            {!isCaptacao && form.ativo === 'N' && (
               <SelectComAdd label="Motivo da desistência" value={form.motivo_desistencia || ''} onChange={v => set('motivo_desistencia', v)}
                 options={motivos} setOptions={setMotivos} chave="motivos" isGerente={isGerente} perfil={perfil} />
             )}
@@ -1475,7 +1626,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               variant="modal" />
           )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
+          {countdownSalvar != null ? (
+            <button className="btn btn-primary" onClick={cancelarSalvamento} style={{ background: '#d97706' }}>
+              Salvando em {countdownSalvar}… toque para cancelar
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={iniciarSalvamento} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
+          )}
           </div>
         </div>
       </div>
