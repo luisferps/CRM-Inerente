@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, ehCaptacao } from '../constants';
 
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL_COMPLETO.length - 1; i >= 0; i--) {
@@ -16,9 +16,9 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
   const [filterCorretor, setFilterCorretor] = useState('');
 
   // Vendas em andamento: ativas e ainda não captadas (a captação encerra a tratativa com sucesso).
-  const vendas = useMemo(() => data.filter(c => c.modalidade === 'Venda' && c.ativo === 'S' && !c.captado), [data]);
+  const vendas = useMemo(() => data.filter(c => ehCaptacao(c.modalidade) && c.ativo === 'S' && !c.captado), [data]);
   // Captados: vendas concluídas por captação (entram no contador, fora da lista principal).
-  const captados = useMemo(() => data.filter(c => c.modalidade === 'Venda' && c.captado), [data]);
+  const captados = useMemo(() => data.filter(c => ehCaptacao(c.modalidade) && c.captado), [data]);
   const corretoresUnicos = useMemo(() => [...new Set(vendas.map(c => c.corretor).filter(Boolean))].sort(), [vendas]);
 
   const filtered = useMemo(() => {
@@ -77,7 +77,7 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma venda encontrada.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma captação encontrada.</td></tr>}
             {filtered.map((c) => {
               const etapa = getEtapaAtual(c);
               const etapaIdx = etapa ? ETAPAS_FUNIL_COMPLETO.indexOf(etapa) : -1;
