@@ -281,6 +281,8 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const [tituloCarregado, setTituloCarregado] = useState(false);
   const [salvandoTitulo, setSalvandoTitulo] = useState(false);
   const [refreshDireita, setRefreshDireita] = useState(0);
+  const [amostras, setAmostras] = useState([]);
+  const [carregandoAmostra, setCarregandoAmostra] = useState(false);
 
   const instancia = perfil?.whatsapp_instancia || '';
 
@@ -382,6 +384,24 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   }, [textoGerado, editando]);
 
   const textoFinal = editando ? textoEditado : textoGerado;
+
+  async function verAmostra() {
+    if (!textoFinal.trim()) return;
+    setCarregandoAmostra(true);
+    setAmostras([]);
+    try {
+      const r = await fetch(`${WA_AGENT_URL}/demandas/amostra-variacao`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: textoFinal })
+      });
+      const j = await r.json();
+      if (j.ok && j.ativo === false) setAmostras(['A variação por IA está desligada — a mensagem sai exatamente como está acima.']);
+      else if (j.ok && j.amostras && j.amostras.length) setAmostras(j.amostras);
+      else if (j.ok) setAmostras(['Não consegui gerar a amostra agora. Tente de novo.']);
+      else setAmostras(['Erro ao gerar amostra: ' + (j.error || 'desconhecido')]);
+    } catch (e) { setAmostras(['Erro ao gerar amostra: ' + e.message]); }
+    setCarregandoAmostra(false);
+  }
 
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
@@ -495,6 +515,10 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
                     style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                     {copiado ? '✓ Copiado!' : '📋 Copiar'}
                   </button>
+                  <button onClick={verAmostra} disabled={!textoFinal || carregandoAmostra}
+                    style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: (!textoFinal || carregandoAmostra) ? '#c4b5fd' : '#7c3aed', color: '#fff', fontSize: 11, fontWeight: 600, cursor: (!textoFinal || carregandoAmostra) ? 'default' : 'pointer' }}>
+                    {carregandoAmostra ? '✨ gerando…' : '✨ Ver amostra da variação'}
+                  </button>
                 </div>
               </div>
               {textoFinal ? (
@@ -513,6 +537,19 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
               )}
               {instancia && textoFinal && (
                 <div style={{ marginTop: 8, fontSize: 11, color: '#25d366', fontWeight: 600 }}>● {instancia}</div>
+              )}
+              {amostras.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, color: '#7c3aed' }}>✨ Como a IA vai variar (cada grupo recebe uma versão nova):</div>
+                  {amostras.map((a, i) => (
+                    <pre key={i} style={{ fontFamily: 'Inter,sans-serif', fontSize: 11.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: textColor, margin: '0 0 10px', padding: '10px 12px', background: darkMode ? '#1e1b2e' : '#faf5ff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
+                      {a}
+                    </pre>
+                  ))}
+                  <div style={{ fontSize: 10.5, color: textMuted, fontStyle: 'italic' }}>
+                    Confira que preço, bairro, quartos e contato aparecem em todos os exemplos. O envio real gera uma versão fresca pra cada grupo — nunca sai igual.
+                  </div>
+                </div>
               )}
             </div>
           </>
