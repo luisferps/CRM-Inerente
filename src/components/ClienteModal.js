@@ -107,6 +107,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [pedidoPendente, setPedidoPendente] = useState(null); // pedido de divisão aguardando gerência
   const [origens, setOrigens] = useState([]);
   const [tipos, setTipos] = useState([]);
   const [valorDisplay, setValorDisplay] = useState('');
@@ -157,13 +158,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         // não um campo "role" de texto. Listamos todos que atendem cliente (corretor/gerente/diretor).
         const { data } = await supabase
           .from('perfis')
-          .select('id, nome, telefone, is_corretor, is_gerente, is_diretor, aprovado')
+          .select('id, nome, telefone, is_corretor, is_gerente, is_diretor, gerente_id, aprovado')
           .or('is_corretor.eq.true,is_gerente.eq.true,is_diretor.eq.true')
           .order('nome');
         (data || []).forEach(p => {
           if (!p.nome) return;
           if (p.aprovado === false) return; // não lista perfil não aprovado
-          mapa.set(normNome(p.nome), { nome: p.nome, telefone: p.telefone || '', supabaseId: p.id, firebaseId: null });
+          mapa.set(normNome(p.nome), { nome: p.nome, telefone: p.telefone || '', supabaseId: p.id, firebaseId: null, gerente_id: p.gerente_id || null, is_gerente: !!p.is_gerente, is_diretor: !!p.is_diretor });
         });
       } catch (e) { /* segue só com o Estoque */ }
       try {
@@ -198,11 +199,81 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const souDonoEdicaoTrat = !!meuId && meuId === donoEdicaoId;
   const podeTransferirEdicaoTrat = souDonoEdicaoTrat || ehAlcadaSuperior;
   const somaPctTrat = divisao.reduce((s, c) => s + (Number(c.pct) || 0), 0);
+
+  // ─── PARTE 4: aprovação por gerência ao ceder para OUTRA equipe ───
+  // gerente_id do usuário logado (quem cede). Diretor não tem gerente e tem passe livre.
+  const meuGerenteId = perfil?.gerente_id || null;
+  const infoCorretor = (cid) => corretores.find(x => (x.supabaseId || x.id) === cid) || null;
+  // Dois corretores são da MESMA equipe se têm o mesmo gerente_id (ou um é gerente do outro).
+  const mesmaEquipeQueEu = (cid) => {
+    const c = infoCorretor(cid);
+    if (!c) return true; // sem info, não trava
+    const gDele = c.gerente_id || null;
+    // mesma equipe: mesmo gerente; ou o corretor é o próprio gerente do usuário; ou o usuário é gerente dele
+    if (meuGerenteId && gDele && meuGerenteId === gDele) return true;
+    if (meuGerenteId && cid === meuGerenteId) return true;
+    if (gDele && gDele === meuId) return true;
+    if (!meuGerenteId && !gDele) return true; // ambos sem gerente (ex.: direto do diretor)
+    return false;
+  };
+  // Quem aprova quando o usuário cede para fora da equipe: o gerente do usuário; se não tem, o diretor.
+  const aprovadorId = () => meuGerenteId || null; // null => tratado como "diretor aprova" na aba de aprovações
+
+  // Cria um pedido de divisão pendente (cede para outra equipe). A divisão vigente não muda.
+  const criarPedidoDivisao = async (corretorNovo, idNovo) => {
+    const clienteId = form.cliente_real_id || modal?.cliente?.id || null;
+    const propostaBase = (divisao.length > 0 ? divisao : (meuId ? [{ id: meuId, nome: perfil?.nome || '', pct: 100 }] : []));
+    // proposta: metade para o novo (a partir da fatia de quem cede)
+    const proposta = [...propostaBase];
+    const idxCede = proposta.findIndex(d => d.id === meuId);
+    if (idxCede >= 0) {
+      const metade = Math.round((proposta[idxCede].pct || 0) / 2);
+      proposta[idxCede] = { ...proposta[idxCede], pct: (proposta[idxCede].pct || 0) - metade };
+      proposta.push({ id: idNovo, nome: corretorNovo.nome, pct: metade });
+    } else {
+      proposta.push({ id: idNovo, nome: corretorNovo.nome, pct: 0 });
+    }
+    try {
+      const registro = {
+        cliente_id: clienteId,
+        solicitante_id: meuId,
+        aprovador_id: aprovadorId(),
+        divisao_atual: divisao,
+        divisao_proposta: proposta,
+        status: 'pendente',
+      };
+      const { data, error } = await supabase.from('tratativa_divisao_pedidos').insert(registro).select().single();
+      if (error) { alert('Não consegui registrar o pedido de divisão: ' + error.message); return; }
+      setPedidoPendente(data);
+      alert('Pedido de divisão enviado para aprovação do gerente. A tratativa segue como está até ser aprovada.');
+    } catch (e) {
+      alert('Falha ao registrar o pedido de divisão.');
+    }
+  };
+
+  // Carrega pedido de divisão pendente desta tratativa (se houver).
+  useEffect(() => {
+    const clienteId = form.cliente_real_id || modal?.cliente?.id || null;
+    if (!clienteId) { setPedidoPendente(null); return; }
+    let vivo = true;
+    supabase.from('tratativa_divisao_pedidos')
+      .select('*').eq('cliente_id', clienteId).eq('status', 'pendente')
+      .order('criado_em', { ascending: false }).limit(1)
+      .then(({ data }) => { if (vivo) setPedidoPendente(data && data[0] ? data[0] : null); });
+    return () => { vivo = false; };
+  }, [form.cliente_real_id, modal]);
+
   const addCorretorDivisao = (cid) => {
     const c = corretores.find(x => (x.supabaseId || x.id) === cid);
     if (!c) return;
     const idReal = c.supabaseId || c.id;
     if (divisao.some(d => d.id === idReal)) return;
+    // Alçada superior aplica direto (sem aprovação).
+    if (!ehAlcadaSuperior && !mesmaEquipeQueEu(idReal)) {
+      // Cede para outra equipe → cria pedido pendente; a divisão vigente NÃO muda.
+      criarPedidoDivisao(c, idReal);
+      return;
+    }
     setForm(f => {
       const det = [...(f.tratativa_divisao || []), { id: idReal, nome: c.nome, pct: 0 }];
       const eq = Math.floor(100 / det.length);
@@ -845,6 +916,17 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 )}
                 <div style={{ fontSize: 10.5, color: '#9ca3af', paddingLeft: 4 }}>
                   ⭐ = dono da edição. {podeTransferirEdicaoTrat ? 'Clique na ☆ para passar a posse.' : 'Só o dono atual ou diretor/gerente transfere.'}
+                </div>
+              </div>
+            )}
+            {pedidoPendente && (
+              <div style={{ marginTop: 8, padding: '10px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>⏳ Divisão pendente de aprovação</div>
+                <div style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+                  Há uma divisão aguardando o aval do gerente (cede comissão para outra equipe). Até ser aprovada, vale a divisão atual.
+                  <div style={{ marginTop: 4 }}>
+                    Proposta: {(pedidoPendente.divisao_proposta || []).map(d => `${d.nome} ${d.pct}%`).join(' · ')}
+                  </div>
                 </div>
               </div>
             )}
