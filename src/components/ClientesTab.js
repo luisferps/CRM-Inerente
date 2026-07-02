@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
+import AmpulhetaAprovacao from './AmpulhetaAprovacao';
 
 const ORIGENS_DEFAULT = ['Carteira','Facebook','Google','Indicação','Instagram','OLX','Zap Imóveis','Corretor'];
 
-export default function ClientesTab({ clientes, negociacoes, onVerTratativas, onNovaTratativa, onReload }) {
+export default function ClientesTab({ clientes, negociacoes, onVerTratativas, onNovaTratativa, onReload, perfil }) {
   const [search, setSearch] = useState('');
   const [editModal, setEditModal] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -109,6 +110,7 @@ export default function ClientesTab({ clientes, negociacoes, onVerTratativas, on
                 <td style={{ padding: '12px 16px', fontWeight: 600 }}>
                   {c.nome}
                   {c.is_corretor && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 10, fontSize: 10, background: '#fff7ed', color: '#c2410c', fontWeight: 600 }}>Corretor</span>}
+                  <AmpulhetaAprovacao clienteId={c.id} perfil={perfil} onAplicado={onReload} />
                 </td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.telefone || '—'}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.email || '—'}</td>
