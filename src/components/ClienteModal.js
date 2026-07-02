@@ -118,6 +118,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [cadastrandoCli, setCadastrandoCli] = useState(false);
   const [modoCadastroCli, setModoCadastroCli] = useState(false);
   const [dividindoAtend, setDividindoAtend] = useState(false);
+  const telOriginalRef = useRef('');        // telefone como estava salvo (tolera legado fora do padrão)
+  const origemTratLockRef = useRef(false);  // origem da tratativa veio preenchida (ex.: OLX) → só leitura
+  const [imagensIA, setImagensIA] = useState([]); // prints colados no campo da IA
   const [countdownSalvar, setCountdownSalvar] = useState(null);
   const countdownRef = useRef(null);
   const [origemBloqueada, setOrigemBloqueada] = useState(false);
@@ -295,7 +298,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       return;
     }
     setForm(f => {
-      const det = [...(f.tratativa_divisao || []), { id: idReal, nome: c.nome, pct: 0 }];
+      let base = [...(f.tratativa_divisao || [])];
+      // Fichas antigas: divisão vazia → o responsável entra primeiro, senão a lista some (precisa de 2+).
+      if (base.length === 0) {
+        const respId = f.corretor_id || meuId || null;
+        const respNome = f.corretor || (perfil && perfil.nome) || 'Responsável';
+        if (respId && respId !== idReal) base.push({ id: respId, nome: respNome, pct: 0 });
+      }
+      const det = [...base, { id: idReal, nome: c.nome, pct: 0 }];
       const eq = Math.floor(100 / det.length);
       det.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (det.length - 1)) : eq; });
       const dono = f.tratativa_dono_edicao && det.some(d => d.id === f.tratativa_dono_edicao)
@@ -354,7 +364,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     const idReal = c.supabaseId || c.id;
     if (capDiv.some(d => d.tipo === 'interno' && d.id === idReal)) return;
     setForm(f => {
-      const det = recalcCap([...(f.captacao_divisao || []), { tipo: 'interno', id: idReal, nome: c.nome, pct: 0 }]);
+      let base = [...(f.captacao_divisao || [])];
+      if (base.length === 0) {
+        const respId = f.corretor_id || meuId || null;
+        const respNome = f.corretor || (perfil && perfil.nome) || 'Responsável';
+        if (respId && respId !== idReal) base.push({ tipo: 'interno', id: respId, nome: respNome, pct: 0 });
+      }
+      const det = recalcCap([...base, { tipo: 'interno', id: idReal, nome: c.nome, pct: 0 }]);
       const internos = det.filter(d => d.tipo === 'interno');
       const donoOk = internos.some(d => d.id === f.captacao_dono_edicao);
       return { ...f, captacao_divisao: det, captacao_dono_edicao: donoOk ? f.captacao_dono_edicao : (internos[0]?.id || null) };
@@ -439,6 +455,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     if (isEdit) {
       setForm({ ...emptyForm, ...modal, modalidade: normModalidade(modal.modalidade) });
       jaCaptadoRef.current = !!modal.captado;
+      telOriginalRef.current = modal.telefone || '';
+      origemTratLockRef.current = !!(modal.origem_tratativa && String(modal.origem_tratativa).trim());
+      // Busca silenciosa: só descobre se o cliente existe na tabela (sem mexer no form).
+      // Se não existe, os campos abrem editáveis na edição (tratativa legada sem cadastro).
+      (async () => {
+        try {
+          const digits = String(modal.telefone || '').replace(/\D/g, '');
+          if (digits.length >= 8) {
+            const suf = digits.slice(-8);
+            const { data: cs } = await supabase.from('clientes').select('*').or(`telefone.ilike.%${suf}%,telefone.eq.${digits}`).limit(1);
+            setClienteEncontrado(cs && cs.length ? cs[0] : null);
+          } else setClienteEncontrado(null);
+        } catch (e) { /* silencioso */ }
+      })();
       // o que já estava nas observações internas vira o trecho PROTEGIDO (não pode ser apagado)
       detalhesBloqueadoRef.current = (modal.detalhes || '').trim();
       setDetalhesAdicional('');
@@ -635,7 +665,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   function validate() {
     const errs = {};
     if (!form.nome.trim()) errs.nome = true;
-    if (!validarTel(form.telefone, internacional)) errs.telefone = true;
+    if (!validarTel(form.telefone, internacional)) {
+      // Legado: na edição, se o telefone já estava salvo assim e não foi mexido, não trava o salvamento.
+      const legadoOk = isEdit && telOriginalRef.current && form.telefone === telOriginalRef.current;
+      if (!legadoOk) errs.telefone = true;
+    }
     if (!form.modalidade) errs.modalidade = true;
     // Etapa inicial: lead recém-chegado (ex.: vindo do SDR / Canal Pro / Chaves na Mão) que ainda
     // está só em "Tratativa" e não avançou no funil. Nesse momento o corretor ainda nem conversou
@@ -652,14 +686,31 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     return errs;
   }
 
+  function handlePasteIA(e) {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    const files = [];
+    for (const it of items) { if (it.type && it.type.indexOf('image/') === 0) { const f = it.getAsFile(); if (f) files.push(f); } }
+    if (!files.length) return; // texto normal segue o fluxo padrão
+    e.preventDefault();
+    files.forEach(file => {
+      const r = new FileReader();
+      r.onload = () => {
+        const res = String(r.result || '');
+        const m = res.match(/^data:(.+);base64,(.*)$/);
+        if (m) setImagensIA(prev => prev.length >= 4 ? prev : [...prev, { media_type: m[1], data: m[2], preview: res }]);
+      };
+      r.readAsDataURL(file);
+    });
+  }
+
   async function organizarIA() {
     const desc = ((conversaComprador || '') || (form.ficha && form.ficha._descricao) || '').trim();
-    if (!desc.trim()) { alert('Cole a conversa/anúncio no campo antes de organizar com a IA.'); return; }
+    if (!desc.trim() && imagensIA.length === 0) { alert('Cole a conversa/anúncio (texto ou print) no campo antes de organizar com a IA.'); return; }
     setOrganizandoIA(true);
     try {
       const r = await fetch(BACKEND + '/captacao/organizar-ficha', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descricao: desc, ficha: form.ficha || {} })
+        body: JSON.stringify({ descricao: desc, ficha: form.ficha || {}, imagens: imagensIA.map(i => ({ media_type: i.media_type, data: i.data })) })
       });
       const j = await r.json();
       if (j.ok && j.ficha) {
@@ -676,6 +727,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           localizacao: loc || f.localizacao
         }));
         if (precoNum > 0) setValorDisplay(precoNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setImagensIA([]);
         alert('✓ Campos preenchidos pela IA. Confira Tipo, Valor e Localização e ajuste o que precisar.');
       } else alert('Não consegui organizar: ' + (j.error || 'erro'));
     } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
@@ -686,12 +738,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   // (modalidade, tipo, valor/orçamento, localização desejada, quartos e observações).
   async function organizarConversaComprador() {
     const txt = (conversaComprador || '').trim();
-    if (!txt) { alert('Cole a conversa do WhatsApp com o cliente antes de organizar com a IA.'); return; }
+    if (!txt && imagensIA.length === 0) { alert('Cole a conversa do WhatsApp (texto ou print) antes de organizar com a IA.'); return; }
     setOrganizandoComprador(true);
     try {
       const r = await fetch(BACKEND + '/crm/organizar-conversa', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversa: txt, tipos: tipos || [] })
+        body: JSON.stringify({ conversa: txt, tipos: tipos || [], imagens: imagensIA.map(i => ({ media_type: i.media_type, data: i.data })) })
       });
       const j = await r.json();
       if (j.ok && j.dados) {
@@ -736,6 +788,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         }
         if (valorNum > 0) setValorDisplay(valorNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         const quartosTxt = (d.quartos && String(d.quartos).trim()) ? ('\nQuartos desejados: ' + d.quartos) : '';
+        setImagensIA([]);
         alert('✓ Campos preenchidos pela IA a partir da conversa. Confira e ajuste o que precisar.' + quartosTxt);
       } else alert('Não consegui organizar: ' + (j.error || 'erro'));
     } catch (e) { alert('Erro ao chamar a IA: ' + e.message); }
@@ -847,7 +900,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         const locEstado = (partesLoc[2] && partesLoc[2].length <= 3) ? partesLoc[2].toUpperCase() : (partesLoc[2] || '');
         const nomePlaceholder = /^propriet[áa]rio\s*\d+$/i.test(String(form.nome || '').trim());
         const fichaEnvio = Object.assign({}, fbase, {
-          preco: (form.valor !== '' && form.valor != null) ? form.valor : fbase.preco,
+          // Estoque: venda usa 'preco'; LOCAÇÃO usa 'valorAluguel'. Mandar no campo certo.
+          preco: isLocacao ? (fbase.preco || '') : ((form.valor !== '' && form.valor != null) ? form.valor : fbase.preco),
+          valorAluguel: isLocacao ? ((form.valor !== '' && form.valor != null) ? form.valor : (fbase.valorAluguel || '')) : (fbase.valorAluguel || ''),
           tipo: tipoNome || fbase.tipo,
           transacao: isLocacao ? 'Locação' : 'Venda',
           condominio: !!form.em_condominio || !!fbase.condominio,
@@ -873,7 +928,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           body: JSON.stringify({ ficha: fichaEnvio })
         });
         const jEst = await rEst.json();
-        if (jEst.ok) { jaCaptadoRef.current = true; alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
+        if (jEst.ok) { jaCaptadoRef.current = true; setImagensIA([]);
+        alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
         else alert('A tratativa foi salva, mas não consegui criar no Estoque:\n' + (jEst.error || 'erro desconhecido') + '\n\nMe avise para verificar.');
       } catch (e) { alert('A tratativa foi salva, mas falhou o envio ao Estoque:\n' + e.message); }
     }
@@ -974,7 +1030,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (vazioVal(ficha.valorCondominio)) f.push('Valor do condomínio');
     }
     if (isLocacao && vazioVal(ficha.valorIPTU)) f.push('IPTU');
-    if (vazioVal(ficha.permuta)) f.push('Permuta');
+    if (!isLocacao && vazioVal(ficha.permuta)) f.push('Permuta');
     return f;
   })();
   // Campo que grava dentro da ficha, com ✓ verde quando preenchido
@@ -1032,8 +1088,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           <textarea
             value={conversaComprador}
             onChange={e => setConversaComprador(e.target.value)}
-            placeholder="Cole aqui a conversa que você teve com o cliente (ou o anúncio do imóvel). A IA lê e preenche os campos abaixo."
+            onPaste={handlePasteIA}
+            placeholder="Cole aqui a conversa que você teve com o cliente (texto ou print/foto — Ctrl+V) ou o anúncio do imóvel. A IA lê e preenche os campos abaixo."
             style={{ width: '100%', minHeight: 84, fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #d2d2d7', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+          {imagensIA.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              {imagensIA.map((img, i) => (
+                <div key={i} style={{ position: 'relative' }}>
+                  <img src={img.preview} alt={'print ' + (i + 1)} style={{ width: 74, height: 74, objectFit: 'cover', borderRadius: 8, border: '1px solid #d2d2d7' }} />
+                  <button type="button" onClick={() => setImagensIA(prev => prev.filter((_, j) => j !== i))}
+                    style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', border: 'none', background: '#C0392B', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ textAlign: 'center', marginTop: 10 }}>
             <button type="button" disabled={organizandoIA || organizandoComprador || !form.modalidade}
               onClick={() => (isCaptacao ? organizarIA() : organizarConversaComprador())}
@@ -1071,7 +1139,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             </div>
           )}
 
-          {!isEdit && !clienteEncontrado && !modoCadastroCli && validarTel(form.telefone, internacional) && (
+          {!clienteEncontrado && !modoCadastroCli && validarTel(form.telefone, internacional) && (
             <div style={{ marginTop: 10, padding: '10px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12.5, color: '#92400e' }}>Esse cliente ainda não está cadastrado.</span>
               <button type="button" onClick={() => setModoCadastroCli(true)} style={{ background: 'var(--ine-primary, #C0392B)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>＋ Cadastrar agora</button>
@@ -1079,7 +1147,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           )}
 
           {(clienteEncontrado || modoCadastroCli || isEdit) && (() => {
-            const leitura = !modoCadastroCli;
+            const leitura = !modoCadastroCli && !(isEdit && !clienteEncontrado);
             return (
             <div className="tgrid" style={{ marginTop: 12 }}>
               <div className="col-2">
@@ -1167,7 +1235,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                   style={!isCaptacao ? errStyle('tipo_id') : {}}
                 >
                   <option value="">Selecionar</option>
-                  {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  {[...tipos].sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR', { sensitivity: 'base' })).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
                 </select>
                 {permiteCond && (
                   <label style={{ marginTop: 6, fontSize: 13, color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1229,12 +1297,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               {fichaInput('Valor do condomínio (R$)', 'valorCondominio', { type: 'number' })}
             </>)}
             {isLocacao && fichaInput('IPTU (R$)', 'valorIPTU', { type: 'number' })}
+            {!isLocacao && (
             <div>
               <label className="form-label">Aceita permuta? {!vazioVal(ficha.permuta) && <span style={{ color: '#1D9E75' }}>✓</span>}</label>
               <select value={ficha.permuta ?? ''} onChange={e => setFicha('permuta', e.target.value)}>
                 <option value="">Não informado</option><option>Sim</option><option>Não</option>
               </select>
             </div>
+            )}
           </>) : (<>
             <div>
               <label className="form-label">Localização *</label>
@@ -1246,7 +1316,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             </div>
           </>)}
           </div>
-          {isCaptacao && (
+          {isCaptacao && !isLocacao && (
             <div className="field-full" style={{ marginTop: 4 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1d1d1f', cursor: 'pointer', fontWeight: 500 }}>
                 <input type="checkbox" checked={!!ficha._agio} onChange={e => setFicha('_agio', e.target.checked)} style={{ width: 16, height: 16, margin: 0 }} />
@@ -1494,12 +1564,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             )}
           </div>
           )}
+          {isEdit && modal && modal.id && (form.corretor_id === perfil?.id || perfil?.is_diretor || perfil?.is_gerente) && (
+            <div className="field-full" style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
+              <button type="button" onClick={() => setTransfAberto(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                🔄 Transferir cliente para outro corretor
+              </button>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 5 }}>Diferente da divisão acima: aqui o cliente passa INTEIRO pra outro corretor (com aprovação dos dois).</div>
+            </div>
+          )}
           </div>
 
           <div className="tsec">
           <div className="tsec-head">📋 Acompanhamento da tratativa</div>
           <div className="tgrid">
-          <SelectComAdd label="De onde veio essa tratativa?" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
+          <SelectComAdd label="De onde veio essa tratativa?" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)} bloqueado={origemTratLockRef.current}
             options={origens} setOptions={setOrigens} chave="origens"
             isGerente={isGerente} perfil={perfil} />
           <div>
@@ -1577,9 +1656,6 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               }}>🗑️ Excluir</button>
               {String(form.origem_tratativa || '').toUpperCase() === 'OLX' && (
                 <button className="btn btn-ghost" style={{ color: '#b45309' }} onClick={devolverParaCaptacao} disabled={saving}>↩ Devolver pra Captação</button>
-              )}
-              {(form.corretor_id === perfil?.id || perfil?.is_diretor || perfil?.is_gerente) && (
-                <button className="btn btn-ghost" style={{ color: '#7c3aed' }} onClick={() => setTransfAberto(true)}>🔄 Transferir cliente</button>
               )}
             </div>
           )}
