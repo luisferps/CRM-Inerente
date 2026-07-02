@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
+import { normModalidade } from '../constants';
 
 export default function RecebidosTab({ data, onOpenModal, onDevolver }) {
   const [search, setSearch] = useState('');
@@ -14,7 +15,7 @@ export default function RecebidosTab({ data, onOpenModal, onDevolver }) {
     const q = search.toLowerCase();
     return list.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.corretor || '').toLowerCase().includes(q)) &&
-      (!filterModalidade || c.modalidade === filterModalidade) &&
+      (!filterModalidade || normModalidade(c.modalidade) === normModalidade(filterModalidade)) &&
       (!filterCorretor || c.corretor === filterCorretor)
     );
   };
