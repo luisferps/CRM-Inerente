@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import BotaoFecharContrato from './BotaoFecharContrato';
-import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, normModalidade, ehCaptacao, ehLocacao } from '../constants';
 
 const hoje = new Date().toISOString().slice(0, 10);
 const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
@@ -198,7 +198,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const isEdit = modal && modal.negociacao_id;
   const isNovaNeg = modal && modal.novaNegociacao;
   const isGerente = perfil?.is_gerente;
-  const isVenda = form.modalidade === 'Venda';
+  // Eixo 1 — é captação? (Venda ou Locador → capta, vai pro Estoque)
+  const isCaptacao = ehCaptacao(form.modalidade);
+  // Eixo 2 — é locação? (Locador ou Locatário; inclui o "Locação" legado)
+  const isLocacao = ehLocacao(form.modalidade);
 
   // ─── DIVISÃO DE COMISSÃO DA TRATATIVA (100% interno, sem externo) ───
   // Mesmo sistema da captação de imóveis: cada corretor dono da própria fatia,
@@ -429,7 +432,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     setClienteEncontrado(null);
     setOrigemBloqueada(false);
     if (isEdit) {
-      setForm({ ...emptyForm, ...modal });
+      setForm({ ...emptyForm, ...modal, modalidade: normModalidade(modal.modalidade) });
       jaCaptadoRef.current = !!modal.captado;
       // o que já estava nas observações internas vira o trecho PROTEGIDO (não pode ser apagado)
       detalhesBloqueadoRef.current = (modal.detalhes || '').trim();
@@ -440,7 +443,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       localStorage.removeItem('crm_rascunho');
     } else if (isNovaNeg) {
       const c = modal.cliente;
-      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: 'Carteira', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
+      const initial = { ...emptyForm, nome: c.nome, telefone: c.telefone, email: c.email, entrada: c.entrada, origem: (c.origem || 'Carteira'), origem_tratativa: 'Carteira', is_corretor: c.is_corretor || false, cliente_real_id: c.id };
       if (perfil) {
       initial.corretor = perfil.nome; initial.corretor_id = perfil.id;
       // Tratativa nasce 100% de quem registra; ele já é o dono da edição.
@@ -509,7 +512,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           ...f,
           nome: c.nome,
           email: c.email || f.email,
-          origem: temTratativas ? 'Carteira' : (c.origem || f.origem),
+          // Aquisição (origem do CLIENTE) é imutável: sempre preserva a original (ex.: OLX), nunca vira Carteira.
+          origem: (c.origem || f.origem),
+          // Origem da TRATATIVA: cliente reincidente → Carteira (padrão, editável); 1ª tratativa → herda a aquisição.
+          origem_tratativa: temTratativas ? 'Carteira' : (c.origem || f.origem_tratativa),
           is_corretor: c.is_corretor || false,
           cliente_real_id: c.id,
         }));
@@ -595,7 +601,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     // só passam a ser obrigatórios quando a tratativa avança para Pesquisa ou além.
     const etapasMarcadas = ETAPAS_FUNIL_COMPLETO.filter(e => form[e]);
     const soNaTratativa = etapasMarcadas.length === 0 || (etapasMarcadas.length === 1 && form.tratativa);
-    if (!isVenda) {
+    if (!isCaptacao) {
       if (!soNaTratativa && !form.tipo_id) errs.tipo_id = true;
       if (!ETAPAS_FUNIL_COMPLETO.some(e => form[e])) errs.funil = true;
     }
@@ -652,8 +658,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         const tEnc = d.tipo ? (tipos.find(t => norm(t.nome) === norm(d.tipo))
           || tipos.find(t => norm(t.nome).startsWith(norm(d.tipo)) || norm(d.tipo).startsWith(norm(t.nome)))) : null;
         const valorNum = Number(String(d.valor == null ? '' : d.valor).replace(/[^\d]/g, ''));
-        const modValida = ['Compra', 'Locação', 'Venda'].includes(d.modalidade) ? d.modalidade
-          : (norm(d.modalidade) === 'locacao' ? 'Locação' : (norm(d.modalidade) === 'compra' ? 'Compra' : ''));
+        // A conversa é de um comprador/locatário (lado da PROCURA): só aceitamos Compra ou Locatário.
+        const mNorm = normModalidade(d.modalidade);
+        const modValida = (mNorm === 'Compra' || mNorm === 'Locatário') ? mNorm : '';
         // Nome: a IA preenche se estiver vazio OU se o atual for claramente um placeholder
         // ("Lead 6299...", "Proprietário 12"). Se o atual já parece um nome real e a IA sugere
         // OUTRO diferente, pergunta antes de trocar (evita sobrescrever por engano).
@@ -751,7 +758,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (soma !== 100) { alert(`A divisão de comissão da tratativa precisa somar 100%. Atualmente soma ${soma}%.`); return; }
     }
     // Trava da divisão de CAPTAÇÃO (só venda): também precisa fechar 100%.
-    if (isVenda && (form.captacao_divisao || []).length > 0) {
+    if (isCaptacao && (form.captacao_divisao || []).length > 0) {
       const somaCap = (form.captacao_divisao || []).reduce((s, c) => s + (Number(c.pct) || 0), 0);
       if (somaCap !== 100) { alert(`A divisão de captação precisa somar 100%. Atualmente soma ${somaCap}%.`); return; }
     }
@@ -800,7 +807,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         const fichaEnvio = Object.assign({}, fbase, {
           preco: (form.valor !== '' && form.valor != null) ? form.valor : fbase.preco,
           tipo: tipoNome || fbase.tipo,
-          transacao: 'Venda',
+          transacao: isLocacao ? 'Locação' : 'Venda',
           condominio: !!form.em_condominio || !!fbase.condominio,
           bairro: locBairro || fbase.bairro,
           cidade: locCidade || fbase.cidade,
@@ -841,7 +848,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       const base = (form.detalhes || '').trim();
       detalhesFinal = [base, adicional].filter(Boolean).join('\n');
     }
-    await onSave({ ...form, detalhes: detalhesFinal, imovel: imovelStr, cliente_real_id: idVinculado });
+    await onSave({ ...form, origem_tratativa: form.origem_tratativa || form.origem, detalhes: detalhesFinal, imovel: imovelStr, cliente_real_id: idVinculado });
     setSaving(false);
   }
 
@@ -945,7 +952,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} />
           </div>
 
-          <SelectComAdd label="Aquisição" value={form.origem} onChange={v => set('origem', v)}
+          <SelectComAdd label="Aquisição" value={form.origem} onChange={v => { set('origem', v); if (!form.origem_tratativa) set('origem_tratativa', v); }}
             options={origens} setOptions={setOrigens} chave="origens"
             isGerente={isGerente} perfil={perfil} bloqueado={origemBloqueada && !isEdit} />
 
@@ -1046,7 +1053,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             )}
           </div>
 
-          {isVenda && (
+          {isCaptacao && (
           <div className="field-full" style={{ marginTop: 4, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
             <label className="form-label">Divisão de captação (vai para o Estoque)</label>
             <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>Quem captou este imóvel. Ao marcar como captado, esta divisão segue para o cadastro no Estoque.</div>
@@ -1143,9 +1150,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                   {v === 'S' ? '✓ Ativo' : '✕ Inativo'}
                 </button>
               ))}
-              {isVenda && (
+              {isCaptacao && (
                 <button type="button" onClick={toggleCaptado}
-                  title="Marca a tratativa de venda como encerrada com sucesso: o imóvel foi captado"
+                  title="Marca a captação como encerrada com sucesso: o imóvel foi captado"
                   style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                     border: `1px solid ${form.captado ? '#2563eb' : '#d1d5db'}`,
                     background: form.captado ? '#dbeafe' : '#fff',
@@ -1154,12 +1161,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 </button>
               )}
             </div>
-            {isVenda && form.captado && (
+            {isCaptacao && form.captado && (
               <span style={{ fontSize: 11, color: '#2563eb', marginTop: 4, display: 'block' }}>
                 Imóvel captado — tratativa encerrada com sucesso.
               </span>
             )}
-            {isVenda && (
+            {isCaptacao && (
               <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd6fe', borderRadius: 8, background: '#faf5ff' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9' }}>🤖 Colar anúncio → IA preenche os campos</span>
@@ -1189,7 +1196,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 </p>
               </div>
             )}
-            {!isVenda && (
+            {!isCaptacao && (
               <div style={{ marginTop: 12, padding: 12, border: '1px solid #bfdbfe', borderRadius: 8, background: '#eff6ff' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>🤖 Colar conversa do cliente → IA preenche os campos</span>
@@ -1242,10 +1249,15 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
 
           <div className="field-full">
             <label className="form-label">Modalidade *</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['Compra','🛒','#059669','#dcfce7','#065f46'],['Venda','🏠','#2563eb','#dbeafe','#1d4ed8'],['Locação','🔑','#7c3aed','#ede9fe','#5b21b6']].map(([m, icon, border, bg, text]) => (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                ['Compra','🛒','#059669','#dcfce7','#065f46'],
+                ['Venda','🏷️','#2563eb','#dbeafe','#1d4ed8'],
+                ['Locador','🔑','#d97706','#fef3c7','#92400e'],
+                ['Locatário','🚪','#7c3aed','#ede9fe','#5b21b6'],
+              ].map(([m, icon, border, bg, text]) => (
                 <button key={m} type="button" onClick={() => set('modalidade', m)}
-                  style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  style={{ flex: '1 1 90px', minWidth: 90, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                     border: `1px solid ${form.modalidade === m ? border : '#d1d5db'}`,
                     background: form.modalidade === m ? bg : '#fff',
                     color: form.modalidade === m ? text : '#6b7280',
@@ -1256,11 +1268,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             </div>
           </div>
 
-          {/* Captação (Venda) */}
-          {isVenda && (
+          {/* Captação (Venda ou Locador) */}
+          {isCaptacao && (
             <div className="field-full" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '12px 14px' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>🏠 Captação</div>
-              <div style={{ fontSize: 12, color: '#3b82f6' }}>Imóvel a ser captado para venda. Preencha localização e observações.</div>
+              <div style={{ fontSize: 12, color: '#3b82f6' }}>Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'}. Preencha localização e observações.</div>
             </div>
           )}
 
@@ -1270,7 +1282,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             return (
               <div>
                 <label className="form-label" style={errors.tipo_id ? { color: '#dc2626' } : {}}>
-                  Tipo de Imóvel{!isVenda ? ' *' : ''}
+                  Tipo de Imóvel{!isCaptacao ? ' *' : ''}
                 </label>
                 <select
                   value={form.tipo_id}
@@ -1281,7 +1293,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                     if (!t || !t.permite_condominio) set('em_condominio', false);
                     if (errors.tipo_id) setErrors(er => ({ ...er, tipo_id: false }));
                   }}
-                  style={!isVenda ? errStyle('tipo_id') : {}}
+                  style={!isCaptacao ? errStyle('tipo_id') : {}}
                 >
                   <option value="">Selecionar</option>
                   {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
@@ -1364,14 +1376,14 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <input type="date" value={form.prox_contato || ''} onChange={e => set('prox_contato', e.target.value)} />
           </div>
 
-          {!isVenda && (
+          {!isCaptacao && (
             <div>
               <label className="form-label">Imóveis Visitados</label>
               <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
             </div>
           )}
 
-          {!isVenda && (
+          {!isCaptacao && (
             <div className="field-full">
               <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
                 Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
@@ -1390,7 +1402,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             </div>
           )}
 
-          {!isVenda && (
+          {!isCaptacao && (
             <div className="field-full">
               <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
