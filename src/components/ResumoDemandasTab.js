@@ -47,7 +47,9 @@ function gerarTexto(titulo, selecionados, porModalidade) {
     if (!filtrados.length) return;
     temConteudo = true;
     const icon = mod === 'Comprador' ? '🛒' : mod === 'Locatário' ? '🔑' : '📄';
-    out += `${icon} *${capitalize(mod)}:*\n`;
+    // No TEXTO da mensagem, o rótulo é o tipo de negócio (não o papel do cliente):
+    const rotulo = mod === 'Comprador' ? 'Compra' : mod === 'Locatário' ? 'Aluguel' : capitalize(mod);
+    out += `${icon} *${rotulo}:*\n`;
     filtrados.forEach(c => { out += formatarLinha(c) + '\n'; });
     out += '\n';
   });
