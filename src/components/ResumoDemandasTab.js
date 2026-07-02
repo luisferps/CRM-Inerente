@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { normModalidade } from '../constants';
 
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
@@ -38,14 +39,14 @@ function gerarTexto(titulo, selecionados, porModalidade) {
   const ids = new Set(selecionados);
   if (ids.size === 0) return '';
   let out = titulo + '\n\n';
-  const ordem = ['Compra', 'Locação'];
-  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m) && m !== 'Venda')])];
+  const ordem = ['Comprador', 'Locatário'];
+  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m) && m !== 'Vendedor')])];
   let temConteudo = false;
   mods.forEach(mod => {
     const filtrados = (porModalidade[mod] || []).filter(c => ids.has(c.id));
     if (!filtrados.length) return;
     temConteudo = true;
-    const icon = mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄';
+    const icon = mod === 'Comprador' ? '🛒' : mod === 'Locatário' ? '🔑' : '📄';
     out += `${icon} *${capitalize(mod)}:*\n`;
     filtrados.forEach(c => { out += formatarLinha(c) + '\n'; });
     out += '\n';
@@ -338,7 +339,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
-    if (c.modalidade === 'Venda') return false;
+    if (normModalidade(c.modalidade) === 'Vendedor') return false;
     const etapasAvancadas = ['contrato','financiamento','recebimento','recebido'];
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
@@ -369,8 +370,8 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
-      const mod = c.modalidade || 'Outros';
-      if (mod === 'Venda') return;
+      const mod = normModalidade(c.modalidade) || 'Outros';
+      if (mod === 'Vendedor') return;
       if (!grupos[mod]) grupos[mod] = [];
       grupos[mod].push(c);
     });
@@ -409,7 +410,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
 
-  const ordem = ['Compra', 'Locação'];
+  const ordem = ['Comprador', 'Locatário'];
   const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
 
   return (
@@ -443,7 +444,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
               <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>
-                    {mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄'} {mod}
+                    {mod === 'Comprador' ? '🛒' : mod === 'Locatário' ? '🔑' : '📄'} {mod}
                   </span>
                   <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '2px 8px', borderRadius: 20 }}>
                     {(porModalidade[mod] || []).filter(c => selecionados.has(c.id)).length}/{(porModalidade[mod] || []).length}
