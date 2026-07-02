@@ -1455,7 +1455,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 .map(c => <option key={c.supabaseId || c.id} value={c.supabaseId || c.id}>{c.nome}</option>)}
             </select>
 
-            {divisao.length > 1 && (
+            {divisao.length >= 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {divisao.map((item, idx) => {
                   const posso = podeEditarFatiaTrat(item);
@@ -1543,7 +1543,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </div>
             )}
 
-            {capDiv.length > 1 && (
+            {capDiv.length >= 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {capDiv.map((item, idx) => {
                   const posso = podeEditarFatiaCap(item);
