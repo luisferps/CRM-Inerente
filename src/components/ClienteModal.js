@@ -875,13 +875,93 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           <span className="modal-title">{titulo}</span>
           <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>✕</button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body" style={{ display: 'block' }}>
 
-          {/* DADOS DO CLIENTE */}
-          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados do Cliente</span>
+          <div className="tsec">
+          <div className="tsec-head">Tipo de tratativa *</div>
+          <div className="field-full">
+            <label className="form-label">Modalidade *</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                ['Compra','🛒','#059669','#dcfce7','#065f46'],
+                ['Venda','🏷️','#2563eb','#dbeafe','#1d4ed8'],
+                ['Locador','🔑','#d97706','#fef3c7','#92400e'],
+                ['Locatário','🚪','#7c3aed','#ede9fe','#5b21b6'],
+              ].map(([m, icon, border, bg, text]) => (
+                <button key={m} type="button" onClick={() => set('modalidade', m)}
+                  style={{ flex: '1 1 90px', minWidth: 90, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `1px solid ${form.modalidade === m ? border : '#d1d5db'}`,
+                    background: form.modalidade === m ? bg : '#fff',
+                    color: form.modalidade === m ? text : '#6b7280',
+                    outline: errors.modalidade ? '2px solid #dc2626' : 'none' }}>
+                  {icon} {m}
+                </button>
+              ))}
+            </div>
+          </div>
           </div>
 
+          <div className="tsec">
+          <div className="tsec-head">🤖 Preenchimento por IA</div>
+          {!form.modalidade ? (
+            <div style={{ fontSize: 12.5, color: '#9ca3af' }}>Escolha o tipo de tratativa acima — a IA se adapta (colar anúncio para captação, ou a conversa do cliente para procura) e preenche os campos abaixo.</div>
+          ) : (<>
+            {isCaptacao && (
+              <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd6fe', borderRadius: 8, background: '#faf5ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9' }}>🤖 Colar anúncio → IA preenche os campos</span>
+                  <button type="button" onClick={organizarIA} disabled={organizandoIA}
+                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoIA ? 'default' : 'pointer',
+                      border: '1px solid #7c3aed', background: organizandoIA ? '#ede9fe' : '#7c3aed', color: organizandoIA ? '#7c3aed' : '#fff' }}>
+                    {organizandoIA ? '🤖 organizando…' : '🤖 Organizar com IA'}
+                  </button>
+                </div>
+                <textarea
+                  value={(form.ficha && form.ficha._descricao) || ''}
+                  onChange={e => set('ficha', Object.assign({}, form.ficha || {}, { _descricao: e.target.value }))}
+                  placeholder="Cole aqui o texto do anúncio (do proprietário, OLX, etc.) e clique em Organizar com IA. Ela preenche Tipo, Valor e Localização abaixo."
+                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #ddd6fe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                {form.ficha && (form.ficha.metragemTotal || form.ficha.metragem || form.ficha.quartos || form.ficha.garagens || (form.ficha.condicoes && form.ficha.condicoes.length)) && (
+                  <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.6, marginTop: 8 }}>
+                    Detalhes guardados p/ o Estoque: {[
+                      form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
+                      form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
+                      form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
+                      (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
+                    ].filter(Boolean).join('  ·  ')}
+                  </div>
+                )}
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
+                  A IA preenche <b>Tipo, Valor e Localização</b> abaixo — confira e ajuste. Ao marcar <b>Captado</b>, o imóvel vai pro Estoque (oculto) com esses detalhes.
+                </p>
+              </div>
+            )}
+            {!isCaptacao && (
+              <div style={{ marginTop: 12, padding: 12, border: '1px solid #bfdbfe', borderRadius: 8, background: '#eff6ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>🤖 Colar conversa do cliente → IA preenche os campos</span>
+                  <button type="button" onClick={organizarConversaComprador} disabled={organizandoComprador}
+                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoComprador ? 'default' : 'pointer',
+                      border: '1px solid #2563eb', background: organizandoComprador ? '#dbeafe' : '#2563eb', color: organizandoComprador ? '#2563eb' : '#fff' }}>
+                    {organizandoComprador ? '🤖 organizando…' : '🤖 Organizar com IA'}
+                  </button>
+                </div>
+                <textarea
+                  value={conversaComprador}
+                  onChange={e => setConversaComprador(e.target.value)}
+                  placeholder="Cole aqui a conversa do WhatsApp com o cliente (o que ele procura) e clique em Organizar com IA. Ela preenche Modalidade, Tipo, Valor (orçamento) e Localização abaixo."
+                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #bfdbfe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
+                  A IA lê o que o cliente <b>procura</b> e preenche <b>Modalidade, Tipo, Valor e Localização</b> — confira e ajuste o que precisar.
+                </p>
+              </div>
+            )}
+          </>)}
+          </div>
+
+          <div className="tsec">
+          <div className="tsec-head">👤 Cliente</div>
+          <div className="tgrid">
           <div>
             <label className="form-label">
               Telefone *
@@ -961,12 +1041,144 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               style={{ width: 16, height: 16, cursor: 'pointer', margin: 0 }} disabled={clienteLocked} />
             <label htmlFor="is_corretor" style={{ fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>Este cliente é corretor</label>
           </div>
-
-          {/* TRATATIVA */}
-          <div className="field-full" style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginTop: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tratativa</span>
+          </div>
           </div>
 
+          <div className="tsec">
+          <div className="tsec-head">{!form.modalidade ? '🏠 Imóvel / interesse' : isCaptacao ? '🏠 Imóvel' : '🔎 Interesse'}</div>
+          {/* Captação (Venda ou Locador) */}
+          {isCaptacao && (
+            <div className="field-full" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>🏠 Captação</div>
+              <div style={{ fontSize: 12, color: '#3b82f6' }}>Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'}. Preencha localização e observações.</div>
+            </div>
+          )}
+          <div className="tgrid">
+          {(() => {
+            const tipoSel = tipos.find(t => t.id === form.tipo_id);
+            const permiteCond = !!tipoSel?.permite_condominio;
+            return (
+              <div>
+                <label className="form-label" style={errors.tipo_id ? { color: '#dc2626' } : {}}>
+                  Tipo de Imóvel{!isCaptacao ? ' *' : ''}
+                </label>
+                <select
+                  value={form.tipo_id}
+                  onChange={e => {
+                    const novoId = e.target.value;
+                    const t = tipos.find(x => x.id === novoId);
+                    set('tipo_id', novoId);
+                    if (!t || !t.permite_condominio) set('em_condominio', false);
+                    if (errors.tipo_id) setErrors(er => ({ ...er, tipo_id: false }));
+                  }}
+                  style={!isCaptacao ? errStyle('tipo_id') : {}}
+                >
+                  <option value="">Selecionar</option>
+                  {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+                {permiteCond && (
+                  <label style={{ marginTop: 6, fontSize: 13, color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!form.em_condominio}
+                      onChange={e => set('em_condominio', e.target.checked)}
+                      style={{ width: 'auto', margin: 0 }}
+                    />
+                    Em condomínio
+                  </label>
+                )}
+              </div>
+            );
+          })()}
+          <div>
+            <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
+            <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" style={errStyle('valor')} />
+          </div>
+          <div>
+            <label className="form-label">Localização *</label>
+            <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
+          </div>
+          {!isCaptacao && (
+            <div>
+              <label className="form-label">Imóveis Visitados</label>
+              <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
+            </div>
+          )}
+          </div>
+          {!isCaptacao && (
+            <div className="field-full">
+              <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
+                Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, padding: errors.funil ? '8px' : '0', borderRadius: 7, border: errors.funil ? '1px solid #dc2626' : 'none' }}>
+                {ETAPAS_FUNIL_COMPLETO.map(e => (
+                  <button key={e} type="button" onClick={() => set(e, !form[e])}
+                    style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: `1px solid ${form[e] ? '#059669' : '#d1d5db'}`,
+                      background: form[e] ? '#d1fae5' : '#fff',
+                      color: form[e] ? '#065f46' : '#6b7280' }}>
+                    {ETAPAS_LABEL[e]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          </div>
+
+          <div className="tsec">
+          <div className="tsec-head">📝 Observações</div>
+          <div className="field-full">
+            <label className="form-label">
+              Observações Internas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
+            </label>
+            {detalhesBloqueadoRef.current ? (
+              <>
+                <div style={{ position: 'relative', marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', display: 'inline-block', padding: '2px 7px', borderRadius: '6px 6px 0 0', border: '1px solid #fde68a', borderBottom: 'none' }}>
+                    🔒 Registrado na captação — não pode ser apagado
+                  </div>
+                  <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: '#374151', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '0 6px 6px 6px', padding: '8px 10px', maxHeight: 140, overflowY: 'auto' }}>
+                    {detalhesBloqueadoRef.current}
+                  </div>
+                </div>
+                <textarea rows={2} value={detalhesAdicional} onChange={e => setDetalhesAdicional(e.target.value)}
+                  placeholder="Acrescentar mais observações internas... (o texto acima fica preservado)"
+                  style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+              </>
+            ) : (
+              <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
+                placeholder="Anotações internas, perfil do cliente, situação financeira..."
+                style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+            )}
+          </div>
+          <div className="field-full">
+            <label className="form-label">
+              Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
+            </label>
+            <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
+              placeholder="Informações para enviar a parceiros ou clientes..."
+              style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
+          </div>
+          {!isCaptacao && (
+            <div className="field-full">
+              <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
+                  border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
+                  background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
+                <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
+                </div>
+              </button>
+            </div>
+          )}
+          </div>
+
+          <div className="tsec">
+          <div className="tsec-head">👥 Equipe e comissão</div>
           <div>
             <label className="form-label">Corretor</label>
             {isGerente ? (
@@ -985,7 +1197,6 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
             )}
           </div>
-
           {/* DIVISÃO DE COMISSÃO DA TRATATIVA (100% interno) */}
           <div className="field-full" style={{ marginTop: 4 }}>
             <label className="form-label">Divisão de comissão (tratativa)</label>
@@ -1052,7 +1263,6 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </div>
             )}
           </div>
-
           {isCaptacao && (
           <div className="field-full" style={{ marginTop: 4, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
             <label className="form-label">Divisão de captação (vai para o Estoque)</label>
@@ -1133,14 +1343,38 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             )}
           </div>
           )}
+          </div>
 
+          <div className="tsec">
+          <div className="tsec-head">📊 Situação</div>
+          <div className="tgrid">
           <SelectComAdd label="Origem da Tratativa" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
             options={origens} setOptions={setOrigens} chave="origens"
             isGerente={isGerente} perfil={perfil} />
-
           <div>
-            <label className="form-label">Status</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <label className="form-label">Próxima Ação</label>
+            <input value={form.proxima_acao} onChange={e => set('proxima_acao', e.target.value)} placeholder="O que fazer?" />
+          </div>
+          <div>
+            <label className="form-label">Último Contato</label>
+            <input type="date" value={form.ultimo_contato || ''} onChange={e => set('ultimo_contato', e.target.value)} />
+            <button type="button" onClick={() => set('ultimo_contato', hoje)}
+              style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              📌 Registrar contato hoje
+            </button>
+          </div>
+          <div>
+            <label className="form-label">Próx. Contato</label>
+            <input type="date" value={form.prox_contato || ''} onChange={e => set('prox_contato', e.target.value)} />
+          </div>
+          </div>
+          </div>
+
+        </div>
+        <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+          <div className="tstatus-bar">
+            <label className="form-label" style={{ marginBottom: 2 }}>Status</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
               {['S','N'].map(v => (
                 <button key={v} type="button" onClick={() => setStatus(v)}
                   style={{ flex: 1, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -1161,267 +1395,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 </button>
               )}
             </div>
-            {isCaptacao && form.captado && (
+                        {isCaptacao && form.captado && (
               <span style={{ fontSize: 11, color: '#2563eb', marginTop: 4, display: 'block' }}>
                 Imóvel captado — tratativa encerrada com sucesso.
               </span>
             )}
-            {isCaptacao && (
-              <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd6fe', borderRadius: 8, background: '#faf5ff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9' }}>🤖 Colar anúncio → IA preenche os campos</span>
-                  <button type="button" onClick={organizarIA} disabled={organizandoIA}
-                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoIA ? 'default' : 'pointer',
-                      border: '1px solid #7c3aed', background: organizandoIA ? '#ede9fe' : '#7c3aed', color: organizandoIA ? '#7c3aed' : '#fff' }}>
-                    {organizandoIA ? '🤖 organizando…' : '🤖 Organizar com IA'}
-                  </button>
-                </div>
-                <textarea
-                  value={(form.ficha && form.ficha._descricao) || ''}
-                  onChange={e => set('ficha', Object.assign({}, form.ficha || {}, { _descricao: e.target.value }))}
-                  placeholder="Cole aqui o texto do anúncio (do proprietário, OLX, etc.) e clique em Organizar com IA. Ela preenche Tipo, Valor e Localização abaixo."
-                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #ddd6fe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                {form.ficha && (form.ficha.metragemTotal || form.ficha.metragem || form.ficha.quartos || form.ficha.garagens || (form.ficha.condicoes && form.ficha.condicoes.length)) && (
-                  <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.6, marginTop: 8 }}>
-                    Detalhes guardados p/ o Estoque: {[
-                      form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
-                      form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
-                      form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
-                      (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
-                    ].filter(Boolean).join('  ·  ')}
-                  </div>
-                )}
-                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
-                  A IA preenche <b>Tipo, Valor e Localização</b> abaixo — confira e ajuste. Ao marcar <b>Captado</b>, o imóvel vai pro Estoque (oculto) com esses detalhes.
-                </p>
-              </div>
-            )}
-            {!isCaptacao && (
-              <div style={{ marginTop: 12, padding: 12, border: '1px solid #bfdbfe', borderRadius: 8, background: '#eff6ff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>🤖 Colar conversa do cliente → IA preenche os campos</span>
-                  <button type="button" onClick={organizarConversaComprador} disabled={organizandoComprador}
-                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoComprador ? 'default' : 'pointer',
-                      border: '1px solid #2563eb', background: organizandoComprador ? '#dbeafe' : '#2563eb', color: organizandoComprador ? '#2563eb' : '#fff' }}>
-                    {organizandoComprador ? '🤖 organizando…' : '🤖 Organizar com IA'}
-                  </button>
-                </div>
-                <textarea
-                  value={conversaComprador}
-                  onChange={e => setConversaComprador(e.target.value)}
-                  placeholder="Cole aqui a conversa do WhatsApp com o cliente (o que ele procura) e clique em Organizar com IA. Ela preenche Modalidade, Tipo, Valor (orçamento) e Localização abaixo."
-                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #bfdbfe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
-                  A IA lê o que o cliente <b>procura</b> e preenche <b>Modalidade, Tipo, Valor e Localização</b> — confira e ajuste o que precisar.
-                </p>
-              </div>
+            {form.ativo === 'N' && (
+              <SelectComAdd label="Motivo da desistência" value={form.motivo_desistencia || ''} onChange={v => set('motivo_desistencia', v)}
+                options={motivos} setOptions={setMotivos} chave="motivos" isGerente={isGerente} perfil={perfil} />
             )}
           </div>
-
-          {form.ativo === 'N' && (
-            <div className="field-full" style={{ position: 'relative', zIndex: 100 }}>
-              <label className="form-label">Motivo da Desistência</label>
-              <input
-                value={form.motivo_desistencia}
-                onChange={e => { set('motivo_desistencia', e.target.value); setMotivoAberto(true); }}
-                onFocus={() => setMotivoAberto(true)}
-                onBlur={() => setTimeout(() => setMotivoAberto(false), 200)}
-                placeholder="Por que o cliente desistiu?"
-                autoComplete="off"
-              />
-              {motivoAberto && motivos.length > 0 && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, maxHeight: 180, overflowY: 'auto' }}>
-                  {motivos
-                    .filter(m => !form.motivo_desistencia || m.toLowerCase().includes((form.motivo_desistencia || '').toLowerCase()))
-                    .map((m, i) => (
-                      <div key={i} onMouseDown={e => { e.preventDefault(); set('motivo_desistencia', m); setMotivoAberto(false); }}
-                        style={{ padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: '#374151', borderBottom: '1px solid #f3f4f6' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-                        {m}
-                      </div>
-                    ))
-                  }
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="field-full">
-            <label className="form-label">Modalidade *</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {[
-                ['Compra','🛒','#059669','#dcfce7','#065f46'],
-                ['Venda','🏷️','#2563eb','#dbeafe','#1d4ed8'],
-                ['Locador','🔑','#d97706','#fef3c7','#92400e'],
-                ['Locatário','🚪','#7c3aed','#ede9fe','#5b21b6'],
-              ].map(([m, icon, border, bg, text]) => (
-                <button key={m} type="button" onClick={() => set('modalidade', m)}
-                  style={{ flex: '1 1 90px', minWidth: 90, padding: '8px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${form.modalidade === m ? border : '#d1d5db'}`,
-                    background: form.modalidade === m ? bg : '#fff',
-                    color: form.modalidade === m ? text : '#6b7280',
-                    outline: errors.modalidade ? '2px solid #dc2626' : 'none' }}>
-                  {icon} {m}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Captação (Venda ou Locador) */}
-          {isCaptacao && (
-            <div className="field-full" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '12px 14px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>🏠 Captação</div>
-              <div style={{ fontSize: 12, color: '#3b82f6' }}>Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'}. Preencha localização e observações.</div>
-            </div>
-          )}
-
-          {(() => {
-            const tipoSel = tipos.find(t => t.id === form.tipo_id);
-            const permiteCond = !!tipoSel?.permite_condominio;
-            return (
-              <div>
-                <label className="form-label" style={errors.tipo_id ? { color: '#dc2626' } : {}}>
-                  Tipo de Imóvel{!isCaptacao ? ' *' : ''}
-                </label>
-                <select
-                  value={form.tipo_id}
-                  onChange={e => {
-                    const novoId = e.target.value;
-                    const t = tipos.find(x => x.id === novoId);
-                    set('tipo_id', novoId);
-                    if (!t || !t.permite_condominio) set('em_condominio', false);
-                    if (errors.tipo_id) setErrors(er => ({ ...er, tipo_id: false }));
-                  }}
-                  style={!isCaptacao ? errStyle('tipo_id') : {}}
-                >
-                  <option value="">Selecionar</option>
-                  {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-                </select>
-                {permiteCond && (
-                  <label style={{ marginTop: 6, fontSize: 13, color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={!!form.em_condominio}
-                      onChange={e => set('em_condominio', e.target.checked)}
-                      style={{ width: 'auto', margin: 0 }}
-                    />
-                    Em condomínio
-                  </label>
-                )}
-              </div>
-            );
-          })()}
-
-          <div>
-            <label className="form-label" style={errors.valor ? { color: '#dc2626' } : {}}>Valor (R$) *</label>
-            <input value={valorDisplay} onChange={handleValorChange} placeholder="R$ 0,00" style={errStyle('valor')} />
-          </div>
-
-          <div>
-            <label className="form-label">Localização *</label>
-            <input value={form.localizacao} onChange={e => set('localizacao', e.target.value)} placeholder="Região, bairro..." style={errStyle('localizacao')} />
-          </div>
-
-          <div>
-            <label className="form-label">Próxima Ação</label>
-            <input value={form.proxima_acao} onChange={e => set('proxima_acao', e.target.value)} placeholder="O que fazer?" />
-          </div>
-
-          <div className="field-full">
-            <label className="form-label">
-              Observações Internas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— visível só para a equipe</span>
-            </label>
-            {detalhesBloqueadoRef.current ? (
-              <>
-                <div style={{ position: 'relative', marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', display: 'inline-block', padding: '2px 7px', borderRadius: '6px 6px 0 0', border: '1px solid #fde68a', borderBottom: 'none' }}>
-                    🔒 Registrado na captação — não pode ser apagado
-                  </div>
-                  <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: '#374151', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '0 6px 6px 6px', padding: '8px 10px', maxHeight: 140, overflowY: 'auto' }}>
-                    {detalhesBloqueadoRef.current}
-                  </div>
-                </div>
-                <textarea rows={2} value={detalhesAdicional} onChange={e => setDetalhesAdicional(e.target.value)}
-                  placeholder="Acrescentar mais observações internas... (o texto acima fica preservado)"
-                  style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
-              </>
-            ) : (
-              <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
-                placeholder="Anotações internas, perfil do cliente, situação financeira..."
-                style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
-            )}
-          </div>
-
-          <div className="field-full">
-            <label className="form-label">
-              Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
-            </label>
-            <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
-              placeholder="Informações para enviar a parceiros ou clientes..."
-              style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
-          </div>
-
-          <div>
-            <label className="form-label">Último Contato</label>
-            <input type="date" value={form.ultimo_contato || ''} onChange={e => set('ultimo_contato', e.target.value)} />
-            <button type="button" onClick={() => set('ultimo_contato', hoje)}
-              style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              📌 Registrar contato hoje
-            </button>
-          </div>
-
-          <div>
-            <label className="form-label">Próx. Contato</label>
-            <input type="date" value={form.prox_contato || ''} onChange={e => set('prox_contato', e.target.value)} />
-          </div>
-
-          {!isCaptacao && (
-            <div>
-              <label className="form-label">Imóveis Visitados</label>
-              <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
-            </div>
-          )}
-
-          {!isCaptacao && (
-            <div className="field-full">
-              <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
-                Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
-              </label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, padding: errors.funil ? '8px' : '0', borderRadius: 7, border: errors.funil ? '1px solid #dc2626' : 'none' }}>
-                {ETAPAS_FUNIL_COMPLETO.map(e => (
-                  <button key={e} type="button" onClick={() => set(e, !form[e])}
-                    style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      border: `1px solid ${form[e] ? '#059669' : '#d1d5db'}`,
-                      background: form[e] ? '#d1fae5' : '#fff',
-                      color: form[e] ? '#065f46' : '#6b7280' }}>
-                    {ETAPAS_LABEL[e]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!isCaptacao && (
-            <div className="field-full">
-              <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
-                  border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
-                  background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
-                <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
-                </div>
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
-                </div>
-              </button>
-            </div>
-          )}
-
-        </div>
-        <div className="modal-footer">
-          {onDelete && modal && modal.id && !modal.novaNegociacao && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {onDelete && modal && modal.id && !modal.novaNegociacao && (
             <div style={{ marginRight: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-ghost" style={{ color: '#dc2626' }} onClick={async () => {
                 if (!window.confirm('Excluir esta tratativa? Esta ação não pode ser desfeita.')) return;
@@ -1445,6 +1430,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
+          </div>
         </div>
       </div>
       {transfAberto && (
