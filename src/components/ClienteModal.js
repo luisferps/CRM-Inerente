@@ -935,22 +935,35 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const tipoNomeSel = (tipos.find(t => t.id === form.tipo_id) || {}).nome || '';
   const ehTerreno = /lote|terreno|[áa]rea|gleba|ch[áa]cara|s[íi]tio|fazenda/i.test(tipoNomeSel);
   const vazioVal = v => v === undefined || v === null || String(v).trim() === '';
-  // Radar: campos que o CLIENTE passa e ainda faltam (só captação — Vendedor/Locador)
+  // Radar: TODOS os campos do imóvel (que o cliente passa) ainda vazios — só captação
   const radarFaltando = (() => {
     if (!isCaptacao) return [];
     const f = [];
     if (vazioVal(form.valor)) f.push('Valor');
+    if (vazioVal(ficha.endereco)) f.push('Endereço');
     if (vazioVal(ficha.bairro)) f.push('Bairro');
     if (vazioVal(ficha.cidade)) f.push('Cidade');
+    if (vazioVal(ficha.estado)) f.push('Estado (UF)');
     if (ehTerreno) {
       if (vazioVal(ficha.metragemTotal)) f.push('Metragem do terreno');
       if (vazioVal(ficha.frente)) f.push('Frente');
+      if (vazioVal(ficha.laterais)) f.push('Laterais / fundos');
+      if (vazioVal(ficha.declive)) f.push('Declive');
     } else {
-      if (vazioVal(ficha.quartos)) f.push('Nº de quartos');
+      if (vazioVal(ficha.quartos)) f.push('Quartos');
+      if (vazioVal(ficha.suites)) f.push('Suítes');
       if (vazioVal(ficha.banheiros)) f.push('Banheiros');
+      if (vazioVal(ficha.garagens)) f.push('Vagas de garagem');
       if (vazioVal(ficha.metragem)) f.push('Metragem construída');
+      if (vazioVal(ficha.metragemTotal)) f.push('Metragem do terreno');
+      if (vazioVal(ficha.estadoImovel)) f.push('Estado do imóvel');
     }
-    if (form.em_condominio && vazioVal(ficha.valorCondominio)) f.push('Valor do condomínio');
+    if (form.em_condominio) {
+      if (vazioVal(ficha.nomeCondominio)) f.push('Nome do condomínio');
+      if (vazioVal(ficha.valorCondominio)) f.push('Valor do condomínio');
+    }
+    if (isLocacao && vazioVal(ficha.valorIPTU)) f.push('IPTU');
+    if (vazioVal(ficha.permuta)) f.push('Permuta');
     return f;
   })();
   // Campo que grava dentro da ficha, com ✓ verde quando preenchido
@@ -984,7 +997,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           <div className="tsec">
           <div className="tsec-head">Tipo de tratativa *</div>
           <div className="field-full">
-            <label className="form-label">Modalidade *</label>
+            <label className="form-label">Estou tratando com *</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
                 ['Comprador','🛒','#059669','#dcfce7','#065f46'],
@@ -1160,15 +1173,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
 
           <div className="tsec">
           {isCaptacao && radarFaltando.length > 0 && (
-            <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#fdeceb', borderLeft: '3px solid #C0392B', borderRadius: '0 8px 8px 0', padding: '8px 11px', marginBottom: 12 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: '#922B21', marginBottom: 2 }}>📡 Ainda falta perguntar ({radarFaltando.length})</div>
-              <div style={{ fontSize: 12.5, color: '#6e6e73' }}>{radarFaltando.join(' · ')}</div>
+            <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#C0392B', borderRadius: 10, padding: '11px 13px', marginBottom: 14, boxShadow: '0 2px 8px rgba(192,57,43,0.3)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 7, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 16 }}>📡</span> Ainda falta perguntar ({radarFaltando.length})
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {radarFaltando.map(item => (
+                  <span key={item} style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 20 }}>{item}</span>
+                ))}
+              </div>
             </div>
           )}
           {isCaptacao && form.modalidade && radarFaltando.length === 0 && (
-            <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#eafaf1', borderLeft: '3px solid #1D9E75', borderRadius: '0 8px 8px 0', padding: '8px 11px', marginBottom: 12, fontSize: 12.5, color: '#0F6E56', fontWeight: 600 }}>✓ Todas as informações do cliente foram coletadas.</div>
+            <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#eafaf1', border: '1px solid #9FE1CB', borderRadius: 10, padding: '11px 13px', marginBottom: 14, fontSize: 13, color: '#0F6E56', fontWeight: 700 }}>✓ Todas as informações do cliente foram coletadas.</div>
           )}
-          <div className="tsec-head">{!form.modalidade ? '🏠 Imóvel / interesse' : isCaptacao ? '🏠 Imóvel' : '🔎 Interesse'}</div>
+          <div className="tsec-head">{!form.modalidade ? '🏠 Imóvel / perfil do cliente' : isCaptacao ? '🏠 Imóvel' : '👤 Perfil do cliente'}</div>
           {isCaptacao && (
             <div className="field-full" style={{ background: '#eef4fb', border: '1px solid #b5d4f4', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#185FA5', marginBottom: 4 }}>
               🏠 Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'} — migra pro Estoque ao captar. O que exige pesquisa (CEP, descrição, fotos) fica pro Estoque.
@@ -1292,25 +1311,29 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               )}
             </div>
           )}
-          {!isCaptacao && (
-            <div className="field-full">
-              <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
-                Etapas do Funil * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
-              </label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, padding: errors.funil ? '8px' : '0', borderRadius: 7, border: errors.funil ? '1px solid #dc2626' : 'none' }}>
-                {ETAPAS_FUNIL_COMPLETO.map(e => (
-                  <button key={e} type="button" onClick={() => set(e, !form[e])}
-                    style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      border: `1px solid ${form[e] ? '#059669' : '#d1d5db'}`,
-                      background: form[e] ? '#d1fae5' : '#fff',
-                      color: form[e] ? '#065f46' : '#6b7280' }}>
-                    {ETAPAS_LABEL[e]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           </div>
+
+          {!isCaptacao && (
+          <div className="tsec">
+          <div className="tsec-head">🧭 Fase do atendimento</div>
+          <div className="field-full">
+            <label className="form-label" style={errors.funil ? { color: '#dc2626' } : {}}>
+              Em que etapa o atendimento está * {errors.funil && <span style={{ fontSize: 11 }}>— selecione pelo menos uma</span>}
+            </label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, padding: errors.funil ? '8px' : '0', borderRadius: 7, border: errors.funil ? '1px solid #dc2626' : 'none' }}>
+              {ETAPAS_FUNIL_COMPLETO.map(e => (
+                <button key={e} type="button" onClick={() => set(e, !form[e])}
+                  style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    border: `1px solid ${form[e] ? '#059669' : '#d1d5db'}`,
+                    background: form[e] ? '#d1fae5' : '#fff',
+                    color: form[e] ? '#065f46' : '#6b7280' }}>
+                  {ETAPAS_LABEL[e]}
+                </button>
+              ))}
+            </div>
+          </div>
+          </div>
+          )}
 
           <div className="tsec">
           <div className="tsec-head">📝 Observações</div>
@@ -1346,26 +1369,27 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               placeholder="Informações para enviar a parceiros ou clientes..."
               style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
           </div>
+          </div>
+
+          <div className="tsec">
+          <div className="tsec-head">👥 Equipe e parceria</div>
           {!isCaptacao && (
-            <div className="field-full">
+            <div className="field-full" style={{ marginBottom: 10 }}>
               <button type="button" onClick={() => set('solicitar_parceria', !form.solicitar_parceria)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', width: '100%',
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', width: '100%',
                   border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`,
                   background: form.solicitar_parceria ? '#f5f3ff' : '#fff' }}>
                 <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.solicitar_parceria ? '#7c3aed' : '#d1d5db'}`, background: form.solicitar_parceria ? '#7c3aed' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {form.solicitar_parceria && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
                 </div>
                 <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Solicitar Parceria</div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Este imóvel aparecerá na aba Demandas</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: form.solicitar_parceria ? '#7c3aed' : '#374151' }}>🤝 Quero verificar se algum corretor tem um imóvel que atenda esse cliente</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>Aparece na aba Demandas pros corretores</div>
                 </div>
               </button>
             </div>
           )}
-          </div>
 
-          <div className="tsec">
-          <div className="tsec-head">👥 Equipe e comissão</div>
           <div>
             <label className="form-label">Corretor</label>
             {isGerente ? (
@@ -1533,20 +1557,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           </div>
 
           <div className="tsec">
-          <div className="tsec-head">📊 Situação</div>
+          <div className="tsec-head">📋 Acompanhamento da tratativa</div>
           <div className="tgrid">
-          <SelectComAdd label="Origem da Tratativa" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
+          <SelectComAdd label="De onde veio essa tratativa?" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
             options={origens} setOptions={setOrigens} chave="origens"
             isGerente={isGerente} perfil={perfil} />
           <div>
-            <label className="form-label">Próxima Ação</label>
+            <label className="form-label">Qual será o próximo passo</label>
             <input value={form.proxima_acao} onChange={e => set('proxima_acao', e.target.value)} placeholder="O que fazer?" />
           </div>
           <div>
             <label className="form-label">Último Contato</label>
             <input type="date" value={form.ultimo_contato || ''} onChange={e => set('ultimo_contato', e.target.value)} />
             <button type="button" onClick={() => set('ultimo_contato', hoje)}
-              style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, padding: '9px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
               📌 Registrar contato hoje
             </button>
           </div>
@@ -1560,7 +1584,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         </div>
         <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
           <div className="tstatus-bar">
-            <label className="form-label" style={{ marginBottom: 2 }}>Status</label>
+            <label className="form-label" style={{ marginBottom: 2 }}>Qual é a situação desse cliente hoje?</label>
             {isCaptacao ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" onClick={() => { if (form.captado) toggleCaptado(); }}
