@@ -396,7 +396,7 @@ export default function App() {
       <main className="main">
         {loading ? <div className="loading">Carregando dados...</div> : (
           <>
-            {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} />}
+            {tab === 'clientes' && <ClientesTab clientes={clientes} negociacoes={negociacoes} onVerTratativas={handleVerTratativas} onNovaTratativa={podeEditar ? handleNovaNegociacao : null} onReload={load} perfil={perfil} />}
             {tab === 'captacao' && isDiretor && <CaptacaoTab perfil={perfil} onAtualizar={load} />}
             {tab === 'tratativas' && <CRMTab
               data={filtroClienteId ? data.filter(c => c.cliente_real_id === filtroClienteId && c.ativo === 'S' && !c.recebido && !c.captado) : data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)}
@@ -410,7 +410,7 @@ export default function App() {
               filtroClienteNome={filtroClienteId ? clientes.find(c => c.id === filtroClienteId)?.nome : null}
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
-            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} podeContrato={podeContrato} />}
+            {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} podeContrato={podeContrato} perfil={perfil} onReload={load} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} onDelete={podeEditar ? handleDelete : null} onDevolverCaptacao={podeEditar ? handleDevolverCaptacao : null} />}
             {tab === 'secretaria' && <SecretariaTab />}
             {tab === 'dash' && <DashboardTab data={data} />}
