@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL, ETAPAS_LABEL, normModalidade } from '../constants';
 
 const PERIODOS = [
   { label: 'Este mês', value: 'mes' },
@@ -69,8 +69,8 @@ function GraficoEvolucao({ data }) {
       const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       if (!porMes[key]) porMes[key] = { mes: label, total: 0, compras: 0, locacoes: 0 };
       porMes[key].total += 1;
-      if (c.modalidade === 'Compra') porMes[key].compras += 1;
-      if (c.modalidade === 'Locação') porMes[key].locacoes += 1;
+      if (normModalidade(c.modalidade) === 'Comprador') porMes[key].compras += 1;
+      if (normModalidade(c.modalidade) === 'Locatário') porMes[key].locacoes += 1;
     });
     return Object.entries(porMes).sort(([a],[b]) => a.localeCompare(b)).slice(-12).map(([,v]) => v);
   }, [data]);
@@ -222,9 +222,9 @@ export default function DashboardTab({ data }) {
   const stats = useMemo(() => ({
     total: filtered.length,
     ativos: filtered.filter(c => c.ativo === 'S').length,
-    compras: filtered.filter(c => c.modalidade === 'Compra').length,
-    locacoes: filtered.filter(c => c.modalidade === 'Locação').length,
-    vendas: filtered.filter(c => c.modalidade === 'Venda').length,
+    compras: filtered.filter(c => normModalidade(c.modalidade) === 'Comprador').length,
+    locacoes: filtered.filter(c => normModalidade(c.modalidade) === 'Locatário').length,
+    vendas: filtered.filter(c => normModalidade(c.modalidade) === 'Vendedor').length,
     contratos: filtered.filter(c => c.contrato).length,
   }), [filtered]);
 
