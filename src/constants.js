@@ -4,24 +4,23 @@ export const DEFAULT_ORIGENS = [
   "Stories Ig","Zap Imóveis","Corretor","Gabriela"
 ];
 export const DEFAULT_IMOVEIS = ["Apartamento","Casa","Apt./Casa","Lote","Terreno","Comercial","Galpão"];
-export const MODALIDADES = ["Compra","Venda","Locador","Locatário"];
+export const MODALIDADES = ["Comprador","Vendedor","Locador","Locatário"];
 
-// Os 4 tipos de tratativa em dois eixos:
-//  • Captação (o cliente TEM o imóvel → vira imóvel no Estoque): Venda, Locador
-//  • Procura  (o cliente QUER um imóvel nosso → vira contrato):    Compra, Locatário
-export const MODALIDADES_CAPTACAO = ["Venda","Locador"];
-export const MODALIDADES_PROCURA  = ["Compra","Locatário"];
+// Os 4 tipos de tratativa em dois eixos (nome = papel da pessoa):
+//  • Captação (o cliente TEM o imóvel → vira imóvel no Estoque): Vendedor, Locador
+//  • Procura  (o cliente QUER um imóvel nosso → vira contrato):    Comprador, Locatário
+export const MODALIDADES_CAPTACAO = ["Vendedor","Locador"];
+export const MODALIDADES_PROCURA  = ["Comprador","Locatário"];
 
-// Normaliza a modalidade para leitura. Registros antigos gravados como
-// "Locação"/"Aluguel" são lidos como "Locatário" (o lado da procura, que é
-// o que eles sempre foram). Nenhuma migração no banco é necessária: a
-// regravação acontece naturalmente quando o cadastro é salvo de novo.
+// Normaliza a modalidade para leitura. Cobre o legado sem migração no banco:
+//  "Locação"/"Aluguel" → Locatário · "Venda" → Vendedor · "Compra" → Comprador.
+// A regravação acontece naturalmente quando o cadastro é salvo de novo.
 export function normModalidade(m) {
   const s = String(m || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   if (s === "locacao" || s === "aluguel" || s === "locatario") return "Locatário";
   if (s === "locador") return "Locador";
-  if (s === "venda") return "Venda";
-  if (s === "compra") return "Compra";
+  if (s === "venda" || s === "vendedor") return "Vendedor";
+  if (s === "compra" || s === "comprador") return "Comprador";
   return m || "";
 }
 // É captação? (Venda ou Locador → vai pro Estoque)
