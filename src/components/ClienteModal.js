@@ -115,6 +115,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [internacional, setInternacional] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [clienteEncontrado, setClienteEncontrado] = useState(null);
+  const [cadastrandoCli, setCadastrandoCli] = useState(false);
   const [origemBloqueada, setOrigemBloqueada] = useState(false);
   const [duplicatas, setDuplicatas] = useState([]);
   const [motivos, setMotivos] = useState([]);
@@ -490,6 +491,39 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     setInternacional(false);
   }
 
+  // Normaliza telefone igual ao App.js (só dígitos; tira o 55 do começo se vier 12-13 dígitos)
+  function so11Modal(x) {
+    let d = String(x == null ? '' : x).replace(/\D/g, '');
+    if (d.length >= 12 && d.length <= 13 && d.slice(0, 2) === '55') d = d.slice(2);
+    return d || '';
+  }
+
+  // Cadastra o cliente NOVO no banco na hora, sem fechar o modal. Depois disso, salvar a
+  // tratativa só cria a negociação (não duplica o cliente, pois cliente_real_id já fica setado).
+  async function cadastrarClienteNovo() {
+    if (!validarTel(form.telefone, internacional)) { setErrors(e => ({ ...e, telefone: true })); alert('Informe um telefone válido antes de cadastrar o cliente.'); return; }
+    if (!form.nome.trim()) { setErrors(e => ({ ...e, nome: true })); alert('Informe o nome do cliente.'); return; }
+    setCadastrandoCli(true);
+    try {
+      const payload = {
+        nome: form.nome.trim(),
+        telefone: internacional ? (form.telefone || '').trim() : so11Modal(form.telefone),
+        telefone2: form.telefone2 ? so11Modal(form.telefone2) : null,
+        email: form.email || null,
+        entrada: form.entrada || hoje,
+        origem: form.origem || null,
+        is_corretor: form.is_corretor || false,
+        // herda o dono para o RLS saber de quem é o cliente (igual ao App.js)
+        corretor_id: form.corretor_id || perfil?.id || null,
+      };
+      const { data, error } = await supabase.from('clientes').insert(payload).select().single();
+      if (error) { alert('Não consegui cadastrar o cliente:\n' + error.message); setCadastrandoCli(false); return; }
+      setForm(f => ({ ...f, cliente_real_id: data.id }));
+      setClienteEncontrado(data);
+    } catch (e) { alert('Falha ao cadastrar o cliente:\n' + (e.message || e)); }
+    setCadastrandoCli(false);
+  }
+
   // Busca por telefone — debounce 700ms, usa últimos 8 dígitos
   async function buscarPorTelefone(tel) {
     const digits = tel.replace(/\D/g, '');
@@ -511,7 +545,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         setForm(f => ({
           ...f,
           nome: c.nome,
+          telefone2: c.telefone2 || f.telefone2,
           email: c.email || f.email,
+          entrada: c.entrada || f.entrada,
           // Aquisição (origem do CLIENTE) é imutável: sempre preserva a original (ex.: OLX), nunca vira Carteira.
           origem: (c.origem || f.origem),
           // Origem da TRATATIVA: cliente reincidente → Carteira (padrão, editável); 1ª tratativa → herda a aquisição.
@@ -1021,6 +1057,16 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </div>
             )}
           </div>
+
+          {!isEdit && !isNovaNeg && !clienteEncontrado && !form.cliente_real_id && validarTel(form.telefone, internacional) && form.nome.trim() && (
+            <div className="col-2">
+              <button type="button" onClick={cadastrarClienteNovo} disabled={cadastrandoCli}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--ine-primary, #C0392B)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: cadastrandoCli ? 'default' : 'pointer' }}>
+                {cadastrandoCli ? 'Cadastrando…' : '＋ Cadastrar este cliente'}
+              </button>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 5 }}>Cliente novo — cadastra agora, sem fechar o modal. Depois é só continuar a tratativa.</div>
+            </div>
+          )}
 
           <div>
             <label className="form-label">Email</label>
