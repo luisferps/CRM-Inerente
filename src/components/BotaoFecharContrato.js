@@ -85,6 +85,16 @@ export default function BotaoFecharContrato({ neg, podeContrato, variant = 'row'
         { venda_id: venda.id, papel: 'comprador', nome: neg.nome || '', telefone: neg.telefone || '', email: neg.email || '', interno: false, ordem: 0 },
         { venda_id: venda.id, papel: 'imovel', nome: imovel, interno: false, ordem: 0 },
       ];
+      // Herda a divisão de comissão da tratativa: cada corretor vira participante 'corretor'
+      // com seu percentual (pct). Se não houver divisão, cai no corretor único da tratativa.
+      const divisaoTrat = Array.isArray(neg.tratativa_divisao) ? neg.tratativa_divisao : [];
+      if (divisaoTrat.length > 0) {
+        divisaoTrat.forEach((d, i) => {
+          participantes.push({ venda_id: venda.id, papel: 'corretor', nome: d.nome || '', pessoa_id: d.id || null, pct: Number(d.pct) || 0, interno: true, ordem: i });
+        });
+      } else if (neg.corretor) {
+        participantes.push({ venda_id: venda.id, papel: 'corretor', nome: neg.corretor, pessoa_id: neg.corretor_id || null, pct: 100, interno: true, ordem: 0 });
+      }
       // os participantes são um conforto inicial; se a tabela ainda não existir, a venda já foi criada
       try { await supabase.from('venda_participantes').insert(participantes); } catch (e2) {}
 
