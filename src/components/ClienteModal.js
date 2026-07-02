@@ -116,6 +116,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [buscando, setBuscando] = useState(false);
   const [clienteEncontrado, setClienteEncontrado] = useState(null);
   const [cadastrandoCli, setCadastrandoCli] = useState(false);
+  const [modoCadastroCli, setModoCadastroCli] = useState(false);
+  const [dividindoAtend, setDividindoAtend] = useState(false);
   const [countdownSalvar, setCountdownSalvar] = useState(null);
   const countdownRef = useRef(null);
   const [origemBloqueada, setOrigemBloqueada] = useState(false);
@@ -522,6 +524,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (error) { alert('Não consegui cadastrar o cliente:\n' + error.message); setCadastrandoCli(false); return; }
       setForm(f => ({ ...f, cliente_real_id: data.id }));
       setClienteEncontrado(data);
+      setModoCadastroCli(false);
     } catch (e) { alert('Falha ao cadastrar o cliente:\n' + (e.message || e)); }
     setCadastrandoCli(false);
   }
@@ -542,6 +545,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (data && data.length > 0) {
         const c = data[0];
         setClienteEncontrado(c);
+        setModoCadastroCli(false);
         const { data: negs } = await supabase.from('negociacoes').select('id').eq('cliente_id', c.id).limit(1);
         const temTratativas = negs && negs.length > 0;
         setForm(f => ({
@@ -649,8 +653,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   }
 
   async function organizarIA() {
-    const desc = (form.ficha && form.ficha._descricao) || '';
-    if (!desc.trim()) { alert('Cole o texto do anúncio no campo antes de organizar com a IA.'); return; }
+    const desc = ((conversaComprador || '') || (form.ficha && form.ficha._descricao) || '').trim();
+    if (!desc.trim()) { alert('Cole a conversa/anúncio no campo antes de organizar com a IA.'); return; }
     setOrganizandoIA(true);
     try {
       const r = await fetch(BACKEND + '/captacao/organizar-ficha', {
@@ -916,6 +920,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     setCountdownSalvar(null);
   }
   useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
+  // Se a tratativa já nasce com divisão de mais de uma pessoa, o painel de divisão já vem aberto
+  useEffect(() => {
+    const nTrat = (modal?.tratativa_divisao || []).length;
+    const nCap = (modal?.captacao_divisao || []).length;
+    setDividindoAtend(nTrat > 1 || nCap > 1);
+  }, [modal]);
 
   const errStyle = k => errors[k] ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px #dc262618' } : {};
   const clienteLocked = (isNovaNeg || !!clienteEncontrado) && !isEdit;
@@ -1020,155 +1030,97 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
 
           <div className="tsec">
           <div className="tsec-head">🤖 Preenchimento por IA</div>
-          {!form.modalidade ? (
-            <div style={{ fontSize: 12.5, color: '#9ca3af' }}>Escolha o tipo de tratativa acima — a IA se adapta (colar anúncio para captação, ou a conversa do cliente para procura) e preenche os campos abaixo.</div>
-          ) : (<>
-            {isCaptacao && (
-              <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd6fe', borderRadius: 8, background: '#faf5ff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9' }}>🤖 Colar anúncio → IA preenche os campos</span>
-                  <button type="button" onClick={organizarIA} disabled={organizandoIA}
-                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoIA ? 'default' : 'pointer',
-                      border: '1px solid #7c3aed', background: organizandoIA ? '#ede9fe' : '#7c3aed', color: organizandoIA ? '#7c3aed' : '#fff' }}>
-                    {organizandoIA ? '🤖 organizando…' : '🤖 Organizar com IA'}
-                  </button>
-                </div>
-                <textarea
-                  value={(form.ficha && form.ficha._descricao) || ''}
-                  onChange={e => set('ficha', Object.assign({}, form.ficha || {}, { _descricao: e.target.value }))}
-                  placeholder="Cole aqui o texto do anúncio (do proprietário, OLX, etc.) e clique em Organizar com IA. Ela preenche Tipo, Valor e Localização abaixo."
-                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #ddd6fe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                {form.ficha && (form.ficha.metragemTotal || form.ficha.metragem || form.ficha.quartos || form.ficha.garagens || (form.ficha.condicoes && form.ficha.condicoes.length)) && (
-                  <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.6, marginTop: 8 }}>
-                    Detalhes guardados p/ o Estoque: {[
-                      form.ficha.metragemTotal ? (form.ficha.metragemTotal + ' m² terreno') : (form.ficha.metragem ? (form.ficha.metragem + ' m²') : null),
-                      form.ficha.quartos ? (form.ficha.quartos + ' qto') : null,
-                      form.ficha.garagens ? (form.ficha.garagens + ' vaga') : null,
-                      (form.ficha.condicoes && form.ficha.condicoes.length) ? form.ficha.condicoes.join(' · ') : null
-                    ].filter(Boolean).join('  ·  ')}
-                  </div>
-                )}
-                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
-                  A IA preenche <b>Tipo, Valor e Localização</b> abaixo — confira e ajuste. Ao marcar <b>Captado</b>, o imóvel vai pro Estoque (oculto) com esses detalhes.
-                </p>
-              </div>
-            )}
-            {!isCaptacao && (
-              <div style={{ marginTop: 12, padding: 12, border: '1px solid #bfdbfe', borderRadius: 8, background: '#eff6ff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>🤖 Colar conversa do cliente → IA preenche os campos</span>
-                  <button type="button" onClick={organizarConversaComprador} disabled={organizandoComprador}
-                    style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: organizandoComprador ? 'default' : 'pointer',
-                      border: '1px solid #2563eb', background: organizandoComprador ? '#dbeafe' : '#2563eb', color: organizandoComprador ? '#2563eb' : '#fff' }}>
-                    {organizandoComprador ? '🤖 organizando…' : '🤖 Organizar com IA'}
-                  </button>
-                </div>
-                <textarea
-                  value={conversaComprador}
-                  onChange={e => setConversaComprador(e.target.value)}
-                  placeholder="Cole aqui a conversa do WhatsApp com o cliente (o que ele procura) e clique em Organizar com IA. Ela preenche Modalidade, Tipo, Valor (orçamento) e Localização abaixo."
-                  style={{ width: '100%', minHeight: 72, fontSize: 12, padding: 8, borderRadius: 6, border: '1px solid #bfdbfe', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>
-                  A IA lê o que o cliente <b>procura</b> e preenche <b>Modalidade, Tipo, Valor e Localização</b> — confira e ajuste o que precisar.
-                </p>
-              </div>
-            )}
-          </>)}
+          <textarea
+            value={conversaComprador}
+            onChange={e => setConversaComprador(e.target.value)}
+            placeholder="Cole aqui a conversa que você teve com o cliente (ou o anúncio do imóvel). A IA lê e preenche os campos abaixo."
+            style={{ width: '100%', minHeight: 84, fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #d2d2d7', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+          <button type="button" disabled={organizandoIA || organizandoComprador || !form.modalidade}
+            onClick={() => (isCaptacao ? organizarIA() : organizarConversaComprador())}
+            style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7, background: (!form.modalidade) ? '#e5e5e7' : (organizandoIA || organizandoComprador) ? '#ede9fe' : '#7c3aed', color: (!form.modalidade) ? '#a1a1a6' : (organizandoIA || organizandoComprador) ? '#7c3aed' : '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13.5, fontWeight: 600, cursor: (organizandoIA || organizandoComprador || !form.modalidade) ? 'default' : 'pointer' }}>
+            {(organizandoIA || organizandoComprador) ? '🤖 organizando…' : '🤖 Organizar com IA'}
+          </button>
+          {!form.modalidade && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 6 }}>Escolha primeiro "Estou tratando com" acima — a IA se adapta ao tipo.</div>}
           </div>
 
           <div className="tsec">
           <div className="tsec-head">👤 Cliente</div>
-          <div className="tgrid">
+
           <div>
             <label className="form-label">
-              Telefone *
+              Cole aqui o telefone do cliente *
               <label style={{ marginLeft: 12, fontSize: 11, fontWeight: 400, color: '#6b7280', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); setClienteEncontrado(null); }} style={{ width: 'auto', margin: 0 }} disabled={isEdit} />
+                <input type="checkbox" checked={internacional} onChange={() => { setInternacional(n => !n); set('telefone', ''); setClienteEncontrado(null); setModoCadastroCli(false); }} style={{ width: 'auto', margin: 0 }} disabled={isEdit} />
                 Internacional
               </label>
             </label>
             <div style={{ position: 'relative' }}>
-              <input
-                value={form.telefone}
-                onChange={handleTelChange}
-                placeholder={internacional ? '+1 555 000 0000' : '62999999999'}
-                style={errStyle('telefone')}
-                disabled={isEdit && !isGerente}
-                inputMode="numeric"
-              />
+              <input value={form.telefone} onChange={handleTelChange} placeholder={internacional ? '+1 555 000 0000' : 'Ex: 62999999999'} style={errStyle('telefone')} disabled={isEdit && !isGerente} inputMode="numeric" />
               {buscando && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#9ca3af' }}>🔍</span>}
             </div>
             {waHref && (
-              <a href={waHref} target="_blank" rel="noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: '#25d366', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-                💬 Abrir no WhatsApp
-              </a>
+              <a href={waHref} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: '#25d366', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>💬 Abrir no WhatsApp</a>
             )}
             {errors.telefone && <span style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'block' }}>{internacional ? 'Informe um número válido.' : 'Informe um celular completo (11 dígitos: DDD + 9 + número).'}</span>}
-            {clienteEncontrado && (
-              <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 12, color: '#065f46' }}>
-                ✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>
-              </div>
-            )}
           </div>
 
-          <div>
-            <label className="form-label">Telefone 2 <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— reserva</span></label>
-            <input
-              value={form.telefone2 || ''}
-              onChange={e => set('telefone2', e.target.value.replace(/\D/g,'').slice(0,11))}
-              placeholder="62999999999"
-              inputMode="numeric"
-              disabled={clienteLocked}
-            />
-          </div>
-
-          <div>
-            <label className="form-label">Nome *</label>
-            <input value={form.nome} onChange={handleNomeChange} placeholder="Nome completo" style={errStyle('nome')} disabled={clienteLocked} />
-            {!clienteLocked && duplicatas.length > 0 && (
-              <div style={{ marginTop: 6, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: '#92400e', marginBottom: 4 }}>⚠️ Clientes parecidos encontrados:</div>
-                {duplicatas.map(d => (
-                  <div key={d.id} style={{ color: '#78350f', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{d.nome}</span>
-                    <span style={{ color: '#9ca3af' }}>{d.telefone || '—'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {!isEdit && !isNovaNeg && !clienteEncontrado && !form.cliente_real_id && validarTel(form.telefone, internacional) && form.nome.trim() && (
-            <div className="col-2">
-              <button type="button" onClick={cadastrarClienteNovo} disabled={cadastrandoCli}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--ine-primary, #C0392B)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: cadastrandoCli ? 'default' : 'pointer' }}>
-                {cadastrandoCli ? 'Cadastrando…' : '＋ Cadastrar este cliente'}
-              </button>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 5 }}>Cliente novo — cadastra agora, sem fechar o modal. Depois é só continuar a tratativa.</div>
+          {clienteEncontrado && !modoCadastroCli && (
+            <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 12.5, color: '#065f46' }}>
+              ✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>. Os dados abaixo vêm do cadastro — para alterar, edite na aba <strong>Clientes</strong>.
             </div>
           )}
 
-          <div>
-            <label className="form-label">Email</label>
-            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" disabled={clienteLocked} />
-          </div>
+          {!isEdit && !clienteEncontrado && !modoCadastroCli && validarTel(form.telefone, internacional) && (
+            <div style={{ marginTop: 10, padding: '10px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12.5, color: '#92400e' }}>Esse cliente ainda não está cadastrado.</span>
+              <button type="button" onClick={() => setModoCadastroCli(true)} style={{ background: 'var(--ine-primary, #C0392B)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>＋ Cadastrar agora</button>
+            </div>
+          )}
 
-          <div>
-            <label className="form-label">Data de Entrada</label>
-            <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} />
-          </div>
-
-          <SelectComAdd label="Aquisição" value={form.origem} onChange={v => { set('origem', v); if (!form.origem_tratativa) set('origem_tratativa', v); }}
-            options={origens} setOptions={setOrigens} chave="origens"
-            isGerente={isGerente} perfil={perfil} bloqueado={origemBloqueada && !isEdit} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 20 }}>
-            <input type="checkbox" id="is_corretor" checked={form.is_corretor || false} onChange={e => set('is_corretor', e.target.checked)}
-              style={{ width: 16, height: 16, cursor: 'pointer', margin: 0 }} disabled={clienteLocked} />
-            <label htmlFor="is_corretor" style={{ fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>Este cliente é corretor</label>
-          </div>
-          </div>
+          {(clienteEncontrado || modoCadastroCli || isEdit) && (() => {
+            const leitura = !modoCadastroCli;
+            return (
+            <div className="tgrid" style={{ marginTop: 12 }}>
+              <div className="col-2">
+                <label className="form-label">Nome{modoCadastroCli ? ' *' : ''}</label>
+                <input value={form.nome} onChange={handleNomeChange} placeholder="Nome completo" style={errStyle('nome')} disabled={leitura} />
+                {modoCadastroCli && duplicatas.length > 0 && (
+                  <div style={{ marginTop: 6, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12 }}>
+                    <div style={{ fontWeight: 600, color: '#92400e', marginBottom: 4 }}>⚠️ Clientes parecidos:</div>
+                    {duplicatas.map(d => (<div key={d.id} style={{ color: '#78350f', display: 'flex', justifyContent: 'space-between' }}><span>{d.nome}</span><span style={{ color: '#9ca3af' }}>{d.telefone || '—'}</span></div>))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="form-label">Telefone 2 <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— reserva</span></label>
+                <input value={form.telefone2 || ''} onChange={e => set('telefone2', e.target.value.replace(/\D/g,'').slice(0,11))} placeholder="62999999999" inputMode="numeric" disabled={leitura} />
+              </div>
+              <div>
+                <label className="form-label">Email</label>
+                <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" disabled={leitura} />
+              </div>
+              <div>
+                <label className="form-label">Data de entrada</label>
+                <input type="date" value={form.entrada || hoje} onChange={e => set('entrada', e.target.value)} disabled={leitura} />
+              </div>
+              <SelectComAdd label="De onde veio esse cliente?" value={form.origem} onChange={v => set('origem', v)}
+                options={origens} setOptions={setOrigens} chave="origens" isGerente={isGerente} perfil={perfil} bloqueado={leitura} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 20 }}>
+                <input type="checkbox" id="is_corretor" checked={form.is_corretor || false} onChange={e => set('is_corretor', e.target.checked)} style={{ width: 16, height: 16, cursor: leitura ? 'default' : 'pointer', margin: 0 }} disabled={leitura} />
+                <label htmlFor="is_corretor" style={{ fontSize: 13, color: leitura ? '#9ca3af' : '#374151', cursor: leitura ? 'default' : 'pointer', fontWeight: 500 }}>Este cliente é corretor</label>
+              </div>
+              {modoCadastroCli && (
+                <div className="col-2" style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button type="button" onClick={cadastrarClienteNovo} disabled={cadastrandoCli}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--ine-primary, #C0392B)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13.5, fontWeight: 600, cursor: cadastrandoCli ? 'default' : 'pointer' }}>
+                    {cadastrandoCli ? 'Cadastrando…' : '✓ Salvar cliente'}
+                  </button>
+                  <button type="button" onClick={() => setModoCadastroCli(false)} style={{ background: 'none', border: '1px solid #d2d2d7', borderRadius: 8, padding: '9px 16px', fontSize: 13.5, color: '#6e6e73', cursor: 'pointer' }}>Cancelar</button>
+                </div>
+              )}
+            </div>
+            );
+          })()}
           </div>
 
           <div className="tsec">
@@ -1390,25 +1342,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             </div>
           )}
 
-          <div>
-            <label className="form-label">Corretor</label>
-            {isGerente ? (
-              <select value={form.corretor || ''} onChange={e => {
-                const nome = e.target.value;
-                const c = corretores.find(x => x.nome === nome);
-                setForm(f => ({ ...f, corretor: nome, corretor_id: (c && c.supabaseId) || null }));
-              }} style={{ width: '100%' }}>
-                <option value="">— selecione —</option>
-                {form.corretor && !corretores.some(c => c.nome === form.corretor) && (
-                  <option value={form.corretor}>{form.corretor} (atual)</option>
-                )}
-                {corretores.map(c => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
-              </select>
-            ) : (
-              <input value={form.corretor || ''} readOnly style={{ background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} />
-            )}
-          </div>
-          {/* DIVISÃO DE COMISSÃO DA TRATATIVA (100% interno) */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: '#1d1d1f', cursor: 'pointer', fontWeight: 500, padding: '6px 0' }}>
+            <input type="checkbox" checked={dividindoAtend} onChange={e => setDividindoAtend(e.target.checked)} style={{ width: 16, height: 16, margin: 0 }} />
+            Estou dividindo o atendimento desse cliente
+          </label>
+          {dividindoAtend && !isCaptacao && (
           <div className="field-full" style={{ marginTop: 4 }}>
             <label className="form-label">Divisão de comissão (tratativa)</label>
             <select value="" onChange={e => { if (e.target.value) { addCorretorDivisao(e.target.value); e.target.value = ''; } }} style={{ width: '100%', marginBottom: 8 }}>
@@ -1474,7 +1412,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </div>
             )}
           </div>
-          {isCaptacao && (
+          )}
+          {dividindoAtend && isCaptacao && (
           <div className="field-full" style={{ marginTop: 4, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
             <label className="form-label">Divisão de captação (vai para o Estoque)</label>
             <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>Quem captou este imóvel. Ao marcar como captado, esta divisão segue para o cadastro no Estoque.</div>
