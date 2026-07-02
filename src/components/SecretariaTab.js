@@ -13,6 +13,7 @@ export default function SecretariaTab() {
   const [fAno, setFAno] = useState('todos');
   const [fMes, setFMes] = useState('todos');
   const [edit, setEdit] = useState(null);
+  const [corretoresVenda, setCorretoresVenda] = useState([]); // participantes papel 'corretor' da venda aberta
   const [saving, setSaving] = useState(false);
 
   async function carregar() {
@@ -22,6 +23,17 @@ export default function SecretariaTab() {
     setLoading(false);
   }
   useEffect(() => { carregar(); }, []);
+
+  // Carrega a divisão de corretor (participantes) da venda aberta no modal.
+  useEffect(() => {
+    if (!edit || !edit.id) { setCorretoresVenda([]); return; }
+    let vivo = true;
+    supabase.from('venda_participantes')
+      .select('*').eq('venda_id', edit.id).eq('papel', 'corretor')
+      .order('ordem', { ascending: true })
+      .then(({ data }) => { if (vivo) setCorretoresVenda(data || []); });
+    return () => { vivo = false; };
+  }, [edit]);
 
   const anos = useMemo(() => [...new Set(vendas.map(v => String(v.data).slice(0, 4)))].sort().reverse(), [vendas]);
 
@@ -201,6 +213,21 @@ export default function SecretariaTab() {
               <label style={lab}>VGV (R$)<input type="number" value={edit.vgv} onChange={e => setEdit({ ...edit, vgv: e.target.value })} style={inp} /></label>
               <label style={lab}>Comissão (R$)<input type="number" value={edit.comissao} onChange={e => setEdit({ ...edit, comissao: e.target.value })} style={inp} /></label>
               <label style={lab}>Corretor (R$)<input type="number" value={edit.p_corretor} onChange={e => setEdit({ ...edit, p_corretor: e.target.value })} style={inp} /></label>
+              {corretoresVenda.length > 0 && (
+                <div style={{ gridColumn: '1 / 3', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Divisão da comissão de corretor (herdada da tratativa)</div>
+                  {corretoresVenda.map((p, i) => {
+                    const valor = (Number(edit.p_corretor) || 0) * (Number(p.pct) || 0) / 100;
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: '#374151' }}>
+                        <span>{p.nome} <span style={{ color: '#9ca3af' }}>({Number(p.pct) || 0}%)</span></span>
+                        <b>{BRL(valor)}</b>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 6 }}>Para alterar a divisão é preciso aprovação de alçada superior na tratativa.</div>
+                </div>
+              )}
               <label style={lab}>Captador (R$)<input type="number" value={edit.p_captador} onChange={e => setEdit({ ...edit, p_captador: e.target.value })} style={inp} /></label>
               <label style={lab}>Gerente (R$)<input type="number" value={edit.p_gerente} onChange={e => setEdit({ ...edit, p_gerente: e.target.value })} style={inp} /></label>
               <label style={lab}>Imobiliária (R$)<input type="number" value={edit.p_imobiliaria} onChange={e => setEdit({ ...edit, p_imobiliaria: e.target.value })} style={inp} /></label>
