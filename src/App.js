@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import './index.css';
 import { supabase } from './supabaseClient';
+import { normModalidade, ehCaptacao } from './constants';
 import CRMTab from './components/CRMTab';
 import FunilTab from './components/FunilTab';
 import VendasTab from './components/VendasTab';
@@ -320,9 +321,10 @@ export default function App() {
 
   const stats = useMemo(() => ({
     total: data.filter(c => c.ativo === 'S').length,
-    compras: data.filter(c => c.ativo === 'S' && c.modalidade === 'Compra').length,
-    locacoes: data.filter(c => c.ativo === 'S' && c.modalidade === 'Locação').length,
-    vendas: data.filter(c => c.ativo === 'S' && c.modalidade === 'Venda').length,
+    // Procuras: quem busca imóvel (Comprador + Locatário, cobrindo nomes legados via normModalidade)
+    procuras: data.filter(c => c.ativo === 'S' && ['Comprador', 'Locatário'].includes(normModalidade(c.modalidade))).length,
+    // Captações: quem tem imóvel (Vendedor + Locador + legados)
+    captacoes: data.filter(c => c.ativo === 'S' && ehCaptacao(c.modalidade)).length,
     contratos: data.filter(c => c.contrato).length,
   }), [data]);
 
@@ -336,7 +338,7 @@ export default function App() {
   const todasAbas = [
     ['tratativas', 'Tratativas'],
     ['funil', 'Funil'],
-    ['vendas', '🏠 Vendas'],
+    ['vendas', '🏠 Captações'],
     ['secretaria', '📊 Secretaria', 'gerente'],
     ['dash', 'Dashboard'],
     ['recebidos', '💰 Recebidos'],
@@ -390,9 +392,8 @@ export default function App() {
 
       <div className="stats-bar">
         <div className="stat-item"><span className="stat-label">Tratativas</span><span className="stat-value stat-blue">{stats.total}</span></div>
-        <div className="stat-item"><span className="stat-label">Compras</span><span className="stat-value stat-green">{stats.compras}</span></div>
-        <div className="stat-item"><span className="stat-label">Locações</span><span className="stat-value stat-purple">{stats.locacoes}</span></div>
-        <div className="stat-item"><span className="stat-label">Vendas</span><span className="stat-value stat-orange">{stats.vendas}</span></div>
+        <div className="stat-item"><span className="stat-label">Procuras</span><span className="stat-value stat-green">{stats.procuras}</span></div>
+        <div className="stat-item"><span className="stat-label">Captações</span><span className="stat-value stat-orange">{stats.captacoes}</span></div>
         <div className="stat-item"><span className="stat-label">Contratos</span><span className="stat-value stat-green">{stats.contratos}</span></div>
       </div>
       </>)}
