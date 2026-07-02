@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL, ETAPAS_LABEL, normModalidade } from '../constants';
 import DetailPanel from './DetailPanel';
 import BotaoFecharContrato from './BotaoFecharContrato';
 
@@ -12,9 +12,11 @@ function getEtapaAtual(c) {
 }
 
 function modalidadeBadge(modalidade) {
-  if (modalidade === 'Venda') return { bg: '#dbeafe', color: '#1d4ed8' };
-  if (modalidade === 'Locação') return { bg: '#ede9fe', color: '#7e22ce' };
-  if (modalidade === 'Compra') return { bg: '#dcfce7', color: '#065f46' };
+  const m = normModalidade(modalidade);
+  if (m === 'Vendedor') return { bg: '#dbeafe', color: '#1d4ed8' };
+  if (m === 'Locador') return { bg: '#fef3c7', color: '#92400e' };
+  if (m === 'Locatário') return { bg: '#ede9fe', color: '#7e22ce' };
+  if (m === 'Comprador') return { bg: '#dcfce7', color: '#065f46' };
   return { bg: '#f3f4f6', color: '#6b7280' };
 }
 
