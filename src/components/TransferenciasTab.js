@@ -58,21 +58,12 @@ export default function TransferenciasTab({ perfil }) {
 
   async function aprovarDestino(t) {
     setMsg('');
-    // 1) marca a transferência como aceita
-    const { error: e1 } = await supabase.from('transferencias').update({
-      status: 'aceita',
-      aprovado_destino_por: perfil.id,
-      aprovado_destino_em: new Date().toISOString(),
-    }).eq('id', t.id);
-    if (e1) { setMsg('Erro: ' + e1.message); return; }
-    // 2) move o cliente e a negociação para o destino
-    const novoNome = nomePerfil(t.para_corretor_id);
-    if (t.cliente_id) {
-      await supabase.from('clientes').update({ corretor_id: t.para_corretor_id }).eq('id', t.cliente_id);
-    }
-    if (t.negociacao_id) {
-      await supabase.from('negociacoes').update({ corretor_id: t.para_corretor_id, corretor: novoNome }).eq('id', t.negociacao_id);
-    }
+    // A efetivação roda no BANCO (função aceitar_transferencia, SECURITY DEFINER):
+    // valida quem aceita e move cliente+negociação sem esbarrar no RLS.
+    // (Antes o update rodava como o destino e o RLS barrava em silêncio — 0 linhas.)
+    const { data, error } = await supabase.rpc('aceitar_transferencia', { t_id: String(t.id) });
+    if (error) { setMsg('Erro: ' + error.message + ' — se aparecer "function not found", rode o SQL da função aceitar_transferencia no Supabase.'); return; }
+    if (data !== 'ok') { setMsg('Não foi possível aceitar: ' + data); return; }
     load();
   }
 
