@@ -221,10 +221,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const podeEditarFatiaTrat = (item) => ehAlcadaSuperior || (!!meuId && item.id === meuId);
   const souDonoEdicaoTrat = !!meuId && meuId === donoEdicaoId;
   const podeTransferirEdicaoTrat = souDonoEdicaoTrat || ehAlcadaSuperior;
-  // Quem pode SALVAR a edição: alçada superior, o corretor responsável ou quem tem a estrela.
-  // Quem está na divisão sem a estrela (ou só visualiza) entra em modo somente leitura.
+  // Quem pode SALVAR a edição: alçada superior, o corretor responsável, quem tem a estrela
+  // da TRATATIVA ou quem tem a estrela da CAPTAÇÃO. Os demais entram em somente visualização.
   const donoTratativaSouEu = !!meuId && form.corretor_id === meuId;
-  const podeSalvarTratativa = !isEdit || ehAlcadaSuperior || donoTratativaSouEu || souDonoEdicaoTrat;
+  const temEstrelaCap = !!meuId && meuId === (form.captacao_dono_edicao || null);
+  const podeSalvarTratativa = !isEdit || ehAlcadaSuperior || donoTratativaSouEu || souDonoEdicaoTrat || temEstrelaCap;
   const donoEdicaoNome = ((divisao.find(d => d.id === donoEdicaoId) || {}).nome) || '';
   const somaPctTrat = divisao.reduce((s, c) => s + (Number(c.pct) || 0), 0);
 
@@ -459,6 +460,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     setOrigemBloqueada(false);
     if (isEdit) {
       setForm({ ...emptyForm, ...modal, modalidade: normModalidade(modal.modalidade) });
+      // Busca a versão FRESCA das divisões no banco. Evita que uma tela aberta há tempo
+      // regrave estado velho por cima e apague a divisão/estrela que outra pessoa configurou.
+      supabase.from('negociacoes')
+        .select('tratativa_divisao, tratativa_dono_edicao, captacao_divisao, captacao_dono_edicao')
+        .eq('id', modal.negociacao_id).single()
+        .then(({ data: fresca }) => {
+          if (fresca) setForm(f => ({
+            ...f,
+            tratativa_divisao: fresca.tratativa_divisao || [],
+            tratativa_dono_edicao: fresca.tratativa_dono_edicao || null,
+            captacao_divisao: fresca.captacao_divisao || [],
+            captacao_dono_edicao: fresca.captacao_dono_edicao || null,
+          }));
+        });
       jaCaptadoRef.current = !!modal.captado;
       telOriginalRef.current = modal.telefone || '';
       origemTratLockRef.current = !!(modal.origem_tratativa && String(modal.origem_tratativa).trim());
