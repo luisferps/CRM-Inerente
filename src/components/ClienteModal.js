@@ -949,6 +949,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const radarFaltando = (() => {
     if (!isCaptacao) return [];
     const f = [];
+    if (vazioVal(form.tipo_id)) f.push('Tipo de imóvel');
     if (vazioVal(form.valor)) f.push('Valor');
     if (vazioVal(ficha.endereco)) f.push('Endereço');
     if (vazioVal(ficha.bairro)) f.push('Bairro');
@@ -1005,7 +1006,6 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         <div className="modal-body" style={{ display: 'block' }}>
 
           <div className="tsec">
-          <div className="tsec-head">Tipo de tratativa *</div>
           <div className="field-full">
             <label className="form-label">Estou tratando com *</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1029,18 +1029,19 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           </div>
 
           <div className="tsec">
-          <div className="tsec-head">🤖 Preenchimento por IA</div>
           <textarea
             value={conversaComprador}
             onChange={e => setConversaComprador(e.target.value)}
             placeholder="Cole aqui a conversa que você teve com o cliente (ou o anúncio do imóvel). A IA lê e preenche os campos abaixo."
             style={{ width: '100%', minHeight: 84, fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #d2d2d7', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-          <button type="button" disabled={organizandoIA || organizandoComprador || !form.modalidade}
-            onClick={() => (isCaptacao ? organizarIA() : organizarConversaComprador())}
-            style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7, background: (!form.modalidade) ? '#e5e5e7' : (organizandoIA || organizandoComprador) ? '#ede9fe' : '#7c3aed', color: (!form.modalidade) ? '#a1a1a6' : (organizandoIA || organizandoComprador) ? '#7c3aed' : '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13.5, fontWeight: 600, cursor: (organizandoIA || organizandoComprador || !form.modalidade) ? 'default' : 'pointer' }}>
-            {(organizandoIA || organizandoComprador) ? '🤖 organizando…' : '🤖 Organizar com IA'}
-          </button>
-          {!form.modalidade && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 6 }}>Escolha primeiro "Estou tratando com" acima — a IA se adapta ao tipo.</div>}
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button type="button" disabled={organizandoIA || organizandoComprador || !form.modalidade}
+              onClick={() => (isCaptacao ? organizarIA() : organizarConversaComprador())}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: (!form.modalidade) ? '#e5e5e7' : (organizandoIA || organizandoComprador) ? '#dbeafe' : '#2563eb', color: (!form.modalidade) ? '#a1a1a6' : (organizandoIA || organizandoComprador) ? '#2563eb' : '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13.5, fontWeight: 600, cursor: (organizandoIA || organizandoComprador || !form.modalidade) ? 'default' : 'pointer' }}>
+              {(organizandoIA || organizandoComprador) ? '🤖 organizando…' : '🤖 Organizar com IA'}
+            </button>
+            {!form.modalidade && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 6 }}>Escolha primeiro "Estou tratando com" acima — a IA se adapta ao tipo.</div>}
+          </div>
           </div>
 
           <div className="tsec">
@@ -1139,7 +1140,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           {isCaptacao && form.modalidade && radarFaltando.length === 0 && (
             <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#eafaf1', border: '1px solid #9FE1CB', borderRadius: 10, padding: '11px 13px', marginBottom: 14, fontSize: 13, color: '#0F6E56', fontWeight: 700 }}>✓ Todas as informações do cliente foram coletadas.</div>
           )}
-          <div className="tsec-head">{!form.modalidade ? '🏠 Imóvel / perfil do cliente' : isCaptacao ? '🏠 Imóvel' : '👤 Perfil do cliente'}</div>
+          <div className="tsec-head">{!form.modalidade ? '🏠 Imóvel / interesse' : isCaptacao ? '🏠 Imóvel' : '🔎 O que esse cliente está procurando'}</div>
           {isCaptacao && (
             <div className="field-full" style={{ background: '#eef4fb', border: '1px solid #b5d4f4', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#185FA5', marginBottom: 4 }}>
               🏠 Imóvel a ser captado para {isLocacao ? 'locação' : 'venda'} — migra pro Estoque ao captar. O que exige pesquisa (CEP, descrição, fotos) fica pro Estoque.
@@ -1348,7 +1349,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           </label>
           {dividindoAtend && !isCaptacao && (
           <div className="field-full" style={{ marginTop: 4 }}>
-            <label className="form-label">Divisão de comissão (tratativa)</label>
+            <label className="form-label">Adicionar corretor</label>
             <select value="" onChange={e => { if (e.target.value) { addCorretorDivisao(e.target.value); e.target.value = ''; } }} style={{ width: '100%', marginBottom: 8 }}>
               <option value="">+ Adicionar corretor à divisão...</option>
               {corretores
@@ -1356,7 +1357,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 .map(c => <option key={c.supabaseId || c.id} value={c.supabaseId || c.id}>{c.nome}</option>)}
             </select>
 
-            {divisao.length > 0 && (
+            {divisao.length > 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {divisao.map((item, idx) => {
                   const posso = podeEditarFatiaTrat(item);
@@ -1444,7 +1445,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </div>
             )}
 
-            {capDiv.length > 0 && (
+            {capDiv.length > 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {capDiv.map((item, idx) => {
                   const posso = podeEditarFatiaCap(item);
