@@ -221,6 +221,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const podeEditarFatiaTrat = (item) => ehAlcadaSuperior || (!!meuId && item.id === meuId);
   const souDonoEdicaoTrat = !!meuId && meuId === donoEdicaoId;
   const podeTransferirEdicaoTrat = souDonoEdicaoTrat || ehAlcadaSuperior;
+  // Quem pode SALVAR a edição: alçada superior, o corretor responsável ou quem tem a estrela.
+  // Quem está na divisão sem a estrela (ou só visualiza) entra em modo somente leitura.
+  const donoTratativaSouEu = !!meuId && form.corretor_id === meuId;
+  const podeSalvarTratativa = !isEdit || ehAlcadaSuperior || donoTratativaSouEu || souDonoEdicaoTrat;
+  const donoEdicaoNome = ((divisao.find(d => d.id === donoEdicaoId) || {}).nome) || '';
   const somaPctTrat = divisao.reduce((s, c) => s + (Number(c.pct) || 0), 0);
 
   // ─── PARTE 4: aprovação por gerência ao ceder para OUTRA equipe ───
@@ -961,6 +966,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
 
   // Salvar com contagem regressiva de 3s cancelável (evita clique errado)
   function iniciarSalvamento() {
+    if (!podeSalvarTratativa) { alert('Somente visualização: a edição desta tratativa é de quem tem a estrela ⭐' + (donoEdicaoNome ? ' (' + donoEdicaoNome + ')' : '') + ' ou do corretor responsável.'); return; }
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); alert('Preencha todos os campos obrigatórios.'); return; }
     setCountdownSalvar(3);
@@ -1060,6 +1066,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'block' }}>
+
+          {isEdit && !podeSalvarTratativa && (
+            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>
+              👁 <b>Somente visualização.</b> A edição desta tratativa é de quem tem a estrela ⭐{donoEdicaoNome ? ` (${donoEdicaoNome})` : ''} ou do corretor responsável. Para editar, peça a transferência da estrela.
+            </div>
+          )}
 
           <div className="tsec">
           <div className="field-full">
@@ -1666,7 +1678,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               variant="modal" />
           )}
           <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('crm_rascunho'); onClose(); }}>Cancelar</button>
-          {countdownSalvar != null ? (
+          {!podeSalvarTratativa ? (
+            <button className="btn btn-primary" disabled style={{ opacity: 0.55, cursor: 'not-allowed' }}
+              title={'Somente visualização — a edição é de quem tem a estrela ⭐' + (donoEdicaoNome ? ' (' + donoEdicaoNome + ')' : '')}>
+              🔒 Somente visualização
+            </button>
+          ) : countdownSalvar != null ? (
             <button className="btn btn-primary" onClick={cancelarSalvamento} style={{ background: '#d97706' }}>
               Salvando em {countdownSalvar}… toque para cancelar
             </button>
