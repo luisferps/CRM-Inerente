@@ -272,6 +272,30 @@ export default function App() {
 
   async function handleDelete(negId) {
     if (!podeEditar) return;
+    const neg = negociacoes.find(n => n.id === negId);
+    const div = Array.isArray(neg?.tratativa_divisao) ? neg.tratativa_divisao : [];
+    const souParticipante = !!(perfil?.id && div.some(d => d.id === perfil.id));
+    // Regra da divisão: com 2+ participantes, "excluir" = SAIR do atendimento — ele volta
+    // 100% pro(s) outro(s). A exclusão de verdade só acontece quando resta 1 participante
+    // (ou quando quem exclui não participa da divisão — ex.: diretor).
+    if (souParticipante && div.length > 1) {
+      const resto = div.filter(d => d.id !== perfil.id).map(d => ({ ...d }));
+      const eq = Math.floor(100 / resto.length);
+      resto.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (resto.length - 1)) : eq; });
+      const novaEstrela = (neg.tratativa_dono_edicao && resto.some(d => d.id === neg.tratativa_dono_edicao))
+        ? neg.tratativa_dono_edicao : resto[0].id;
+      const updates = { tratativa_divisao: resto, tratativa_dono_edicao: novaEstrela };
+      // Se quem saiu era o corretor responsável, o atendimento passa pro primeiro que ficou.
+      if (neg.corretor_id === perfil.id) {
+        updates.corretor_id = resto[0].id;
+        updates.corretor = resto[0].nome;
+      }
+      const { error } = await supabase.from('negociacoes').update(updates).eq('id', negId);
+      if (error) return alert('Erro ao sair do atendimento: ' + error.message);
+      alert('Você saiu deste atendimento. Ele agora é 100% de: ' + resto.map(d => d.nome).join(' e ') + '.');
+      await load();
+      return;
+    }
     const { error: err } = await supabase.from('negociacoes').delete().eq('id', negId);
     if (err) return alert('Erro ao excluir: ' + err.message);
     await load();
