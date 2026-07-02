@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import AmpulhetaAprovacao from './AmpulhetaAprovacao';
-import { ETAPAS_FUNIL, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL, ETAPAS_LABEL, normModalidade } from '../constants';
 import { supabase } from '../supabaseClient';
 import BotaoFecharContrato from './BotaoFecharContrato';
 
@@ -185,8 +185,8 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard, podeCon
 
 export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onSetAbaFunil, podeContrato, perfil, onReload }) {
   const aba = abaFunil || 'compra';
-  const compras = data.filter(c => c.modalidade === 'Compra');
-  const locacoes = data.filter(c => c.modalidade === 'Locação');
+  const compras = data.filter(c => normModalidade(c.modalidade) === 'Comprador');
+  const locacoes = data.filter(c => normModalidade(c.modalidade) === 'Locatário');
 
   return (
     <div>
