@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL } from '../constants';
+import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, normModalidade } from '../constants';
 
 function getEtapaLabel(c) {
   for (let i = ETAPAS_FUNIL_COMPLETO.length - 1; i >= 0; i--) {
@@ -70,7 +70,7 @@ export default function InativosTab({ data, onOpenModal, onDelete }) {
     const q = search.toLowerCase();
     return data.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.telefone || '').includes(q) || (c.motivo_desistencia || '').toLowerCase().includes(q)) &&
-      (!filterModalidade || c.modalidade === filterModalidade) &&
+      (!filterModalidade || normModalidade(c.modalidade) === normModalidade(filterModalidade)) &&
       (!filterCorretor || c.corretor === filterCorretor)
     );
   }, [data, search, filterModalidade, filterCorretor]);
