@@ -225,7 +225,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   // da TRATATIVA ou quem tem a estrela da CAPTAÇÃO. Os demais entram em somente visualização.
   const donoTratativaSouEu = !!meuId && form.corretor_id === meuId;
   const temEstrelaCap = !!meuId && meuId === (form.captacao_dono_edicao || null);
-  const podeSalvarTratativa = !isEdit || ehAlcadaSuperior || donoTratativaSouEu || souDonoEdicaoTrat || temEstrelaCap;
+  // Responsável (corretor_id) só edita se NÃO houver estrela definida (legado) ou se a estrela for dele.
+  const podeSalvarTratativa = !isEdit || ehAlcadaSuperior || souDonoEdicaoTrat || temEstrelaCap || (donoTratativaSouEu && !donoEdicaoId);
   const donoEdicaoNome = ((divisao.find(d => d.id === donoEdicaoId) || {}).nome) || '';
   const somaPctTrat = divisao.reduce((s, c) => s + (Number(c.pct) || 0), 0);
 
