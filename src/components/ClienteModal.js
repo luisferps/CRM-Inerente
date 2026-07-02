@@ -13,6 +13,7 @@ const emptyForm = {
   captado: false, ficha: null,
   corretor: '', corretor_id: null,
   tratativa_divisao: [], tratativa_dono_edicao: null,
+  captacao_divisao: [], captacao_dono_edicao: null,
   imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
   origem_tratativa: '',
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
@@ -148,6 +149,17 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   // Lista de corretores: junta os do CRM (Supabase perfis) com os do Estoque (Firebase, via backend),
   // sem duplicar pelo nome. O dropdown trabalha por NOME (que é o que rankings/filtros usam).
   const [corretores, setCorretores] = useState([]);
+  const [listaExternos, setListaExternos] = useState([]);
+  const [mostrarNovoExternoCap, setMostrarNovoExternoCap] = useState(false);
+  const [novoExternoCap, setNovoExternoCap] = useState({ nome: '', cpf: '', telefone: '' });
+  const [salvandoExternoCap, setSalvandoExternoCap] = useState(false);
+  // Carrega captadores externos (tabela do Supabase) para a divisão de captação.
+  useEffect(() => {
+    let vivo = true;
+    supabase.from('captadores_externos').select('id, nome, cpf, telefone, criado_por').order('nome')
+      .then(({ data }) => { if (vivo) setListaExternos(data || []); });
+    return () => { vivo = false; };
+  }, []);
   useEffect(() => {
     let vivo = true;
     const normNome = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -158,13 +170,13 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         // não um campo "role" de texto. Listamos todos que atendem cliente (corretor/gerente/diretor).
         const { data } = await supabase
           .from('perfis')
-          .select('id, nome, telefone, is_corretor, is_gerente, is_diretor, gerente_id, aprovado')
+          .select('id, nome, telefone, email, is_corretor, is_gerente, is_diretor, gerente_id, aprovado')
           .or('is_corretor.eq.true,is_gerente.eq.true,is_diretor.eq.true')
           .order('nome');
         (data || []).forEach(p => {
           if (!p.nome) return;
           if (p.aprovado === false) return; // não lista perfil não aprovado
-          mapa.set(normNome(p.nome), { nome: p.nome, telefone: p.telefone || '', supabaseId: p.id, firebaseId: null, gerente_id: p.gerente_id || null, is_gerente: !!p.is_gerente, is_diretor: !!p.is_diretor });
+          mapa.set(normNome(p.nome), { nome: p.nome, telefone: p.telefone || '', email: p.email || '', supabaseId: p.id, firebaseId: null, gerente_id: p.gerente_id || null, is_gerente: !!p.is_gerente, is_diretor: !!p.is_diretor });
         });
       } catch (e) { /* segue só com o Estoque */ }
       try {
@@ -307,6 +319,89 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     setForm(f => ({ ...f, tratativa_dono_edicao: item.id }));
   };
 
+  // ─── DIVISÃO DE CAPTAÇÃO (só tratativas de VENDA) — mesmas regras do Estoque ───
+  // Interno (corretor com login, por perfil.id) ou externo (parceiro sem login).
+  // Fatia por dono + trava sistêmica + estrela de dono da edição + soma 100%.
+  // Viaja para o Estoque quando o imóvel é captado.
+  const capDiv = form.captacao_divisao || [];
+  const capDonoEdicao = form.captacao_dono_edicao || null;
+  const meuEmailCap = (perfil?.email || '').toLowerCase();
+  const podeEditarFatiaCap = (item) => {
+    if (ehAlcadaSuperior) return true;
+    if (item.tipo === 'externo') return !!meuEmailCap && String(item.representante || '').toLowerCase() === meuEmailCap;
+    if (!meuId) return false;
+    return item.id === meuId;
+  };
+  const souDonoEdicaoCap = !!meuId && meuId === capDonoEdicao;
+  const podeTransferirEdicaoCap = souDonoEdicaoCap || ehAlcadaSuperior;
+  const somaPctCap = capDiv.reduce((s, c) => s + (Number(c.pct) || 0), 0);
+  const recalcCap = (det) => {
+    const eq = Math.floor(100 / det.length);
+    det.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (det.length - 1)) : eq; });
+    return det;
+  };
+  const addCaptadorInterno = (cid) => {
+    const c = corretores.find(x => (x.supabaseId || x.id) === cid);
+    if (!c) return;
+    const idReal = c.supabaseId || c.id;
+    if (capDiv.some(d => d.tipo === 'interno' && d.id === idReal)) return;
+    setForm(f => {
+      const det = recalcCap([...(f.captacao_divisao || []), { tipo: 'interno', id: idReal, nome: c.nome, pct: 0 }]);
+      const internos = det.filter(d => d.tipo === 'interno');
+      const donoOk = internos.some(d => d.id === f.captacao_dono_edicao);
+      return { ...f, captacao_divisao: det, captacao_dono_edicao: donoOk ? f.captacao_dono_edicao : (internos[0]?.id || null) };
+    });
+  };
+  const addCaptadorExterno = (extId) => {
+    const ext = listaExternos.find(x => x.id === extId);
+    if (!ext) return;
+    if (capDiv.some(d => d.tipo === 'externo' && d.externo_id === extId)) return;
+    setForm(f => {
+      const det = recalcCap([...(f.captacao_divisao || []), { tipo: 'externo', externo_id: extId, nome: ext.nome, telefone: ext.telefone || '', representante: (perfil?.email || '').toLowerCase() || null, pct: 0 }]);
+      return { ...f, captacao_divisao: det };
+    });
+  };
+  const removerCaptador = (idx, item) => {
+    if (!podeEditarFatiaCap(item)) return;
+    setForm(f => {
+      const det = (f.captacao_divisao || []).filter((_, i) => i !== idx);
+      if (det.length > 0) recalcCap(det);
+      const internos = det.filter(d => d.tipo === 'interno');
+      const donoOk = internos.some(d => d.id === f.captacao_dono_edicao);
+      return { ...f, captacao_divisao: det, captacao_dono_edicao: donoOk ? f.captacao_dono_edicao : (internos[0]?.id || null) };
+    });
+  };
+  const setPctCap = (idx, val) => {
+    setForm(f => {
+      const det = [...(f.captacao_divisao || [])];
+      det[idx] = { ...det[idx], pct: Number(val) || 0 };
+      return { ...f, captacao_divisao: det };
+    });
+  };
+  const definirDonoEdicaoCap = (item) => {
+    if (!podeTransferirEdicaoCap) return;
+    if (item.tipo !== 'interno') return;
+    setForm(f => ({ ...f, captacao_dono_edicao: item.id }));
+  };
+  const salvarNovoExternoCap = async () => {
+    const nome = (novoExternoCap.nome || '').trim();
+    if (!nome) { alert('Informe o nome do captador externo.'); return; }
+    setSalvandoExternoCap(true);
+    try {
+      const registro = { nome, cpf: (novoExternoCap.cpf || '').trim() || null, telefone: (novoExternoCap.telefone || '').trim() || null, criado_por: perfil?.email || perfil?.nome || null };
+      const { data, error } = await supabase.from('captadores_externos').insert(registro).select().single();
+      if (error || !data) { alert('Erro ao salvar externo: ' + (error?.message || '')); setSalvandoExternoCap(false); return; }
+      setListaExternos(p => [...p, data].sort((a, b) => (a.nome || '').localeCompare(b.nome || '')));
+      setForm(f => {
+        const det = recalcCap([...(f.captacao_divisao || []), { tipo: 'externo', externo_id: data.id, nome: data.nome, telefone: data.telefone || '', representante: (perfil?.email || '').toLowerCase() || null, pct: 0 }]);
+        return { ...f, captacao_divisao: det };
+      });
+      setNovoExternoCap({ nome: '', cpf: '', telefone: '' });
+      setMostrarNovoExternoCap(false);
+    } catch { alert('Falha ao salvar externo.'); }
+    setSalvandoExternoCap(false);
+  };
+
   useEffect(() => {
     function handleEsc(e) {
       if (e.key === 'Escape') { localStorage.removeItem('crm_rascunho'); onClose(); }
@@ -352,6 +447,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (perfil.id) {
         initial.tratativa_divisao = [{ id: perfil.id, nome: perfil.nome, pct: 100 }];
         initial.tratativa_dono_edicao = perfil.id;
+        // Divisão de CAPTAÇÃO também nasce 100% do corretor (usada só em tratativas de venda).
+        initial.captacao_divisao = [{ tipo: 'interno', id: perfil.id, nome: perfil.nome, pct: 100 }];
+        initial.captacao_dono_edicao = perfil.id;
       }
     }
       setForm(initial);
@@ -379,6 +477,9 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (perfil.id) {
         initial.tratativa_divisao = [{ id: perfil.id, nome: perfil.nome, pct: 100 }];
         initial.tratativa_dono_edicao = perfil.id;
+        // Divisão de CAPTAÇÃO também nasce 100% do corretor (usada só em tratativas de venda).
+        initial.captacao_divisao = [{ tipo: 'interno', id: perfil.id, nome: perfil.nome, pct: 100 }];
+        initial.captacao_dono_edicao = perfil.id;
       }
     }
     setForm(initial);
@@ -649,6 +750,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       const soma = (form.tratativa_divisao || []).reduce((s, c) => s + (Number(c.pct) || 0), 0);
       if (soma !== 100) { alert(`A divisão de comissão da tratativa precisa somar 100%. Atualmente soma ${soma}%.`); return; }
     }
+    // Trava da divisão de CAPTAÇÃO (só venda): também precisa fechar 100%.
+    if (isVenda && (form.captacao_divisao || []).length > 0) {
+      const somaCap = (form.captacao_divisao || []).reduce((s, c) => s + (Number(c.pct) || 0), 0);
+      if (somaCap !== 100) { alert(`A divisão de captação precisa somar 100%. Atualmente soma ${somaCap}%.`); return; }
+    }
     setSaving(true);
 
     // Bloqueio de duplicata: só para cliente NOVO (sem vínculo). Se o telefone já existe
@@ -702,7 +808,15 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           nomeProprietario: nomePlaceholder ? (fbase.nomeProprietario || form.nome) : (form.nome || fbase.nomeProprietario),
           telefoneProprietario: form.telefone || fbase.telefoneProprietario,
           nomeCaptador: fbase.nomeCaptador || capNome,
-          telefoneCaptador: fbase.telefoneCaptador || capTel
+          telefoneCaptador: fbase.telefoneCaptador || capTel,
+          // Divisão de captação definida no CRM viaja para o Estoque (herda no cadastro).
+          captadores_detalhes: Array.isArray(form.captacao_divisao) ? form.captacao_divisao : [],
+          captadores_ids: (Array.isArray(form.captacao_divisao) ? form.captacao_divisao : []).filter(d => d.tipo === 'interno').map(d => d.id),
+          captadorEmail: (() => {
+            const dono = (form.captacao_divisao || []).find(d => d.tipo === 'interno' && d.id === form.captacao_dono_edicao);
+            const donoObj = dono && corretores.find(c => (c.supabaseId || c.id) === dono.id);
+            return (donoObj && donoObj.email) ? String(donoObj.email).toLowerCase() : (perfil?.email || '').toLowerCase();
+          })()
         });
         const rEst = await fetch(BACKEND + '/captacao/enviar-estoque', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -931,6 +1045,87 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               </div>
             )}
           </div>
+
+          {isVenda && (
+          <div className="field-full" style={{ marginTop: 4, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
+            <label className="form-label">Divisão de captação (vai para o Estoque)</label>
+            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>Quem captou este imóvel. Ao marcar como captado, esta divisão segue para o cadastro no Estoque.</div>
+
+            <select value="" onChange={e => { if (e.target.value) { addCaptadorInterno(e.target.value); e.target.value = ''; } }} style={{ width: '100%', marginBottom: 8 }}>
+              <option value="">+ Adicionar captador interno...</option>
+              {corretores.filter(c => (c.supabaseId || c.id) && !capDiv.some(d => d.tipo === 'interno' && d.id === (c.supabaseId || c.id)))
+                .map(c => <option key={c.supabaseId || c.id} value={c.supabaseId || c.id}>{c.nome}</option>)}
+            </select>
+
+            <select value="" onChange={e => { const v = e.target.value; if (v === '__novo__') { setMostrarNovoExternoCap(true); } else if (v) { addCaptadorExterno(v); } e.target.value = ''; }} style={{ width: '100%', marginBottom: 8 }}>
+              <option value="">+ Adicionar captador externo...</option>
+              <option value="__novo__">➕ Cadastrar novo externo</option>
+              {listaExternos.filter(x => !capDiv.some(d => d.tipo === 'externo' && d.externo_id === x.id))
+                .map(x => <option key={x.id} value={x.id}>{x.nome}{x.cpf ? ` — CPF ${x.cpf}` : ''}</option>)}
+            </select>
+
+            {mostrarNovoExternoCap && (
+              <div style={{ padding: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>Novo captador externo</div>
+                <input placeholder="Nome *" value={novoExternoCap.nome} onChange={e => setNovoExternoCap(p => ({ ...p, nome: e.target.value }))} style={{ width: '100%', marginBottom: 6, padding: '7px 9px', borderRadius: 7, border: '1px solid #d1d5db' }} />
+                <input placeholder="CPF" value={novoExternoCap.cpf} onChange={e => setNovoExternoCap(p => ({ ...p, cpf: e.target.value }))} style={{ width: '100%', marginBottom: 6, padding: '7px 9px', borderRadius: 7, border: '1px solid #d1d5db' }} />
+                <input placeholder="Telefone" value={novoExternoCap.telefone} onChange={e => setNovoExternoCap(p => ({ ...p, telefone: e.target.value }))} style={{ width: '100%', marginBottom: 8, padding: '7px 9px', borderRadius: 7, border: '1px solid #d1d5db' }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" disabled={salvandoExternoCap} onClick={salvarNovoExternoCap} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>{salvandoExternoCap ? 'Salvando...' : 'Salvar externo'}</button>
+                  <button type="button" onClick={() => { setMostrarNovoExternoCap(false); setNovoExternoCap({ nome: '', cpf: '', telefone: '' }); }} style={{ padding: '7px 14px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                </div>
+              </div>
+            )}
+
+            {capDiv.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {capDiv.map((item, idx) => {
+                  const posso = podeEditarFatiaCap(item);
+                  const ehDono = item.tipo === 'interno' && item.id === capDonoEdicao;
+                  const chave = item.tipo === 'externo' ? `ext-${item.externo_id}` : `int-${item.id}`;
+                  return (
+                    <div key={chave} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: '8px 12px', border: '1px solid #e5e7eb' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {item.tipo === 'interno' && (
+                            <span onClick={() => definirDonoEdicaoCap(item)}
+                              title={ehDono ? 'Dono da edição da captação' : (podeTransferirEdicaoCap ? 'Passar o dono da edição para este captador' : 'Só o dono atual ou diretor/gerente transfere')}
+                              style={{ fontSize: 15, lineHeight: 1, cursor: (podeTransferirEdicaoCap && !ehDono) ? 'pointer' : 'default', opacity: ehDono ? 1 : (podeTransferirEdicaoCap ? 0.35 : 0.2), userSelect: 'none' }}>
+                              {ehDono ? '⭐' : '☆'}
+                            </span>
+                          )}
+                          {item.nome}
+                          {item.tipo === 'externo' && <span style={{ fontSize: 11, fontWeight: 500, color: '#9ca3af', marginLeft: 4 }}>(externo)</span>}
+                          {!posso && <span style={{ fontSize: 10.5, color: '#9ca3af', fontWeight: 500 }}>🔒</span>}
+                        </div>
+                      </div>
+                      {capDiv.length > 1 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input type="number" min="0" max="100" step="1" value={item.pct} disabled={!posso}
+                            onChange={e => setPctCap(idx, e.target.value)}
+                            style={{ width: 60, textAlign: 'center', padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db', opacity: posso ? 1 : 0.55, cursor: posso ? 'auto' : 'not-allowed', background: posso ? '#fff' : '#f3f4f6' }} />
+                          <span style={{ fontSize: 12, color: '#9ca3af' }}>%</span>
+                        </div>
+                      )}
+                      <button type="button" disabled={!posso} title={posso ? 'Remover' : 'Só o dono ou diretor/gerente remove'}
+                        onClick={() => removerCaptador(idx, item)}
+                        style={{ background: 'none', border: 'none', color: posso ? '#9ca3af' : '#e5e7eb', cursor: posso ? 'pointer' : 'not-allowed', fontSize: 18, lineHeight: 1, padding: '0 4px' }}>×</button>
+                    </div>
+                  );
+                })}
+                {capDiv.length > 1 && (
+                  <div style={{ fontSize: 11, color: '#9ca3af', paddingLeft: 4 }}>
+                    Total: {somaPctCap}%
+                    {somaPctCap !== 100 && <span style={{ color: '#dc2626', marginLeft: 6 }}>⚠ deve somar 100%</span>}
+                  </div>
+                )}
+                <div style={{ fontSize: 10.5, color: '#9ca3af', paddingLeft: 4 }}>
+                  ⭐ = dono da edição da captação. {podeTransferirEdicaoCap ? 'Clique na ☆ para passar a posse.' : 'Só o dono atual ou diretor/gerente transfere.'}
+                </div>
+              </div>
+            )}
+          </div>
+          )}
 
           <SelectComAdd label="Origem da Tratativa" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)}
             options={origens} setOptions={setOrigens} chave="origens"
