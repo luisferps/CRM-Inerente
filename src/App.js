@@ -68,6 +68,12 @@ function splitForm(form) {
     corretor_id: form.corretor_id,
     corretor: form.corretor,
     ficha: form.ficha || null,
+    // Divisão de comissão da tratativa (antes se perdia aqui e nunca chegava ao banco)
+    tratativa_divisao: Array.isArray(form.tratativa_divisao) ? form.tratativa_divisao : [],
+    tratativa_dono_edicao: form.tratativa_dono_edicao || null,
+    // Divisão de CAPTAÇÃO configurada na tratativa (persistida para não se perder entre edições)
+    captacao_divisao: Array.isArray(form.captacao_divisao) ? form.captacao_divisao : [],
+    captacao_dono_edicao: form.captacao_dono_edicao || null,
   };
   return { clienteData, negociacaoData };
 }
