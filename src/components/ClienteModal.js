@@ -14,6 +14,7 @@ const emptyForm = {
   corretor: '', corretor_id: null,
   tratativa_divisao: [], tratativa_dono_edicao: null,
   captacao_divisao: [], captacao_dono_edicao: null,
+  fotos_tratativa: [],
   imovel: '', tipo_id: '', em_condominio: false, modalidade: '',
   origem_tratativa: '',
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
@@ -221,11 +222,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const podeEditarFatiaTrat = (item) => ehAlcadaSuperior || (!!meuId && item.id === meuId);
   const souDonoEdicaoTrat = !!meuId && meuId === donoEdicaoId;
   const podeTransferirEdicaoTrat = souDonoEdicaoTrat || ehAlcadaSuperior;
-  // Quem pode SALVAR a edição: alçada superior, o corretor responsável, quem tem a estrela
-  // da TRATATIVA ou quem tem a estrela da CAPTAÇÃO. Os demais entram em somente visualização.
+  // Quem pode SALVAR a edição: alçada superior, quem tem estrela (tratativa OU captação),
+  // OU o corretor responsável desde que ninguém tenha estrela ainda (legado sem divisão).
   const donoTratativaSouEu = !!meuId && form.corretor_id === meuId;
   const temEstrelaCap = !!meuId && meuId === (form.captacao_dono_edicao || null);
-  // Responsável (corretor_id) só edita se NÃO houver estrela definida (legado) ou se a estrela for dele.
   const podeSalvarTratativa = !isEdit || ehAlcadaSuperior || souDonoEdicaoTrat || temEstrelaCap || (donoTratativaSouEu && !donoEdicaoId);
   const donoEdicaoNome = ((divisao.find(d => d.id === donoEdicaoId) || {}).nome) || '';
   const somaPctTrat = divisao.reduce((s, c) => s + (Number(c.pct) || 0), 0);
@@ -461,10 +461,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     setOrigemBloqueada(false);
     if (isEdit) {
       setForm({ ...emptyForm, ...modal, modalidade: normModalidade(modal.modalidade) });
-      // Busca a versão FRESCA das divisões no banco. Evita que uma tela aberta há tempo
-      // regrave estado velho por cima e apague a divisão/estrela que outra pessoa configurou.
+      // Busca a versão FRESCA das divisões e fotos direto no banco (evita regravar estado velho)
+      // e semeia o responsável na divisão quando ela veio vazia, para a lista sempre existir.
       supabase.from('negociacoes')
-        .select('tratativa_divisao, tratativa_dono_edicao, captacao_divisao, captacao_dono_edicao')
+        .select('tratativa_divisao, tratativa_dono_edicao, captacao_divisao, captacao_dono_edicao, fotos_tratativa')
         .eq('id', modal.negociacao_id).single()
         .then(({ data: fresca }) => {
           if (!fresca) return;
@@ -473,13 +473,16 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             let te = fresca.tratativa_dono_edicao || null;
             let cd = Array.isArray(fresca.captacao_divisao) ? fresca.captacao_divisao : [];
             let ce = fresca.captacao_dono_edicao || null;
-            // Divisão vazia (tratativa antiga/zerada): semeia o responsável com 100% e a estrela,
-            // para a lista sempre aparecer e dar pra gerenciar (adicionar gente, passar estrela).
             const respId = f.corretor_id || null;
             const respNome = f.corretor || 'Responsável';
             if (td.length === 0 && respId) { td = [{ id: respId, nome: respNome, pct: 100 }]; te = te || respId; }
             if (cd.length === 0 && respId) { cd = [{ tipo: 'interno', id: respId, nome: respNome, pct: 100 }]; ce = ce || respId; }
-            return { ...f, tratativa_divisao: td, tratativa_dono_edicao: te, captacao_divisao: cd, captacao_dono_edicao: ce };
+            return {
+              ...f,
+              tratativa_divisao: td, tratativa_dono_edicao: te,
+              captacao_divisao: cd, captacao_dono_edicao: ce,
+              fotos_tratativa: Array.isArray(fresca.fotos_tratativa) ? fresca.fotos_tratativa : (f.fotos_tratativa || []),
+            };
           });
         });
       jaCaptadoRef.current = !!modal.captado;
@@ -714,58 +717,71 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     return errs;
   }
 
-  // ─── Fotos nas observações: colar print (Ctrl+V) sobe pro Supabase Storage
-  // (bucket 'observacoes') e entra como link 📷 no texto; miniaturas aparecem abaixo. ───
-  const [subindoFotoObs, setSubindoFotoObs] = useState(false);
-  const urlsDeFotos = (txt) => (String(txt || '').match(/https?:\/\/\S+\/storage\/v1\/object\/public\/observacoes\/\S+/g) || []);
-  async function uploadFotoObs(file) {
-    const ext = ((file.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabase.storage.from('observacoes').upload(path, file, { contentType: file.type || 'image/png' });
-    if (error) { alert('Não consegui subir a foto: ' + error.message); return null; }
-    const { data } = supabase.storage.from('observacoes').getPublicUrl(path);
-    return (data && data.publicUrl) || null;
+  // ─── Galeria "Fotos da tratativa" — upload por Ctrl+V ou botão, guarda no
+  // Supabase Storage (bucket 'observacoes') e persiste as URLs em fotos_tratativa. ───
+  const [subindoFoto, setSubindoFoto] = useState(false);
+  const inputFotoRef = useRef(null);
+  const fotos = Array.isArray(form.fotos_tratativa) ? form.fotos_tratativa : [];
+  async function subirArquivosFoto(files) {
+    if (!podeSalvarTratativa) { alert('Somente visualização: não é possível adicionar fotos.'); return; }
+    setSubindoFoto(true);
+    const novas = [];
+    for (const f of files) {
+      if (!f || !f.type || f.type.indexOf('image/') !== 0) continue;
+      if (f.size > 8 * 1024 * 1024) { alert('Foto muito grande: ' + f.name + ' (máximo 8 MB).'); continue; }
+      const ext = ((f.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage.from('observacoes').upload(path, f, { contentType: f.type || 'image/png' });
+      if (error) { alert('Não consegui subir a foto: ' + error.message); continue; }
+      const { data } = supabase.storage.from('observacoes').getPublicUrl(path);
+      if (data && data.publicUrl) novas.push(data.publicUrl);
+    }
+    if (novas.length) setForm(f => ({ ...f, fotos_tratativa: [...(f.fotos_tratativa || []), ...novas] }));
+    setSubindoFoto(false);
   }
-  function handlePasteObs(e, aplicar) {
+  function handlePasteFotos(e) {
     const items = (e.clipboardData && e.clipboardData.items) || [];
     const files = [];
     for (const it of items) { if (it.type && it.type.indexOf('image/') === 0) { const f = it.getAsFile(); if (f) files.push(f); } }
-    if (!files.length) return; // texto normal segue o fluxo padrão
+    if (!files.length) return;
     e.preventDefault();
-    (async () => {
-      setSubindoFotoObs(true);
-      for (const f of files) {
-        if (f.size > 8 * 1024 * 1024) { alert('Foto muito grande (máximo 8 MB).'); continue; }
-        const url = await uploadFotoObs(f);
-        if (url) aplicar('\n📷 ' + url);
-      }
-      setSubindoFotoObs(false);
-    })();
+    subirArquivosFoto(files);
   }
-  const FotosDoTexto = ({ texto, onRemover }) => {
-    const urls = urlsDeFotos(texto);
-    if (!urls.length && !subindoFotoObs) return null;
-    return (
-      <div style={{ marginTop: 6 }}>
-        {urls.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {urls.map((u, i) => (
-              <div key={u + i} style={{ position: 'relative' }}>
-                <a href={u} target="_blank" rel="noreferrer">
-                  <img src={u} alt={'foto ' + (i + 1)} style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                </a>
-                {onRemover && (
-                  <button type="button" onClick={() => onRemover(u)} title="Remover foto"
-                    style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12, lineHeight: 1, cursor: 'pointer' }}>×</button>
-                )}
-              </div>
-            ))}
+  function removerFoto(url) {
+    if (!podeSalvarTratativa) return;
+    setForm(f => ({ ...f, fotos_tratativa: (f.fotos_tratativa || []).filter(u => u !== url) }));
+  }
+  const GaleriaFotos = () => (
+    <div style={{ marginTop: 8 }}
+      onDragOver={e => { e.preventDefault(); }}
+      onDrop={e => { e.preventDefault(); if (e.dataTransfer.files && e.dataTransfer.files.length) subirArquivosFoto(Array.from(e.dataTransfer.files)); }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 10, background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 8 }}>
+        {fotos.map((u, i) => (
+          <div key={u + i} style={{ position: 'relative' }}>
+            <a href={u} target="_blank" rel="noreferrer">
+              <img src={u} alt={'foto ' + (i + 1)} style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb', display: 'block' }} />
+            </a>
+            {podeSalvarTratativa && (
+              <button type="button" onClick={() => removerFoto(u)} title="Remover foto"
+                style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12, lineHeight: 1, cursor: 'pointer' }}>×</button>
+            )}
           </div>
+        ))}
+        {podeSalvarTratativa && (
+          <button type="button" onClick={() => inputFotoRef.current && inputFotoRef.current.click()} disabled={subindoFoto}
+            style={{ width: 84, height: 84, borderRadius: 8, border: '1px dashed #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, cursor: subindoFoto ? 'wait' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <span style={{ fontSize: 22, lineHeight: 1 }}>＋</span>
+            {subindoFoto ? 'Enviando…' : 'Adicionar'}
+          </button>
         )}
-        {subindoFotoObs && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>⏳ Enviando foto…</div>}
+        {!fotos.length && !subindoFoto && (
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>Nenhuma foto. Cole um print (Ctrl+V) no campo acima, arraste arquivos ou clique em Adicionar.</div>
+        )}
+        <input ref={inputFotoRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+          onChange={e => { if (e.target.files && e.target.files.length) subirArquivosFoto(Array.from(e.target.files)); e.target.value = ''; }} />
       </div>
-    );
-  };
+    </div>
+  );
 
   function handlePasteIA(e) {
     const items = (e.clipboardData && e.clipboardData.items) || [];
@@ -1462,21 +1478,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                     {detalhesBloqueadoRef.current}
                   </div>
                 </div>
+                <label className="form-label" style={{ marginTop: 8, display: 'block' }}>➕ Mais observações e fotos</label>
                 <textarea rows={2} value={detalhesAdicional} onChange={e => setDetalhesAdicional(e.target.value)}
-                  onPaste={e => handlePasteObs(e, t => setDetalhesAdicional(p => (p || '') + t))}
-                  placeholder="Acrescentar mais observações internas... (cole prints com Ctrl+V)"
+                  onPaste={handlePasteFotos}
+                  placeholder="Acrescentar mais observações internas... (cole prints com Ctrl+V — viram fotos abaixo)"
                   style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
-                <FotosDoTexto texto={(detalhesBloqueadoRef.current || '') + '\n' + (detalhesAdicional || '')}
-                  onRemover={u => setDetalhesAdicional(p => String(p || '').split('\n').filter(l => l.indexOf(u) === -1).join('\n'))} />
+                <GaleriaFotos />
               </>
             ) : (
               <>
                 <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
-                  onPaste={e => handlePasteObs(e, t => setForm(f => ({ ...f, detalhes: (f.detalhes || '') + t })))}
-                  placeholder="Anotações internas, perfil do cliente... (cole prints com Ctrl+V)"
+                  onPaste={handlePasteFotos}
+                  placeholder="Anotações internas, perfil do cliente... (cole prints com Ctrl+V — viram fotos abaixo)"
                   style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
-                <FotosDoTexto texto={form.detalhes}
-                  onRemover={u => setForm(f => ({ ...f, detalhes: String(f.detalhes || '').split('\n').filter(l => l.indexOf(u) === -1).join('\n') }))} />
+                <GaleriaFotos />
               </>
             )}
           </div>
@@ -1485,11 +1500,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
             </label>
             <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
-              onPaste={e => handlePasteObs(e, t => setForm(f => ({ ...f, detalhes_externos: (f.detalhes_externos || '') + t })))}
-              placeholder="Informações para enviar a parceiros ou clientes... (cole prints com Ctrl+V)"
+              placeholder="Informações para enviar a parceiros ou clientes..."
               style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
-            <FotosDoTexto texto={form.detalhes_externos}
-              onRemover={u => setForm(f => ({ ...f, detalhes_externos: String(f.detalhes_externos || '').split('\n').filter(l => l.indexOf(u) === -1).join('\n') }))} />
           </div>
           </div>
 
