@@ -118,6 +118,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   const [clienteEncontrado, setClienteEncontrado] = useState(null);
   const [cadastrandoCli, setCadastrandoCli] = useState(false);
   const [modoCadastroCli, setModoCadastroCli] = useState(false);
+  const [editandoCliente, setEditandoCliente] = useState(false); // ✏️ Editar cliente dentro do modal
   const [dividindoAtend, setDividindoAtend] = useState(false);
   const telOriginalRef = useRef('');        // telefone como estava salvo (tolera legado fora do padrão)
   const origemTratLockRef = useRef(false);  // origem da tratativa veio preenchida (ex.: OLX) → só leitura
@@ -459,6 +460,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   useEffect(() => {
     setClienteEncontrado(null);
     setOrigemBloqueada(false);
+    setEditandoCliente(false);
     if (isEdit) {
       setForm({ ...emptyForm, ...modal, modalidade: normModalidade(modal.modalidade) });
       // Busca a versão FRESCA das divisões e fotos direto no banco (evita regravar estado velho)
@@ -1238,8 +1240,18 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           </div>
 
           {clienteEncontrado && !modoCadastroCli && (
-            <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 12.5, color: '#065f46' }}>
-              ✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>. Os dados abaixo vêm do cadastro — para alterar, edite na aba <strong>Clientes</strong>.
+            <div style={{ marginTop: 10, padding: '8px 12px', background: editandoCliente ? '#eff6ff' : '#f0fdf4', border: `1px solid ${editandoCliente ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: 8, fontSize: 12.5, color: editandoCliente ? '#1d4ed8' : '#065f46', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <span>
+                {editandoCliente
+                  ? <>✏️ Editando o cadastro de <strong>{clienteEncontrado.nome}</strong> — os campos abaixo estão liberados. As alterações valem ao clicar em Salvar.</>
+                  : <>✅ Cliente encontrado: <strong>{clienteEncontrado.nome}</strong>. Os dados abaixo vêm do cadastro.</>}
+              </span>
+              {isEdit && podeSalvarTratativa && (
+                <button type="button" onClick={() => setEditandoCliente(v => !v)}
+                  style={{ background: editandoCliente ? '#1d4ed8' : '#fff', color: editandoCliente ? '#fff' : '#065f46', border: `1px solid ${editandoCliente ? '#1d4ed8' : '#86efac'}`, borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {editandoCliente ? '✓ Concluir edição' : '✏️ Editar cliente'}
+                </button>
+              )}
             </div>
           )}
 
@@ -1251,7 +1263,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           )}
 
           {(clienteEncontrado || modoCadastroCli || isEdit) && (() => {
-            const leitura = !modoCadastroCli && !(isEdit && !clienteEncontrado);
+            const leitura = !editandoCliente && !modoCadastroCli && !(isEdit && !clienteEncontrado);
             return (
             <div className="tgrid" style={{ marginTop: 12 }}>
               <div className="col-2">
