@@ -273,31 +273,52 @@ export default function App() {
   async function handleDelete(negId) {
     if (!podeEditar) return;
     const neg = negociacoes.find(n => n.id === negId);
-    const div = Array.isArray(neg?.tratativa_divisao) ? neg.tratativa_divisao : [];
-    const souParticipante = !!(perfil?.id && div.some(d => d.id === perfil.id));
-    // Regra da divisão: com 2+ participantes, "excluir" = SAIR do atendimento — ele volta
-    // 100% pro(s) outro(s). A exclusão de verdade só acontece quando resta 1 participante
-    // (ou quando quem exclui não participa da divisão — ex.: diretor).
-    if (souParticipante && div.length > 1) {
-      const resto = div.filter(d => d.id !== perfil.id).map(d => ({ ...d }));
-      const eq = Math.floor(100 / resto.length);
-      resto.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (resto.length - 1)) : eq; });
-      const novaEstrela = (neg.tratativa_dono_edicao && resto.some(d => d.id === neg.tratativa_dono_edicao))
-        ? neg.tratativa_dono_edicao : resto[0].id;
-      const updates = { tratativa_divisao: resto, tratativa_dono_edicao: novaEstrela };
-      // Se quem saiu era o corretor responsável, o atendimento passa pro primeiro que ficou.
-      if (neg.corretor_id === perfil.id) {
-        updates.corretor_id = resto[0].id;
-        updates.corretor = resto[0].nome;
+    const divT = Array.isArray(neg?.tratativa_divisao) ? neg.tratativa_divisao : [];
+    const divC = Array.isArray(neg?.captacao_divisao) ? neg.captacao_divisao : [];
+    const meuId = perfil?.id || null;
+    // Participante em QUALQUER divisão (tratativa ou captação; externos não contam como "eu")
+    const souPartT = !!(meuId && divT.some(d => d.id === meuId));
+    const souPartC = !!(meuId && divC.some(d => d.tipo !== 'externo' && d.id === meuId));
+    const outrosT = divT.filter(d => d.id !== meuId).map(d => ({ ...d }));
+    const outrosC = divC.filter(d => !(d.tipo !== 'externo' && d.id === meuId)).map(d => ({ ...d }));
+    const temOutroInterno = outrosT.length > 0 || outrosC.some(d => d.tipo === 'interno');
+    // Regra da divisão: se participo e existe OUTRO corretor interno, "excluir" = SAIR do
+    // atendimento — ele volta 100% pro(s) outro(s). Exclusão real só quando estou sozinho
+    // (ou quando quem exclui não participa — ex.: diretor).
+    if ((souPartT || souPartC) && temOutroInterno) {
+      const renorm = (arr) => {
+        if (!arr.length) return arr;
+        const eq = Math.floor(100 / arr.length);
+        arr.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (arr.length - 1)) : eq; });
+        return arr;
+      };
+      const novosT = renorm(outrosT);
+      const novosC = renorm(outrosC);
+      const internosC = novosC.filter(d => d.tipo === 'interno');
+      const updates = {
+        tratativa_divisao: novosT,
+        tratativa_dono_edicao: (neg.tratativa_dono_edicao && novosT.some(d => d.id === neg.tratativa_dono_edicao))
+          ? neg.tratativa_dono_edicao : (novosT[0]?.id || null),
+        captacao_divisao: novosC,
+        captacao_dono_edicao: (neg.captacao_dono_edicao && internosC.some(d => d.id === neg.captacao_dono_edicao))
+          ? neg.captacao_dono_edicao : (internosC[0]?.id || null),
+      };
+      // Se quem saiu era o corretor responsável, o atendimento passa pro herdeiro.
+      const herdeiro = novosT[0] || internosC[0] || null;
+      if (neg.corretor_id === meuId && herdeiro) {
+        updates.corretor_id = herdeiro.id;
+        updates.corretor = herdeiro.nome;
       }
       const { error } = await supabase.from('negociacoes').update(updates).eq('id', negId);
       if (error) return alert('Erro ao sair do atendimento: ' + error.message);
-      alert('Você saiu deste atendimento. Ele agora é 100% de: ' + resto.map(d => d.nome).join(' e ') + '.');
+      const nomes = [...new Set([...novosT, ...internosC].map(d => d.nome))].join(' e ');
+      alert('Você saiu deste atendimento. Ele agora é 100% de: ' + (nomes || 'outro participante') + '.');
       await load();
       return;
     }
-    const { error: err } = await supabase.from('negociacoes').delete().eq('id', negId);
+    const { data: del, error: err } = await supabase.from('negociacoes').delete().eq('id', negId).select('id');
     if (err) return alert('Erro ao excluir: ' + err.message);
+    if (!del || del.length === 0) return alert('Não foi possível excluir: você não tem permissão sobre esta tratativa (só o responsável, quem tem a estrela, ou diretor/gerente).');
     await load();
   }
 
