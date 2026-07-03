@@ -714,6 +714,59 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     return errs;
   }
 
+  // ─── Fotos nas observações: colar print (Ctrl+V) sobe pro Supabase Storage
+  // (bucket 'observacoes') e entra como link 📷 no texto; miniaturas aparecem abaixo. ───
+  const [subindoFotoObs, setSubindoFotoObs] = useState(false);
+  const urlsDeFotos = (txt) => (String(txt || '').match(/https?:\/\/\S+\/storage\/v1\/object\/public\/observacoes\/\S+/g) || []);
+  async function uploadFotoObs(file) {
+    const ext = ((file.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from('observacoes').upload(path, file, { contentType: file.type || 'image/png' });
+    if (error) { alert('Não consegui subir a foto: ' + error.message); return null; }
+    const { data } = supabase.storage.from('observacoes').getPublicUrl(path);
+    return (data && data.publicUrl) || null;
+  }
+  function handlePasteObs(e, aplicar) {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    const files = [];
+    for (const it of items) { if (it.type && it.type.indexOf('image/') === 0) { const f = it.getAsFile(); if (f) files.push(f); } }
+    if (!files.length) return; // texto normal segue o fluxo padrão
+    e.preventDefault();
+    (async () => {
+      setSubindoFotoObs(true);
+      for (const f of files) {
+        if (f.size > 8 * 1024 * 1024) { alert('Foto muito grande (máximo 8 MB).'); continue; }
+        const url = await uploadFotoObs(f);
+        if (url) aplicar('\n📷 ' + url);
+      }
+      setSubindoFotoObs(false);
+    })();
+  }
+  const FotosDoTexto = ({ texto, onRemover }) => {
+    const urls = urlsDeFotos(texto);
+    if (!urls.length && !subindoFotoObs) return null;
+    return (
+      <div style={{ marginTop: 6 }}>
+        {urls.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {urls.map((u, i) => (
+              <div key={u + i} style={{ position: 'relative' }}>
+                <a href={u} target="_blank" rel="noreferrer">
+                  <img src={u} alt={'foto ' + (i + 1)} style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                </a>
+                {onRemover && (
+                  <button type="button" onClick={() => onRemover(u)} title="Remover foto"
+                    style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12, lineHeight: 1, cursor: 'pointer' }}>×</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {subindoFotoObs && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>⏳ Enviando foto…</div>}
+      </div>
+    );
+  };
+
   function handlePasteIA(e) {
     const items = (e.clipboardData && e.clipboardData.items) || [];
     const files = [];
@@ -1410,13 +1463,21 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                   </div>
                 </div>
                 <textarea rows={2} value={detalhesAdicional} onChange={e => setDetalhesAdicional(e.target.value)}
-                  placeholder="Acrescentar mais observações internas... (o texto acima fica preservado)"
+                  onPaste={e => handlePasteObs(e, t => setDetalhesAdicional(p => (p || '') + t))}
+                  placeholder="Acrescentar mais observações internas... (cole prints com Ctrl+V)"
                   style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+                <FotosDoTexto texto={(detalhesBloqueadoRef.current || '') + '\n' + (detalhesAdicional || '')}
+                  onRemover={u => setDetalhesAdicional(p => String(p || '').split('\n').filter(l => l.indexOf(u) === -1).join('\n'))} />
               </>
             ) : (
-              <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
-                placeholder="Anotações internas, perfil do cliente, situação financeira..."
-                style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+              <>
+                <textarea rows={2} value={form.detalhes} onChange={e => set('detalhes', e.target.value)}
+                  onPaste={e => handlePasteObs(e, t => setForm(f => ({ ...f, detalhes: (f.detalhes || '') + t })))}
+                  placeholder="Anotações internas, perfil do cliente... (cole prints com Ctrl+V)"
+                  style={{ background: '#fffbeb', borderColor: '#fde68a' }} />
+                <FotosDoTexto texto={form.detalhes}
+                  onRemover={u => setForm(f => ({ ...f, detalhes: String(f.detalhes || '').split('\n').filter(l => l.indexOf(u) === -1).join('\n') }))} />
+              </>
             )}
           </div>
           <div className="field-full">
@@ -1424,8 +1485,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
               Observações Externas <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>— pode ser compartilhado</span>
             </label>
             <textarea rows={2} value={form.detalhes_externos || ''} onChange={e => set('detalhes_externos', e.target.value)}
-              placeholder="Informações para enviar a parceiros ou clientes..."
+              onPaste={e => handlePasteObs(e, t => setForm(f => ({ ...f, detalhes_externos: (f.detalhes_externos || '') + t })))}
+              placeholder="Informações para enviar a parceiros ou clientes... (cole prints com Ctrl+V)"
               style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }} />
+            <FotosDoTexto texto={form.detalhes_externos}
+              onRemover={u => setForm(f => ({ ...f, detalhes_externos: String(f.detalhes_externos || '').split('\n').filter(l => l.indexOf(u) === -1).join('\n') }))} />
           </div>
           </div>
 
