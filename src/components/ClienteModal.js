@@ -467,13 +467,20 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         .select('tratativa_divisao, tratativa_dono_edicao, captacao_divisao, captacao_dono_edicao')
         .eq('id', modal.negociacao_id).single()
         .then(({ data: fresca }) => {
-          if (fresca) setForm(f => ({
-            ...f,
-            tratativa_divisao: fresca.tratativa_divisao || [],
-            tratativa_dono_edicao: fresca.tratativa_dono_edicao || null,
-            captacao_divisao: fresca.captacao_divisao || [],
-            captacao_dono_edicao: fresca.captacao_dono_edicao || null,
-          }));
+          if (!fresca) return;
+          setForm(f => {
+            let td = Array.isArray(fresca.tratativa_divisao) ? fresca.tratativa_divisao : [];
+            let te = fresca.tratativa_dono_edicao || null;
+            let cd = Array.isArray(fresca.captacao_divisao) ? fresca.captacao_divisao : [];
+            let ce = fresca.captacao_dono_edicao || null;
+            // Divisão vazia (tratativa antiga/zerada): semeia o responsável com 100% e a estrela,
+            // para a lista sempre aparecer e dar pra gerenciar (adicionar gente, passar estrela).
+            const respId = f.corretor_id || null;
+            const respNome = f.corretor || 'Responsável';
+            if (td.length === 0 && respId) { td = [{ id: respId, nome: respNome, pct: 100 }]; te = te || respId; }
+            if (cd.length === 0 && respId) { cd = [{ tipo: 'interno', id: respId, nome: respNome, pct: 100 }]; ce = ce || respId; }
+            return { ...f, tratativa_divisao: td, tratativa_dono_edicao: te, captacao_divisao: cd, captacao_dono_edicao: ce };
+          });
         });
       jaCaptadoRef.current = !!modal.captado;
       telOriginalRef.current = modal.telefone || '';
