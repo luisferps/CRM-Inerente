@@ -75,6 +75,8 @@ function splitForm(form) {
     // Divisão de CAPTAÇÃO configurada na tratativa (persistida para não se perder entre edições)
     captacao_divisao: Array.isArray(form.captacao_divisao) ? form.captacao_divisao : [],
     captacao_dono_edicao: form.captacao_dono_edicao || null,
+    // Galeria de fotos da tratativa (URLs no Storage 'observacoes')
+    fotos_tratativa: Array.isArray(form.fotos_tratativa) ? form.fotos_tratativa : [],
   };
   return { clienteData, negociacaoData };
 }
