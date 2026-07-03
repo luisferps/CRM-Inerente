@@ -286,35 +286,16 @@ export default function App() {
     // atendimento — ele volta 100% pro(s) outro(s). Exclusão real só quando estou sozinho
     // (ou quando quem exclui não participa — ex.: diretor).
     if ((souPartT || souPartC) && temOutroInterno) {
-      const renorm = (arr) => {
-        if (!arr.length) return arr;
-        const eq = Math.floor(100 / arr.length);
-        arr.forEach((d, i) => { d.pct = (i === 0) ? (100 - eq * (arr.length - 1)) : eq; });
-        return arr;
-      };
-      const novosT = renorm(outrosT);
-      const novosC = renorm(outrosC);
-      const internosC = novosC.filter(d => d.tipo === 'interno');
-      const updates = {
-        tratativa_divisao: novosT,
-        tratativa_dono_edicao: (neg.tratativa_dono_edicao && novosT.some(d => d.id === neg.tratativa_dono_edicao))
-          ? neg.tratativa_dono_edicao : (novosT[0]?.id || null),
-        captacao_divisao: novosC,
-        captacao_dono_edicao: (neg.captacao_dono_edicao && internosC.some(d => d.id === neg.captacao_dono_edicao))
-          ? neg.captacao_dono_edicao : (internosC[0]?.id || null),
-      };
-      // Se quem saiu era o corretor responsável, o atendimento passa pro herdeiro.
-      const herdeiro = novosT[0] || internosC[0] || null;
-      if (neg.corretor_id === meuId && herdeiro) {
-        updates.corretor_id = herdeiro.id;
-        updates.corretor = herdeiro.nome;
-      }
-      const { error } = await supabase.from('negociacoes').update(updates).eq('id', negId);
+      // A saída é feita por uma função do próprio banco (SECURITY DEFINER):
+      // ela valida que quem chama participa e remove só o próprio chamador.
+      const { data: r, error } = await supabase.rpc('sair_do_atendimento', { p_neg: negId });
       if (error) return alert('Erro ao sair do atendimento: ' + error.message);
-      const nomes = [...new Set([...novosT, ...internosC].map(d => d.nome))].join(' e ');
-      alert('Você saiu deste atendimento. Ele agora é 100% de: ' + (nomes || 'outro participante') + '.');
-      await load();
-      return;
+      if (typeof r === 'string' && r.startsWith('ok:')) {
+        alert('Você saiu deste atendimento. Ele agora é 100% de: ' + r.slice(3) + '.');
+        await load();
+        return;
+      }
+      // 'sozinho' / 'nao_participa' → cai na exclusão real abaixo
     }
     const { data: del, error: err } = await supabase.from('negociacoes').delete().eq('id', negId).select('id');
     if (err) return alert('Erro ao excluir: ' + err.message);
