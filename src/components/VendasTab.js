@@ -8,6 +8,18 @@ function getEtapaAtual(c) {
   return null;
 }
 
+// Nome exibido na coluna Corretor: quem tem a estrela da tratativa; senão a da
+// captação; senão o corretor responsável gravado na linha.
+function corretorDaEstrela(c) {
+  const divT = Array.isArray(c.tratativa_divisao) ? c.tratativa_divisao : [];
+  const donoT = divT.find(d => d.id === c.tratativa_dono_edicao);
+  if (donoT && donoT.nome) return donoT.nome;
+  const divC = Array.isArray(c.captacao_divisao) ? c.captacao_divisao : [];
+  const donoC = divC.find(d => d.tipo !== 'externo' && d.id === c.captacao_dono_edicao);
+  if (donoC && donoC.nome) return donoC.nome;
+  return c.corretor || '';
+}
+
 const CORES = ['#1e40af','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#dbeafe','#16a34a'];
 
 export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCaptacao }) {
@@ -19,14 +31,14 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
   const vendas = useMemo(() => data.filter(c => ehCaptacao(c.modalidade) && c.ativo === 'S' && !c.captado), [data]);
   // Captados: vendas concluídas por captação (entram no contador, fora da lista principal).
   const captados = useMemo(() => data.filter(c => ehCaptacao(c.modalidade) && c.captado), [data]);
-  const corretoresUnicos = useMemo(() => [...new Set(vendas.map(c => c.corretor).filter(Boolean))].sort(), [vendas]);
+  const corretoresUnicos = useMemo(() => [...new Set(vendas.map(c => corretorDaEstrela(c)).filter(Boolean))].sort(), [vendas]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return vendas.filter(c =>
       (!q || c.nome.toLowerCase().includes(q) || (c.localizacao || '').toLowerCase().includes(q)) &&
       (!filterEtapa || getEtapaAtual(c) === filterEtapa) &&
-      (!filterCorretor || c.corretor === filterCorretor)
+      (!filterCorretor || corretorDaEstrela(c) === filterCorretor)
     );
   }, [vendas, search, filterEtapa, filterCorretor]);
 
@@ -91,7 +103,7 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
                   <td style={{ padding: '12px 16px' }}>
                     {etapa ? <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: cor + '22', color: cor, border: `1px solid ${cor}44` }}>{ETAPAS_LABEL[etapa]}</span> : '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.corretor || '—'}</td>
+                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{corretorDaEstrela(c) || '—'}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: 12 }}>{c.proxima_acao || '—'}</td>
                   <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                     <Acoes c={c} comDevolver />
@@ -124,7 +136,7 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
                     <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.imovel || '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#059669', fontWeight: 600 }}>{c.valor ? `R$ ${Number(c.valor).toLocaleString('pt-BR')}` : '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.localizacao || '—'}</td>
-                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.corretor || '—'}</td>
+                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{corretorDaEstrela(c) || '—'}</td>
                     <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                       <Acoes c={c} />
                     </td>
