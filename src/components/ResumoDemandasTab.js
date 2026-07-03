@@ -21,7 +21,13 @@ function formatarLinha(c) {
   const local = c.localizacao ? limpar(capitalize(c.localizacao)) : '';
   // Demais partes (observações externas + preço), juntadas com ". "
   const resto = [];
-  if (c.detalhes_externos) resto.push(limpar(capitalize(c.detalhes_externos.trim())));
+  // Fotos coladas nas observações são úteis internamente, mas não vão pra mensagem de demanda:
+  // tiramos as linhas com link do bucket 'observacoes' e o marcador 📷 antes de compor a linha.
+  const semFotos = String(c.detalhes_externos || '')
+    .split('\n')
+    .filter(l => l.indexOf('/storage/v1/object/public/observacoes/') === -1)
+    .join('\n').replace(/📷\s*/g, '').trim();
+  if (semFotos) resto.push(limpar(capitalize(semFotos)));
   const preco = formatarPreco(c.valor);
   if (preco) resto.push(limpar(preco));
 
