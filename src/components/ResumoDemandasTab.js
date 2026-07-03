@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { normModalidade } from '../constants';
 
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
@@ -21,13 +20,7 @@ function formatarLinha(c) {
   const local = c.localizacao ? limpar(capitalize(c.localizacao)) : '';
   // Demais partes (observações externas + preço), juntadas com ". "
   const resto = [];
-  // Fotos coladas nas observações são úteis internamente, mas não vão pra mensagem de demanda:
-  // tiramos as linhas com link do bucket 'observacoes' e o marcador 📷 antes de compor a linha.
-  const semFotos = String(c.detalhes_externos || '')
-    .split('\n')
-    .filter(l => l.indexOf('/storage/v1/object/public/observacoes/') === -1)
-    .join('\n').replace(/📷\s*/g, '').trim();
-  if (semFotos) resto.push(limpar(capitalize(semFotos)));
+  if (c.detalhes_externos) resto.push(limpar(capitalize(c.detalhes_externos.trim())));
   const preco = formatarPreco(c.valor);
   if (preco) resto.push(limpar(preco));
 
@@ -45,17 +38,15 @@ function gerarTexto(titulo, selecionados, porModalidade) {
   const ids = new Set(selecionados);
   if (ids.size === 0) return '';
   let out = titulo + '\n\n';
-  const ordem = ['Comprador', 'Locatário'];
-  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m) && m !== 'Vendedor')])];
+  const ordem = ['Compra', 'Locação'];
+  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m) && m !== 'Venda')])];
   let temConteudo = false;
   mods.forEach(mod => {
     const filtrados = (porModalidade[mod] || []).filter(c => ids.has(c.id));
     if (!filtrados.length) return;
     temConteudo = true;
-    const icon = mod === 'Comprador' ? '🛒' : mod === 'Locatário' ? '🔑' : '📄';
-    // No TEXTO da mensagem, o rótulo é o tipo de negócio (não o papel do cliente):
-    const rotulo = mod === 'Comprador' ? 'Compra' : mod === 'Locatário' ? 'Aluguel' : capitalize(mod);
-    out += `${icon} *${rotulo}:*\n`;
+    const icon = mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄';
+    out += `${icon} *${capitalize(mod)}:*\n`;
     filtrados.forEach(c => { out += formatarLinha(c) + '\n'; });
     out += '\n';
   });
@@ -290,8 +281,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const [tituloCarregado, setTituloCarregado] = useState(false);
   const [salvandoTitulo, setSalvandoTitulo] = useState(false);
   const [refreshDireita, setRefreshDireita] = useState(0);
-  const [amostras, setAmostras] = useState([]);
-  const [carregandoAmostra, setCarregandoAmostra] = useState(false);
 
   const instancia = perfil?.whatsapp_instancia || '';
 
@@ -318,15 +307,15 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
         const rGet = await fetch(`${WA_AGENT_URL}/scheduler/agenda?instancia=${encodeURIComponent(instancia)}`);
         if (!rGet.ok) throw new Error('GET ' + rGet.status);
         const agenda = await rGet.json();
+        // IMPORTANTE: NÃO enviar grupos/regioes/horarios/categorias aqui.
+        // Sem 'grupos' no payload, o backend cai no ramo de MERGE e preserva
+        // tudo do banco (grupos com tags, regiões, horários). Enviar a lista
+        // completa causava sobrescrita das tags quando a página tinha dados
+        // desatualizados em memória (bug que apagou as tags em jul/2026).
         const payload = {
           instancia,
           titulo_crm: titulo,
-          horarios: agenda.horarios,
-          grupos: agenda.grupos,
-          regioes: agenda.regioes,
-          cats: agenda.cats,
-          categorias: agenda.categorias,
-          mapeamento_modalidade: agenda.mapeamento_modalidade
+          cats: agenda.cats
         };
         Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
         const r = await fetch(`${WA_AGENT_URL}/scheduler/update`, {
@@ -347,7 +336,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
-    if (normModalidade(c.modalidade) === 'Vendedor') return false;
+    if (c.modalidade === 'Venda') return false;
     const etapasAvancadas = ['contrato','financiamento','recebimento','recebido'];
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
@@ -378,8 +367,8 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
-      const mod = normModalidade(c.modalidade) || 'Outros';
-      if (mod === 'Vendedor') return;
+      const mod = c.modalidade || 'Outros';
+      if (mod === 'Venda') return;
       if (!grupos[mod]) grupos[mod] = [];
       grupos[mod].push(c);
     });
@@ -394,31 +383,13 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
 
   const textoFinal = editando ? textoEditado : textoGerado;
 
-  async function verAmostra() {
-    if (!textoFinal.trim()) return;
-    setCarregandoAmostra(true);
-    setAmostras([]);
-    try {
-      const r = await fetch(`${WA_AGENT_URL}/demandas/amostra-variacao`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: textoFinal })
-      });
-      const j = await r.json();
-      if (j.ok && j.ativo === false) setAmostras(['A variação por IA está desligada — a mensagem sai exatamente como está acima.']);
-      else if (j.ok && j.amostras && j.amostras.length) setAmostras(j.amostras);
-      else if (j.ok) setAmostras(['Não consegui gerar a amostra agora. Tente de novo.']);
-      else setAmostras(['Erro ao gerar amostra: ' + (j.error || 'desconhecido')]);
-    } catch (e) { setAmostras(['Erro ao gerar amostra: ' + e.message]); }
-    setCarregandoAmostra(false);
-  }
-
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
   const textColor = darkMode ? '#e2e8f0' : '#1a202c';
   const textMuted = darkMode ? '#94a3b8' : '#64748b';
   const bg = darkMode ? '#0f1117' : '#f8fafc';
 
-  const ordem = ['Comprador', 'Locatário'];
+  const ordem = ['Compra', 'Locação'];
   const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
 
   return (
@@ -452,7 +423,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
               <div key={mod} style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>
-                    {mod === 'Comprador' ? '🛒' : mod === 'Locatário' ? '🔑' : '📄'} {mod}
+                    {mod === 'Compra' ? '🛒' : mod === 'Locação' ? '🔑' : '📄'} {mod}
                   </span>
                   <span style={{ fontSize: 12, color: textMuted, background: darkMode ? '#0f3460' : '#f1f5f9', padding: '2px 8px', borderRadius: 20 }}>
                     {(porModalidade[mod] || []).filter(c => selecionados.has(c.id)).length}/{(porModalidade[mod] || []).length}
@@ -524,10 +495,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
                     style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                     {copiado ? '✓ Copiado!' : '📋 Copiar'}
                   </button>
-                  <button onClick={verAmostra} disabled={!textoFinal || carregandoAmostra}
-                    style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: (!textoFinal || carregandoAmostra) ? '#c4b5fd' : '#7c3aed', color: '#fff', fontSize: 11, fontWeight: 600, cursor: (!textoFinal || carregandoAmostra) ? 'default' : 'pointer' }}>
-                    {carregandoAmostra ? '✨ gerando…' : '✨ Ver amostra da variação'}
-                  </button>
                 </div>
               </div>
               {textoFinal ? (
@@ -546,19 +513,6 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
               )}
               {instancia && textoFinal && (
                 <div style={{ marginTop: 8, fontSize: 11, color: '#25d366', fontWeight: 600 }}>● {instancia}</div>
-              )}
-              {amostras.length > 0 && (
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, color: '#7c3aed' }}>✨ Como a IA vai variar (cada grupo recebe uma versão nova):</div>
-                  {amostras.map((a, i) => (
-                    <pre key={i} style={{ fontFamily: 'Inter,sans-serif', fontSize: 11.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: textColor, margin: '0 0 10px', padding: '10px 12px', background: darkMode ? '#1e1b2e' : '#faf5ff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
-                      {a}
-                    </pre>
-                  ))}
-                  <div style={{ fontSize: 10.5, color: textMuted, fontStyle: 'italic' }}>
-                    Confira que preço, bairro, quartos e contato aparecem em todos os exemplos. O envio real gera uma versão fresca pra cada grupo — nunca sai igual.
-                  </div>
-                </div>
               )}
             </div>
           </>
