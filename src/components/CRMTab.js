@@ -101,6 +101,16 @@ function FunilInline({ cliente, onToggleFunil, podeEditar }) {
   );
 }
 
+function corretorDaEstrela(c) {
+  const divT = Array.isArray(c.tratativa_divisao) ? c.tratativa_divisao : [];
+  const donoT = divT.find(d => d.id === c.tratativa_dono_edicao);
+  if (donoT && donoT.nome) return donoT.nome;
+  const divC = Array.isArray(c.captacao_divisao) ? c.captacao_divisao : [];
+  const donoC = divC.find(d => d.tipo !== 'externo' && d.id === c.captacao_dono_edicao);
+  if (donoC && donoC.nome) return donoC.nome;
+  return c.corretor || '';
+}
+
 export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggleFunil, onNovaNegociacao, isGerente, podeContrato, filtroClienteNome, onLimparFiltro }) {
   const [search, setSearch] = useState('');
   const [filterOrigem, setFilterOrigem] = useState('');
@@ -128,7 +138,7 @@ export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggl
   const modalidadesUnicas = useMemo(() => [...new Set(data.map(c => c.modalidade).filter(Boolean))].sort(), [data]);
   const imoveisUnicos = useMemo(() => [...new Set(data.map(c => c.imovel).filter(Boolean))].sort(), [data]);
   const localizacoesUnicas = useMemo(() => [...new Set(data.map(c => c.localizacao).filter(Boolean))].sort(), [data]);
-  const corretoresUnicos = useMemo(() => [...new Set(data.map(c => c.corretor).filter(Boolean))].sort(), [data]);
+  const corretoresUnicos = useMemo(() => [...new Set(data.map(c => corretorDaEstrela(c)).filter(Boolean))].sort(), [data]);
   const etapasUnicas = useMemo(() => ETAPAS_FUNIL.filter(e => data.some(c => c[e])).map(e => ETAPAS_LABEL[e]), [data]);
 
   function toggleSort(col) {
@@ -158,7 +168,7 @@ export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggl
       (filtroTipo === 'todos' || (filtroTipo === 'corretores' ? c.is_corretor : !c.is_corretor)) &&
       (!filtroParcerias || c.solicitar_parceria) &&
       (filterParceria.length === 0 || (filterParceria.includes('🤝 Sim') ? c.solicitar_parceria : !c.solicitar_parceria)) &&
-      (filterCorretor.length === 0 || filterCorretor.includes(c.corretor)) &&
+      (filterCorretor.length === 0 || filterCorretor.includes(corretorDaEstrela(c))) &&
       (filterLocalizacao.length === 0 || filterLocalizacao.includes(c.localizacao)) &&
       (filterFunil.length === 0 || filterFunil.some(f => { const e = getEtapaAtual(c); return e && ETAPAS_LABEL[e] === f; }))
     );
@@ -276,7 +286,7 @@ export default function CRMTab({ data, todosData, onOpenModal, onDelete, onToggl
                       <td className="td-muted">{c.imovel || '—'}</td>
                       <td>{c.modalidade ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: modColors.bg, color: modColors.color }}>{c.modalidade}</span> : '—'}</td>
                       <td style={{ fontWeight: 600, color: '#059669' }}>{c.valor !== '' && c.valor !== null && c.valor !== undefined ? (Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`) : '—'}</td>
-                      <td className="td-muted">{c.corretor || '—'}</td>
+                      <td className="td-muted">{corretorDaEstrela(c) || '—'}</td>
                       <td className="td-muted" title={c.localizacao || ''} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.localizacao || '—'}</td>
                       <td onClick={e => e.stopPropagation()}>
                         <FunilInline cliente={c} onToggleFunil={onToggleFunil} podeEditar={!!onOpenModal} />
