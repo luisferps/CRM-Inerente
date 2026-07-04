@@ -4,6 +4,16 @@ import { ETAPAS_FUNIL, ETAPAS_LABEL, normModalidade } from '../constants';
 import { supabase } from '../supabaseClient';
 import BotaoFecharContrato from './BotaoFecharContrato';
 
+function corretorDaEstrela(c) {
+  const divT = Array.isArray(c.tratativa_divisao) ? c.tratativa_divisao : [];
+  const donoT = divT.find(d => d.id === c.tratativa_dono_edicao);
+  if (donoT && donoT.nome) return donoT.nome;
+  const divC = Array.isArray(c.captacao_divisao) ? c.captacao_divisao : [];
+  const donoC = divC.find(d => d.tipo !== 'externo' && d.id === c.captacao_dono_edicao);
+  if (donoC && donoC.nome) return donoC.nome;
+  return c.corretor || '';
+}
+
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL.length - 1; i >= 0; i--) {
     if (c[ETAPAS_FUNIL[i]]) return ETAPAS_FUNIL[i];
@@ -145,6 +155,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard, podeCon
                           )}
                         </div>
                         <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 2 }}>{c.imovel || '—'}</div>
+                        {corretorDaEstrela(c) && <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 2 }}>👤 {corretorDaEstrela(c)}</div>}
                         {c.valor !== '' && c.valor !== null && c.valor !== undefined && (
                           <div style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>
                             {Number(c.valor) === 0 ? 'Em aberto' : `R$ ${Number(c.valor).toLocaleString('pt-BR')}`}
