@@ -215,10 +215,18 @@ function MultiFiltro({ id, rotulo, itens, value, onChange, aberto, setAberto, C,
       {isOpen && (
         <>
           <div onClick={() => setAberto('')} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 41, background: '#fff', border: '1px solid ' + C.line, borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.14)', minWidth: 200, maxWidth: 280, maxHeight: 320, overflowY: 'auto', padding: 6 }}>
-            {n > 0 && (
-              <button onClick={() => onChange([])} style={{ width: '100%', textAlign: 'left', border: 0, background: 'none', color: C.red, font: 'inherit', fontSize: 12.5, fontWeight: 700, padding: '7px 10px', cursor: 'pointer', borderRadius: 8 }}>✕ limpar seleção</button>
-            )}
+          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 41, background: '#fff', border: '1px solid ' + C.line, borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.14)', minWidth: 200, maxWidth: 280, maxHeight: 340, overflowY: 'auto', padding: 6 }}>
+            {itens.length > 0 && (() => {
+              const todasKeys = itens.map(it => it.key);
+              const todosMarcados = todasKeys.every(k => value.includes(k));
+              return (
+                <button
+                  onClick={() => todosMarcados ? onChange([]) : onChange(todasKeys)}
+                  style={{ position: 'sticky', top: 0, zIndex: 1, width: '100%', textAlign: 'left', border: 0, borderBottom: '1px solid ' + C.line2, background: '#fff', color: C.red, font: 'inherit', fontSize: 12.5, fontWeight: 700, padding: '8px 10px', cursor: 'pointer', borderRadius: 8 }}>
+                  {todosMarcados ? '✕ Limpar seleção' : ('✓ Selecionar todos (' + itens.length + ')')}
+                </button>
+              );
+            })()}
             {itens.length === 0 && <div style={{ padding: '8px 10px', color: C.ink3, fontSize: 12.5 }}>nenhum valor</div>}
             {itens.map(it => {
               const on = value.includes(it.key);
