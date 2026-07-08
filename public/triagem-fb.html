@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triagem — Captação Facebook · Inerente</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,'Segoe UI',sans-serif;background:#f5f5f7;color:#1a1a2e}
+header{background:#C0392B;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+header h1{margin:0;font-size:17px}
+header .n{font-size:12px;opacity:.9}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+.aviso{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:12px;display:none}
+.aviso.show{display:block}
+.filtros{background:#fff;border-radius:14px;padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.filtros select,.filtros input{padding:7px 9px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;background:#fff}
+.filtros input[type=text]{flex:1;min-width:140px}
+.filtros input[type=number]{width:100px}
+.tabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}
+.tabs button{border:none;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#e5e7eb;color:#374151}
+.tabs button.on{background:#C0392B;color:#fff}
+.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;gap:12px}
+.card img{width:86px;height:86px;object-fit:cover;border-radius:10px;background:#eee;flex-shrink:0}
+.card .info{flex:1;min-width:0}
+.card .tit{font-weight:700;font-size:14px;margin-bottom:2px}
+.card .sub{font-size:12px;color:#6b7280;margin-bottom:4px}
+.card .tel{color:#C0392B;font-weight:700;font-size:15px}
+.badges{display:flex;gap:5px;flex-wrap:wrap;margin:4px 0}
+.badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f3f4f6;color:#374151}
+.badge.agio{background:#fef3c7;color:#92400e}
+.acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.acoes a,.acoes button{border:none;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+.b-wa{background:#dcfce7;color:#166534}.b-lk{background:#dbeafe;color:#1e40af}
+.b-crm{background:#C0392B;color:#fff}.b-cont{background:#f3f4f6;color:#374151}.b-desc{background:#fee2e2;color:#991b1b}
+.b-volta{background:#e5e7eb;color:#374151}
+.b-crm:disabled{opacity:.5;cursor:not-allowed}
+.vazio{color:#9ca3af;text-align:center;padding:40px 0;font-size:14px}
+.msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99}
+.msg.show{opacity:1}
+.desc{font-size:12px;color:#4b5563;margin-top:4px;display:none;white-space:pre-wrap}
+.card.aberto .desc{display:block}
+.verdesc{background:none;border:none;color:#2563eb;font-size:11px;cursor:pointer;padding:0}
+#gate{position:fixed;inset:0;background:#f5f5f7;z-index:999;display:flex;align-items:center;justify-content:center}
+#gate .box{background:#fff;border-radius:16px;padding:28px;box-shadow:0 8px 32px rgba(0,0,0,.12);width:300px;text-align:center}
+#gate h2{margin:0 0 4px;font-size:18px;color:#C0392B}
+#gate p{margin:0 0 16px;font-size:13px;color:#6b7280}
+#gate input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:10px}
+#gate button{width:100%;background:#C0392B;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer}
+@media(max-width:560px){.card{flex-direction:column}.card img{width:100%;height:150px}}
+</style>
+</head>
+<body>
+<div id="gate"><div class="box">
+  <h2>📞 Triagem Facebook</h2>
+  <p>Digite a senha para acessar</p>
+  <input type="password" id="gsenha" placeholder="Senha" autofocus>
+  <button id="gbtn">Entrar</button>
+</div></div>
+
+<header><h1>📞 Triagem — Captação Facebook</h1><div class="n" id="conta"></div></header>
+<div class="wrap">
+  <div class="aviso" id="avisoCanal">🔴 Canal desligado pelo diretor — o envio pro CRM está bloqueado no momento.</div>
+  <div class="filtros">
+    <select id="fTipo"><option value="">Tipo: todos</option><option>Casa</option><option>Apartamento</option><option>Lote</option><option>Área</option><option>Comercial</option><option value="_outro">Outro/indefinido</option></select>
+    <select id="fTrans"><option value="">Venda e Aluguel</option><option>Venda</option><option>Aluguel</option></select>
+    <select id="fAgio"><option value="">Ágio: todos</option><option value="sim">Só com ágio</option><option value="nao">Sem ágio</option></select>
+    <input type="number" id="fMin" placeholder="Preço mín">
+    <input type="number" id="fMax" placeholder="Preço máx">
+    <input type="text" id="fBusca" placeholder="Buscar (título, bairro, telefone...)">
+  </div>
+  <div class="tabs">
+    <button data-st="novo" class="on">📋 A triar</button>
+    <button data-st="contactado">📞 Contactados</button>
+    <button data-st="enviado">✅ Enviados ao CRM</button>
+    <button data-st="descartado">🗑 Descartados</button>
+  </div>
+  <div id="lista"></div>
+</div>
+<div class="msg" id="msg"></div>
+<script>
+var SENHA='gabriela';
+var SUPA_URL='https://jmklizgsdxojesvtwpcd.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impta2xpemdzZHhvamVzdnR3cGNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MDMzNzYsImV4cCI6MjA5NDM3OTM3Nn0.Fu9BtNrfDimxVPAGduSO8Mgx-mvYobEeRjWnEXF5uxg';
+function H(extra){var h={apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json'};if(extra)for(var k in extra)h[k]=extra[k];return h;}
+var leads=[],statusAtual='novo',canalAtivo=true;
+function msg(t){var m=document.getElementById('msg');m.textContent=t;m.classList.add('show');setTimeout(function(){m.classList.remove('show');},2500);}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── senha (cortina; barra acesso casual) ──
+function abrirGate(){
+  function tenta(){
+    if(document.getElementById('gsenha').value===SENHA){
+      try{sessionStorage.setItem('fbtriagem_ok','1');}catch(e){}
+      document.getElementById('gate').style.display='none';iniciar();
+    }else{msg('Senha incorreta.');}
+  }
+  document.getElementById('gbtn').onclick=tenta;
+  document.getElementById('gsenha').addEventListener('keydown',function(e){if(e.key==='Enter')tenta();});
+}
+function iniciar(){carregar();carregarCanal();setInterval(carregar,60000);setInterval(carregarCanal,60000);}
+
+function carregar(){
+  fetch(SUPA_URL+'/rest/v1/captacao_facebook?select=*&order=data_captura.desc&limit=1000',{headers:H()})
+  .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+  .then(function(j){leads=j||[];render();})
+  .catch(function(e){msg('Erro ao carregar: '+e.message);});
+}
+function carregarCanal(){
+  fetch(SUPA_URL+'/rest/v1/captacao_facebook_cfg?select=ativo&id=eq.singleton',{headers:H()})
+  .then(function(r){return r.ok?r.json():[];})
+  .then(function(j){canalAtivo=!(j&&j[0]&&j[0].ativo===false);document.getElementById('avisoCanal').classList.toggle('show',!canalAtivo);render();});
+}
+function filtrar(){
+  var fT=document.getElementById('fTipo').value,fTr=document.getElementById('fTrans').value,fA=document.getElementById('fAgio').value;
+  var fMin=parseInt(document.getElementById('fMin').value,10)||0,fMax=parseInt(document.getElementById('fMax').value,10)||Infinity;
+  var q=(document.getElementById('fBusca').value||'').toLowerCase();
+  return leads.filter(function(l){
+    if((l.status||'novo')!==statusAtual)return false;
+    if(fT==='_outro'){if(['Casa','Apartamento','Lote','Área','Comercial'].indexOf(l.tipo)>=0)return false;}
+    else if(fT&&l.tipo!==fT)return false;
+    if(fTr&&l.transacao!==fTr)return false;
+    if(fA==='sim'&&!l.agio)return false;
+    if(fA==='nao'&&l.agio)return false;
+    var v=l.valor_num||0;
+    if(v&&(v<fMin||v>fMax))return false;
+    if(!v&&(fMin>0||fMax<Infinity))return false;
+    if(q){var alvo=((l.titulo||'')+' '+(l.local||'')+' '+(l.telefone||'')+' '+(l.anunciante||'')+' '+(l.descricao||'')).toLowerCase();if(alvo.indexOf(q)<0)return false;}
+    return true;
+  });
+}
+function render(){
+  var arr=filtrar(),lst=document.getElementById('lista');
+  var tot={novo:0,contactado:0,enviado:0,descartado:0};
+  leads.forEach(function(l){var s=l.status||'novo';if(tot[s]!==undefined)tot[s]++;});
+  document.getElementById('conta').textContent='A triar: '+tot.novo+' · Contactados: '+tot.contactado+' · Enviados: '+tot.enviado;
+  if(!arr.length){lst.innerHTML='<div class="vazio">Nada aqui com esses filtros.</div>';return;}
+  lst.innerHTML=arr.map(function(l){
+    var wa='https://wa.me/55'+l.telefone;
+    var badges='';
+    if(l.tipo)badges+='<span class="badge">'+esc(l.tipo)+'</span>';
+    if(l.transacao)badges+='<span class="badge">'+esc(l.transacao)+'</span>';
+    if(l.agio)badges+='<span class="badge agio">ÁGIO</span>';
+    if(l.preco)badges+='<span class="badge">'+esc(l.preco)+'</span>';
+    var dis=canalAtivo?'':' disabled title="Canal desligado pelo diretor"';
+    var acoes='';
+    if(statusAtual==='novo'){
+      acoes='<button class="b-crm" data-a="crm" data-id="'+l.id+'"'+dis+'>✅ Enviar pro CRM</button>'+
+            '<button class="b-cont" data-a="contactado" data-id="'+l.id+'">📞 Contactado (não deu)</button>'+
+            '<button class="b-desc" data-a="descartado" data-id="'+l.id+'">🗑 Descartar</button>';
+    }else if(statusAtual==='contactado'){
+      acoes='<button class="b-crm" data-a="crm" data-id="'+l.id+'"'+dis+'>✅ Enviar pro CRM</button>'+
+            '<button class="b-volta" data-a="novo" data-id="'+l.id+'">↩ Voltar pra triar</button>'+
+            '<button class="b-desc" data-a="descartado" data-id="'+l.id+'">🗑 Descartar</button>';
+    }else if(statusAtual==='descartado'){
+      acoes='<button class="b-volta" data-a="novo" data-id="'+l.id+'">↩ Restaurar</button>';
+    }else{acoes='<span class="badge">enviado '+(l.enviado_em?String(l.enviado_em).slice(0,10):'')+'</span>';}
+    return '<div class="card" id="card-'+l.id+'">'+
+      (l.foto?'<img src="'+esc(l.foto)+'" loading="lazy">':'<img>')+
+      '<div class="info">'+
+      '<div class="tit">'+esc(l.titulo||'(sem título)')+'</div>'+
+      '<div class="sub">'+esc(l.local||'')+(l.anunciante?' · '+esc(l.anunciante):'')+' · capt. '+String(l.data_captura||'').slice(0,10)+'</div>'+
+      '<div class="tel">'+esc(l.telefone)+'</div>'+
+      '<div class="badges">'+badges+'</div>'+
+      (l.descricao?'<button class="verdesc" data-a="desc" data-id="'+l.id+'">ver descrição</button><div class="desc">'+esc(l.descricao)+'</div>':'')+
+      '<div class="acoes"><a class="b-wa" href="'+wa+'" target="_blank">WhatsApp</a><a class="b-lk" href="'+esc(l.url)+'" target="_blank">Anúncio</a>'+acoes+'</div>'+
+      '</div></div>';
+  }).join('');
+}
+function achar(id){for(var i=0;i<leads.length;i++)if(String(leads[i].id)===String(id))return leads[i];return null;}
+function setStatus(id,st,extra){
+  var body={status:st};if(extra)for(var k in extra)body[k]=extra[k];
+  return fetch(SUPA_URL+'/rest/v1/captacao_facebook?id=eq.'+id,{method:'PATCH',headers:H({Prefer:'return=minimal'}),body:JSON.stringify(body)})
+  .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);var l=achar(id);if(l){l.status=st;for(var k in (extra||{}))l[k]=extra[k];}render();});
+}
+function enviarCRM(id){
+  var l=achar(id);if(!l)return;
+  var btn=document.querySelector('#card-'+id+' [data-a="crm"]');if(btn){btn.disabled=true;btn.textContent='Enviando...';}
+  var tel=String(l.telefone||'').replace(/\D/g,'');
+  var tail8=tel.slice(-8);
+  var modalidade=(l.transacao==='Aluguel')?'Locação':'Venda';
+  var imovelChave=[l.tipo||'Imóvel',l.transacao||''].filter(Boolean).join(' - ')||'Imóvel Facebook';
+  var clienteId=null;
+  fetch(SUPA_URL+'/rest/v1/clientes?select=id&telefone=like.*'+tail8+'&limit=1',{headers:H()})
+  .then(function(r){return r.ok?r.json():[];})
+  .then(function(cm){
+    if(cm&&cm[0]){clienteId=cm[0].id;return null;}
+    var novoCliente={nome:(l.anunciante&&l.anunciante.trim())||('Proprietário '+tel),telefone:tel,origem:'Facebook',entrada:new Date().toISOString().slice(0,10)};
+    return fetch(SUPA_URL+'/rest/v1/clientes',{method:'POST',headers:H({Prefer:'return=representation'}),body:JSON.stringify(novoCliente)})
+      .then(function(r){if(!r.ok)throw new Error('criar cliente: HTTP '+r.status);return r.json();})
+      .then(function(cr){clienteId=cr&&cr[0]&&cr[0].id;if(!clienteId)throw new Error('cliente sem id');});
+  })
+  .then(function(){
+    return fetch(SUPA_URL+'/rest/v1/negociacoes?select=id,imovel&cliente_id=eq.'+clienteId+'&origem_tratativa=eq.Facebook&ativo=eq.S&limit=50',{headers:H()})
+      .then(function(r){return r.ok?r.json():[];});
+  })
+  .then(function(dups){
+    if(dups&&dups.some(function(d){return String(d.imovel||'').trim()===imovelChave;})){
+      msg('Já existia tratativa Facebook deste cliente — não dupliquei.');
+      return setStatus(id,'enviado',{enviado_em:new Date().toISOString()});
+    }
+    var resumo='[Captado Facebook] '+[l.tipo,l.transacao,l.preco].filter(Boolean).join(' · ')+(l.local?' — '+l.local:'')+
+      (l.url?'\n'+l.url:'')+(l.descricao?'\n\n📋 Anúncio do proprietário:\n'+l.descricao:'');
+    var novaNego={
+      cliente_id:clienteId,tratativa:true,ativo:'S',captado:false,
+      modalidade:modalidade,origem_tratativa:'Facebook',
+      imovel:imovelChave,localizacao:l.local||null,
+      valor:l.valor_num||null,
+      ficha:{_descricao:l.descricao||'',_origem:'Facebook',_url:l.url||'',_agio:!!l.agio,telefoneProprietario:tel},
+      detalhes:resumo.slice(0,3900),
+      ultimo_contato:new Date().toISOString().slice(0,10)
+    };
+    return fetch(SUPA_URL+'/rest/v1/negociacoes',{method:'POST',headers:H({Prefer:'return=minimal'}),body:JSON.stringify(novaNego)})
+      .then(function(r){if(!r.ok)throw new Error('criar tratativa: HTTP '+r.status);})
+      .then(function(){msg('✅ Enviado! Vai aparecer na aba de captações do CRM.');return setStatus(id,'enviado',{enviado_em:new Date().toISOString()});});
+  })
+  .catch(function(e){msg('Erro: '+e.message);if(btn){btn.disabled=false;btn.textContent='✅ Enviar pro CRM';}});
+}
+document.getElementById('lista').addEventListener('click',function(e){
+  var b=e.target.closest('[data-a]');if(!b)return;
+  var a=b.getAttribute('data-a'),id=b.getAttribute('data-id');
+  if(a==='desc'){document.getElementById('card-'+id).classList.toggle('aberto');return;}
+  if(a==='crm'){if(!canalAtivo){msg('⛔ Canal desligado pelo diretor — envio ao CRM bloqueado.');return;}enviarCRM(id);return;}
+  if(a==='descartado'&&!confirm('Descartar este lead?'))return;
+  var extra=(a==='contactado')?{contactado_em:new Date().toISOString()}:null;
+  setStatus(id,a,extra).catch(function(e2){msg('Erro: '+e2.message);});
+});
+document.querySelector('.tabs').addEventListener('click',function(e){
+  if(e.target.tagName!=='BUTTON')return;
+  statusAtual=e.target.getAttribute('data-st');
+  [].forEach.call(document.querySelectorAll('.tabs button'),function(b){b.classList.remove('on');});
+  e.target.classList.add('on');render();
+});
+['fTipo','fTrans','fAgio','fMin','fMax','fBusca'].forEach(function(id){document.getElementById(id).addEventListener('input',render);});
+
+// já autenticado nesta sessão? pula o gate
+if(sessionStorage.getItem('fbtriagem_ok')==='1'){document.getElementById('gate').style.display='none';iniciar();}
+else{abrirGate();}
+</script>
+</body>
+</html>
