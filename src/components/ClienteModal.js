@@ -990,57 +990,108 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     // Controle pela coluna estoque_id (não mais pelo "já estava captado") — assim
     // tratativas presas (captado=true mas nunca criadas) são reenviadas, e as que já
     // têm imóvel não duplicam.
+    // captarAgora  : 1ª vez — cria o imóvel OCULTO no Estoque.
+    // atualizarDono: imóvel JÁ existe no Estoque (estoque_id) e a divisão de captação
+    //                / corretor responsável mudou no CRM DEPOIS de captado — propaga
+    //                os campos de dono pro Firestore. Sem isso, uma captação transferida
+    //                depois de captada não aparece (nem fica editável) pra quem recebeu.
     const captarAgora = form.captado && !form.estoque_id;
-    if (captarAgora) {
-      try {
-        const fbase = form.ficha || {};
-        // o corretor da tratativa vira o CAPTADOR no Estoque (casado pelo NOME)
-        const _nc = x => String(x || '').toLowerCase().trim();
-        const corretorObj = corretores.find(c => _nc(c.nome) === _nc(form.corretor));
-        const capNome = form.corretor || (perfil && perfil.nome) || '';
-        const capTel = (corretorObj && corretorObj.telefone)
-          || (perfil && _nc(form.corretor) === _nc(perfil.nome) ? perfil.telefone : '') || '';
-        // campos editados no modal do CRM têm prioridade e sobrescrevem a ficha
-        const tipoNome = (tipos.find(x => String(x.id) === String(form.tipo_id)) || {}).nome || '';
-        const partesLoc = String(form.localizacao || '').split(',').map(x => x.trim()).filter(Boolean);
-        const locBairro = partesLoc[0] || '';
-        const locCidade = partesLoc[1] || '';
-        const locEstado = (partesLoc[2] && partesLoc[2].length <= 3) ? partesLoc[2].toUpperCase() : (partesLoc[2] || '');
-        const nomePlaceholder = /^propriet[áa]rio\s*\d+$/i.test(String(form.nome || '').trim());
-        const fichaEnvio = Object.assign({}, fbase, {
-          // Estoque: venda usa 'preco'; LOCAÇÃO usa 'valorAluguel'. Mandar no campo certo.
-          preco: isLocacao ? (fbase.preco || '') : ((form.valor !== '' && form.valor != null) ? form.valor : fbase.preco),
-          valorAluguel: isLocacao ? ((form.valor !== '' && form.valor != null) ? form.valor : (fbase.valorAluguel || '')) : (fbase.valorAluguel || ''),
-          tipo: tipoNome || fbase.tipo,
-          transacao: isLocacao ? 'Locação' : 'Venda',
-          condominio: !!form.em_condominio || !!fbase.condominio,
-          bairro: fbase.bairro || locBairro,
-          cidade: fbase.cidade || locCidade,
-          estado: fbase.estado || locEstado,
-          agio: !!fbase._agio,
-          nomeProprietario: nomePlaceholder ? (fbase.nomeProprietario || form.nome) : (form.nome || fbase.nomeProprietario),
-          telefoneProprietario: form.telefone || fbase.telefoneProprietario,
-          nomeCaptador: fbase.nomeCaptador || capNome,
-          telefoneCaptador: fbase.telefoneCaptador || capTel,
-          // Divisão de captação definida no CRM viaja para o Estoque (herda no cadastro).
-          captadores_detalhes: Array.isArray(form.captacao_divisao) ? form.captacao_divisao : [],
-          captadores_ids: (Array.isArray(form.captacao_divisao) ? form.captacao_divisao : []).filter(d => d.tipo === 'interno').map(d => d.id),
-          captadorEmail: (() => {
-            const dono = (form.captacao_divisao || []).find(d => d.tipo === 'interno' && d.id === form.captacao_dono_edicao);
-            const donoObj = dono && corretores.find(c => (c.supabaseId || c.id) === dono.id);
-            return (donoObj && donoObj.email) ? String(donoObj.email).toLowerCase() : (perfil?.email || '').toLowerCase();
-          })()
-        });
-        const rEst = await fetch(BACKEND + '/captacao/enviar-estoque', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ficha: fichaEnvio })
-        });
-        const jEst = await rEst.json();
-        if (jEst.ok) { jaCaptadoRef.current = true; setImagensIA([]);
-        form.estoque_id = jEst.id; setForm(f => ({ ...f, estoque_id: jEst.id }));
-        alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
-        else alert('A tratativa foi salva, mas não consegui criar no Estoque:\n' + (jEst.error || 'erro desconhecido') + '\n\nMe avise para verificar.');
-      } catch (e) { alert('A tratativa foi salva, mas falhou o envio ao Estoque:\n' + e.message); }
+    const atualizarDono = form.captado && !!form.estoque_id;
+    if (captarAgora || atualizarDono) {
+      // ── Resolução robusta do captador / dono da edição (vale pros dois fluxos) ──
+      // Prioridade: dono da edição na divisão → corretor responsável da tratativa → logado.
+      // O e-mail resolvido vira a "estrela" (captadorEmail) no Estoque: é ele que libera
+      // VER + EDITAR/FINALIZAR o imóvel pra quem recebeu a captação.
+      const _nc = x => String(x || '').toLowerCase().trim();
+      const acharCorretorId = (id) => corretores.find(c => (c.supabaseId || c.id) === id);
+      const acharCorretorNome = (nome) => corretores.find(c => _nc(c.nome) === _nc(nome));
+      const donoDiv = (form.captacao_divisao || []).find(d => d.tipo === 'interno' && d.id === form.captacao_dono_edicao);
+      const donoObj = donoDiv ? acharCorretorId(donoDiv.id) : null;
+      const corretorTratObj = acharCorretorNome(form.corretor);
+      const capEmail =
+        (donoObj && donoObj.email) ? String(donoObj.email).toLowerCase()
+        : (corretorTratObj && corretorTratObj.email) ? String(corretorTratObj.email).toLowerCase()
+        : (perfil?.email || '').toLowerCase();
+      const capNome = (donoDiv && donoDiv.nome) || form.corretor || (perfil && perfil.nome) || '';
+      const capTel = (donoObj && donoObj.telefone) || (corretorTratObj && corretorTratObj.telefone)
+        || (perfil && _nc(form.corretor) === _nc(perfil.nome) ? perfil.telefone : '') || '';
+      // Detalhes da divisão (viajam pro Estoque). Se não há divisão explícita, cria uma
+      // entrada única pro corretor responsável — assim o imóvel aparece pra ele tanto por
+      // e-mail (login pelo Portal) quanto por NOME (login direto no Firebase).
+      let capDetalhes = Array.isArray(form.captacao_divisao) ? form.captacao_divisao.slice() : [];
+      if (capDetalhes.length === 0) {
+        const alvo = donoObj || corretorTratObj;
+        if (alvo) capDetalhes = [{
+          tipo: 'interno',
+          id: alvo.supabaseId || alvo.id || null,
+          nome: alvo.nome,
+          email: alvo.email ? String(alvo.email).toLowerCase() : null,
+          pct: 100
+        }];
+      }
+      const capIds = capDetalhes.filter(d => d.tipo === 'interno' && d.id).map(d => d.id);
+
+      if (captarAgora) {
+        try {
+          const fbase = form.ficha || {};
+          // campos editados no modal do CRM têm prioridade e sobrescrevem a ficha
+          const tipoNome = (tipos.find(x => String(x.id) === String(form.tipo_id)) || {}).nome || '';
+          const partesLoc = String(form.localizacao || '').split(',').map(x => x.trim()).filter(Boolean);
+          const locBairro = partesLoc[0] || '';
+          const locCidade = partesLoc[1] || '';
+          const locEstado = (partesLoc[2] && partesLoc[2].length <= 3) ? partesLoc[2].toUpperCase() : (partesLoc[2] || '');
+          const nomePlaceholder = /^propriet[áa]rio\s*\d+$/i.test(String(form.nome || '').trim());
+          const fichaEnvio = Object.assign({}, fbase, {
+            // Estoque: venda usa 'preco'; LOCAÇÃO usa 'valorAluguel'. Mandar no campo certo.
+            preco: isLocacao ? (fbase.preco || '') : ((form.valor !== '' && form.valor != null) ? form.valor : fbase.preco),
+            valorAluguel: isLocacao ? ((form.valor !== '' && form.valor != null) ? form.valor : (fbase.valorAluguel || '')) : (fbase.valorAluguel || ''),
+            tipo: tipoNome || fbase.tipo,
+            transacao: isLocacao ? 'Locação' : 'Venda',
+            condominio: !!form.em_condominio || !!fbase.condominio,
+            bairro: fbase.bairro || locBairro,
+            cidade: fbase.cidade || locCidade,
+            estado: fbase.estado || locEstado,
+            agio: !!fbase._agio,
+            nomeProprietario: nomePlaceholder ? (fbase.nomeProprietario || form.nome) : (form.nome || fbase.nomeProprietario),
+            telefoneProprietario: form.telefone || fbase.telefoneProprietario,
+            nomeCaptador: capNome,
+            telefoneCaptador: capTel,
+            // Divisão de captação definida no CRM viaja para o Estoque (herda no cadastro).
+            captadores_detalhes: capDetalhes,
+            captadores_ids: capIds,
+            captadorEmail: capEmail
+          });
+          const rEst = await fetch(BACKEND + '/captacao/enviar-estoque', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ficha: fichaEnvio })
+          });
+          const jEst = await rEst.json();
+          if (jEst.ok) { jaCaptadoRef.current = true; setImagensIA([]);
+          form.estoque_id = jEst.id; setForm(f => ({ ...f, estoque_id: jEst.id }));
+          alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
+          else alert('A tratativa foi salva, mas não consegui criar no Estoque:\n' + (jEst.error || 'erro desconhecido') + '\n\nMe avise para verificar.');
+        } catch (e) { alert('A tratativa foi salva, mas falhou o envio ao Estoque:\n' + e.message); }
+      } else if (atualizarDono) {
+        // Imóvel já existe no Estoque: propaga SÓ os campos de dono/captação.
+        // Não toca em status, visibilidade, fotos, preço nem em nada que seja trabalho do Estoque.
+        try {
+          const rUpd = await fetch(BACKEND + '/captacao/atualizar-dono-estoque', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: form.estoque_id,
+              ficha: {
+                nomeCaptador: capNome,
+                telefoneCaptador: capTel,
+                captadores_detalhes: capDetalhes,
+                captadores_ids: capIds,
+                captadorEmail: capEmail
+              }
+            })
+          });
+          const jUpd = await rUpd.json();
+          if (!jUpd.ok) console.warn('Falha ao sincronizar dono no Estoque:', jUpd.error);
+        } catch (e) { console.warn('Erro sincronizando dono no Estoque:', e.message); }
+      }
     }
 
     const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
