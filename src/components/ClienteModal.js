@@ -681,7 +681,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
   function toggleCaptado() {
     setForm(f => {
       const novo = !f.captado;
-      const u = { ...f, captado: novo, ativo: novo ? 'N' : f.ativo };
+      // Captação é sempre uma tratativa EM ABERTO: tanto "Em captação" quanto "Captado"
+      // mantêm ativo:'S'. O eixo Ativo/Inativo é só da PROCURA — se deixasse ativo:'N',
+      // a tratativa escorregava pra aba Finalizadas indevidamente.
+      const u = { ...f, captado: novo, ativo: 'S' };
       if (!isEdit) localStorage.setItem('crm_rascunho', JSON.stringify(u));
       return u;
     });
