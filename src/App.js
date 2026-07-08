@@ -57,6 +57,7 @@ function splitForm(form) {
     motivo_desistencia: form.ativo === 'S' ? '' : form.motivo_desistencia,
     solicitar_parceria: form.solicitar_parceria || false,
     captado: form.captado || false,
+    estoque_id: form.estoque_id || null,
     tratativa: form.tratativa || false,
     pesquisa: form.pesquisa || false,
     agendamento: form.agendamento || false,
