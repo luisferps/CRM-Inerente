@@ -121,6 +121,53 @@ function ListManager({ chave, title, isGerente, perfil }) {
   );
 }
 
+function CanalFacebook() {
+  const [ativo, setAtivo] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from('captacao_facebook_cfg').select('ativo').eq('id', 'singleton').single();
+      setAtivo(data ? data.ativo !== false : true);
+    }
+    load();
+  }, []);
+
+  async function alternar() {
+    const novo = !ativo;
+    const msg = novo
+      ? 'LIGAR o canal Facebook? As capturas voltam a subir e o envio pro CRM é liberado.'
+      : 'DESLIGAR o canal Facebook? Novas capturas param de subir e a página de triagem não consegue enviar leads pro CRM.';
+    if (!window.confirm(msg)) return;
+    setSalvando(true);
+    const { error } = await supabase.from('captacao_facebook_cfg')
+      .update({ ativo: novo, alterado_em: new Date().toISOString() }).eq('id', 'singleton');
+    setSalvando(false);
+    if (error) return alert('Erro: ' + error.message);
+    setAtivo(novo);
+  }
+
+  if (ativo === null) return <div className="dash-section" style={{ maxWidth: 420 }}>Carregando...</div>;
+
+  return (
+    <div className="dash-section" style={{ maxWidth: 420 }}>
+      <div className="dash-section-title" style={{ margin: '0 0 6px' }}>Canal de Captação — Facebook</div>
+      <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
+        Controla a entrada de leads do Facebook Marketplace. Desligado, as capturas param de subir e a página de triagem fica impedida de enviar leads pro CRM.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontWeight: 700, fontSize: 14, color: ativo ? '#166534' : '#991b1b' }}>
+          {ativo ? '🟢 Ligado' : '🔴 Desligado'}
+        </span>
+        <button onClick={alternar} disabled={salvando}
+          style={{ background: ativo ? '#C0392B' : '#166534', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          {salvando ? '...' : (ativo ? 'Desligar canal' : 'Ligar canal')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ConfigTab({ perfil }) {
   const isGerente = perfil?.is_gerente;
   return (
@@ -135,6 +182,7 @@ export default function ConfigTab({ perfil }) {
         {Object.entries(CHAVES).map(([chave, title]) => (
           <ListManager key={chave} chave={chave} title={title} isGerente={isGerente} perfil={perfil} />
         ))}
+        {isGerente && <CanalFacebook />}
       </div>
     </div>
   );
