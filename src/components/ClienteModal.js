@@ -376,9 +376,12 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       if (base.length === 0) {
         const respId = f.corretor_id || meuId || null;
         const respNome = f.corretor || (perfil && perfil.nome) || 'Responsável';
-        if (respId && respId !== idReal) base.push({ tipo: 'interno', id: respId, nome: respNome, pct: 0 });
+        const respObj = corretores.find(x => (x.supabaseId || x.id) === respId);
+        const respEmail = (respObj && respObj.email) ? String(respObj.email).toLowerCase() : ((perfil && perfil.email) ? String(perfil.email).toLowerCase() : null);
+        if (respId && respId !== idReal) base.push({ tipo: 'interno', id: respId, nome: respNome, email: respEmail, pct: 0 });
       }
-      const det = recalcCap([...base, { tipo: 'interno', id: idReal, nome: c.nome, pct: 0 }]);
+      const emailC = (c.email) ? String(c.email).toLowerCase() : null;
+      const det = recalcCap([...base, { tipo: 'interno', id: idReal, nome: c.nome, email: emailC, pct: 0 }]);
       const internos = det.filter(d => d.tipo === 'interno');
       const donoOk = internos.some(d => d.id === f.captacao_dono_edicao);
       return { ...f, captacao_divisao: det, captacao_dono_edicao: donoOk ? f.captacao_dono_edicao : (internos[0]?.id || null) };
@@ -478,7 +481,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             const respId = f.corretor_id || null;
             const respNome = f.corretor || 'Responsável';
             if (td.length === 0 && respId) { td = [{ id: respId, nome: respNome, pct: 100 }]; te = te || respId; }
-            if (cd.length === 0 && respId) { cd = [{ tipo: 'interno', id: respId, nome: respNome, pct: 100 }]; ce = ce || respId; }
+            if (cd.length === 0 && respId) { cd = [{ tipo: 'interno', id: respId, nome: respNome, email: (perfil && perfil.email ? String(perfil.email).toLowerCase() : null), pct: 100 }]; ce = ce || respId; }
             return {
               ...f,
               tratativa_divisao: td, tratativa_dono_edicao: te,
@@ -519,7 +522,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         initial.tratativa_divisao = [{ id: perfil.id, nome: perfil.nome, pct: 100 }];
         initial.tratativa_dono_edicao = perfil.id;
         // Divisão de CAPTAÇÃO também nasce 100% do corretor (usada só em tratativas de venda).
-        initial.captacao_divisao = [{ tipo: 'interno', id: perfil.id, nome: perfil.nome, pct: 100 }];
+        initial.captacao_divisao = [{ tipo: 'interno', id: perfil.id, nome: perfil.nome, email: (perfil.email ? String(perfil.email).toLowerCase() : null), pct: 100 }];
         initial.captacao_dono_edicao = perfil.id;
       }
     }
@@ -549,7 +552,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         initial.tratativa_divisao = [{ id: perfil.id, nome: perfil.nome, pct: 100 }];
         initial.tratativa_dono_edicao = perfil.id;
         // Divisão de CAPTAÇÃO também nasce 100% do corretor (usada só em tratativas de venda).
-        initial.captacao_divisao = [{ tipo: 'interno', id: perfil.id, nome: perfil.nome, pct: 100 }];
+        initial.captacao_divisao = [{ tipo: 'interno', id: perfil.id, nome: perfil.nome, email: (perfil.email ? String(perfil.email).toLowerCase() : null), pct: 100 }];
         initial.captacao_dono_edicao = perfil.id;
       }
     }
