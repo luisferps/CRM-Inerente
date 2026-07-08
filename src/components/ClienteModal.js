@@ -10,7 +10,7 @@ const emptyForm = {
   nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
-  captado: false, ficha: null,
+  captado: false, estoque_id: null, ficha: null,
   corretor: '', corretor_id: null,
   tratativa_divisao: [], tratativa_dono_edicao: null,
   captacao_divisao: [], captacao_dono_edicao: null,
@@ -983,8 +983,11 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       }
     }
 
-    // Captado AGORA (acabou de marcar nesta edição) -> cria o imóvel no Estoque (oculto)
-    const captarAgora = form.captado && !jaCaptadoRef.current;
+    // Cria o imóvel no Estoque quando a tratativa está Captada e ainda NÃO foi enviada.
+    // Controle pela coluna estoque_id (não mais pelo "já estava captado") — assim
+    // tratativas presas (captado=true mas nunca criadas) são reenviadas, e as que já
+    // têm imóvel não duplicam.
+    const captarAgora = form.captado && !form.estoque_id;
     if (captarAgora) {
       try {
         const fbase = form.ficha || {};
@@ -1031,6 +1034,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
         });
         const jEst = await rEst.json();
         if (jEst.ok) { jaCaptadoRef.current = true; setImagensIA([]);
+        form.estoque_id = jEst.id; setForm(f => ({ ...f, estoque_id: jEst.id }));
         alert('✓ Imóvel criado no Estoque (oculto). Vá ao Cadastro de Imóveis, adicione as fotos e publique.'); }
         else alert('A tratativa foi salva, mas não consegui criar no Estoque:\n' + (jEst.error || 'erro desconhecido') + '\n\nMe avise para verificar.');
       } catch (e) { alert('A tratativa foi salva, mas falhou o envio ao Estoque:\n' + e.message); }
