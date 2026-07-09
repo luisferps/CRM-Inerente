@@ -216,7 +216,7 @@ export default function App() {
 
   // Permissões baseadas nas funções
   // libera a Triagem FB pra diretor, gerente e Gabriela (pelo e-mail dela)
-  const EMAIL_GABRIELA = 'gabriela@inerente.com.br';
+  const EMAIL_GABRIELA = 'gppl.41619@gmail.com';
   const podeTriagemFB = !!(perfil && (perfil.is_diretor || perfil.is_gerente || (perfil.email || '').toLowerCase() === EMAIL_GABRIELA));
 
   const isDiretor = perfil?.is_diretor;
