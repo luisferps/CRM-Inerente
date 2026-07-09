@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
+const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
+
 // Aba de Transferências de cliente — fluxo de DUPLA aprovação:
 //   pendente_origem  -> gerente do corretor de origem (ou diretor) libera a saída
 //   pendente_destino -> o corretor destino, o gerente dele, ou o diretor aceita a entrada
@@ -64,7 +66,36 @@ export default function TransferenciasTab({ perfil }) {
     const { data, error } = await supabase.rpc('aceitar_transferencia', { t_id: String(t.id) });
     if (error) { setMsg('Erro: ' + error.message + ' — se aparecer "function not found", rode o SQL da função aceitar_transferencia no Supabase.'); return; }
     if (data !== 'ok') { setMsg('Não foi possível aceitar: ' + data); return; }
+    // Propaga o novo dono pro Estoque (Firestore). Sem isso, um imóvel captado e
+    // transferido continua invisível pra quem recebeu (fica com o e-mail do dono antigo).
+    await sincronizarEstoqueDono(t);
     load();
+  }
+
+  // Escreve o captador do imóvel no Estoque com o corretor de DESTINO. Só age se a
+  // negociação já tem imóvel (estoque_id); se ainda não tem, o botão "Sincronizar
+  // captações → Estoque" (aba Captações) cria depois. Nunca bloqueia a transferência.
+  async function sincronizarEstoqueDono(t) {
+    try {
+      if (!t.negociacao_id) return;
+      const { data: neg } = await supabase.from('negociacoes')
+        .select('captado, estoque_id').eq('id', t.negociacao_id).single();
+      if (!neg || !neg.captado || !neg.estoque_id) return;
+      const { data: destino } = await supabase.from('perfis')
+        .select('nome, email, telefone').eq('id', t.para_corretor_id).single();
+      if (!destino) return;
+      await fetch(BACKEND + '/captacao/atualizar-dono-estoque', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: neg.estoque_id,
+          ficha: {
+            captadorEmail: destino.email ? String(destino.email).toLowerCase() : null,
+            nomeCaptador: destino.nome || '',
+            telefoneCaptador: destino.telefone || '',
+          },
+        }),
+      });
+    } catch (e) { /* silencioso: a reconciliação cobre qualquer falha depois */ }
   }
 
   async function recusar(t) {
