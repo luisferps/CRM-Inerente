@@ -543,6 +543,26 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     }
   }, [modal]);
 
+  // Retrocompat: tratativa legada só tem o TEXTO do imóvel (negociacoes.imovel), sem tipo_id.
+  // Quando os tipos carregam e o tipo_id está vazio, reconstrói tipo_id + em_condominio a
+  // partir do texto — o select "Tipo de imóvel" deixa de abrir vazio (e não some ao salvar).
+  useEffect(() => {
+    if (!tipos.length) return;
+    setForm(f => {
+      if (f.tipo_id) return f;
+      const txt = String(f.imovel || '').trim();
+      if (!txt) return f;
+      const n = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      const emCond = /condom[ií]nio/i.test(txt);
+      const base = n(txt.replace(/\s*em\s+condom[ií]nio\s*/i, '').replace(/\s*condom[ií]nio\s*/i, ''));
+      if (!base) return f;
+      const t = tipos.find(x => n(x.nome) === base)
+        || tipos.find(x => n(x.nome) && (base.indexOf(n(x.nome)) >= 0 || n(x.nome).indexOf(base) >= 0));
+      if (!t) return f;
+      return { ...f, tipo_id: t.id, em_condominio: (emCond && !!t.permite_condominio) ? true : f.em_condominio };
+    });
+  }, [tipos, form.imovel, form.tipo_id]);
+
   function resetForm() {
     const initial = { ...emptyForm };
     if (perfil) {
@@ -1094,7 +1114,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       }
     }
 
-    const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio);
+    // Nunca apaga o texto legado: se não há tipo_id resolvido, mantém o que já estava gravado.
+    const imovelStr = tipoDisplay(tipos, form.tipo_id, form.em_condominio) || form.imovel || '';
     // Observações internas: o trecho PROTEGIDO (do bot/captação) sempre é preservado no topo;
     // o que o corretor acrescentou entra embaixo. Assim nada que o bot gravou se perde.
     const protegido = (detalhesBloqueadoRef.current || '').trim();
