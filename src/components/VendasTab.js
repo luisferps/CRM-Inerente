@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, ehCaptacao } from '../constants';
 
+const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
+
 function getEtapaAtual(c) {
   for (let i = ETAPAS_FUNIL_COMPLETO.length - 1; i >= 0; i--) {
     if (c[ETAPAS_FUNIL_COMPLETO[i]]) return ETAPAS_FUNIL_COMPLETO[i];
@@ -26,6 +28,24 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
   const [search, setSearch] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterCorretor, setFilterCorretor] = useState('');
+  // Sincronização CRM → Estoque (reconciliação): fecha o furo de captados que não
+  // aparecem no Estoque. Sempre roda em preview primeiro; depois aplica.
+  const [sync, setSync] = useState({ estado: 'idle', preview: null, resultado: null, erro: '' });
+
+  async function rodarSync(dry) {
+    setSync(s => ({ ...s, estado: dry ? 'previewing' : 'aplicando', erro: '' }));
+    try {
+      const r = await fetch(BACKEND + '/captacao/reconciliar-estoque' + (dry ? '?dry=1' : ''), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const j = await r.json();
+      if (!j.ok) { setSync({ estado: 'idle', preview: null, resultado: null, erro: j.error || 'Erro desconhecido' }); return; }
+      if (dry) setSync({ estado: 'preview', preview: j.resumo, resultado: null, erro: '' });
+      else setSync({ estado: 'feito', preview: null, resultado: j.resumo, erro: '' });
+    } catch (e) {
+      setSync({ estado: 'idle', preview: null, resultado: null, erro: e.message });
+    }
+  }
 
   // Vendas em andamento: ativas e ainda não captadas (a captação encerra a tratativa com sucesso).
   const vendas = useMemo(() => data.filter(c => ehCaptacao(c.modalidade) && c.ativo === 'S' && !c.captado), [data]);
@@ -64,6 +84,54 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
         ))}
       </div>
 
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#0891b2' }}>🔄 Sincronizar captações → Estoque</div>
+            <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 2 }}>Corrige o corretor dos imóveis vindos do CRM (inclui os transferidos). Não cria nada e não toca nos cadastrados direto no Estoque.</div>
+          </div>
+          {sync.estado === 'idle' && (
+            <button onClick={() => rodarSync(true)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0891b2', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Conferir (prévia)</button>
+          )}
+          {sync.estado === 'previewing' && <span style={{ fontSize: 12, color: '#6b7280' }}>⏳ conferindo…</span>}
+          {sync.estado === 'aplicando' && <span style={{ fontSize: 12, color: '#6b7280' }}>⏳ aplicando…</span>}
+        </div>
+
+        {sync.erro && <div style={{ marginTop: 10, fontSize: 12, color: '#dc2626' }}>{sync.erro}</div>}
+
+        {sync.estado === 'preview' && sync.preview && (
+          <div style={{ marginTop: 12, background: '#ecfeff', border: '1px solid #cffafe', borderRadius: 8, padding: '10px 14px' }}>
+            <div style={{ fontSize: 12.5, color: '#155e75', fontWeight: 600, marginBottom: 6 }}>Prévia (nada foi alterado ainda):</div>
+            <div style={{ fontSize: 12, color: '#0e7490', lineHeight: 1.7 }}>
+              {sync.preview.total} captado(s) conferido(s) · dono a corrigir: <b>{sync.preview.dono_corrigido}</b> · já corretos: <b>{sync.preview.ja_correto}</b>
+              {sync.preview.religados ? <> · religados: <b>{sync.preview.religados}</b></> : null}
+              {sync.preview.sem_vinculo ? <> · sem vínculo com o Estoque (não mexe): <b>{sync.preview.sem_vinculo}</b></> : null}
+              {sync.preview.vinculo_quebrado ? <> · vínculo quebrado (verificar): <b>{sync.preview.vinculo_quebrado}</b></> : null}
+              {sync.preview.sem_dono ? <> · sem dono (verificar): <b>{sync.preview.sem_dono}</b></> : null}
+              {sync.preview.erros ? <> · erros: <b style={{ color: '#dc2626' }}>{sync.preview.erros}</b></> : null}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button onClick={() => rodarSync(false)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Aplicar agora</button>
+              <button onClick={() => setSync({ estado: 'idle', preview: null, resultado: null, erro: '' })} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {sync.estado === 'feito' && sync.resultado && (
+          <div style={{ marginTop: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px' }}>
+            <div style={{ fontSize: 12.5, color: '#166534', fontWeight: 700, marginBottom: 4 }}>✓ Sincronização concluída</div>
+            <div style={{ fontSize: 12, color: '#15803d', lineHeight: 1.7 }}>
+              Dono corrigido: <b>{sync.resultado.dono_corrigido}</b> · já corretos: <b>{sync.resultado.ja_correto}</b>
+              {sync.resultado.religados ? <> · religados: <b>{sync.resultado.religados}</b></> : null}
+              {sync.resultado.sem_vinculo ? <> · sem vínculo (não mexido): <b>{sync.resultado.sem_vinculo}</b></> : null}
+              {sync.resultado.vinculo_quebrado ? <> · vínculo quebrado: <b>{sync.resultado.vinculo_quebrado}</b></> : null}
+              {sync.resultado.sem_dono ? <> · sem dono: <b>{sync.resultado.sem_dono}</b></> : null}
+              {sync.resultado.erros ? <> · erros: <b style={{ color: '#dc2626' }}>{sync.resultado.erros}</b></> : null}
+            </div>
+            <button onClick={() => setSync({ estado: 'idle', preview: null, resultado: null, erro: '' })} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Ok</button>
+          </div>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <input placeholder="🔍 Buscar..." value={search} onChange={e => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
