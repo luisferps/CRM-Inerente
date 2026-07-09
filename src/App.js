@@ -21,6 +21,7 @@ import ClientesTab from './components/ClientesTab';
 import TriagemFacebookTab from './components/TriagemFacebookTab';
 import CaptacaoTab from './components/CaptacaoTab';
 import LeadsPortalTab from './components/LeadsPortalTab';
+import DisponibilidadeTab from './components/DisponibilidadeTab';
 
 // Telefone padrão: 11 dígitos (DDD + número), sem o 55. O 55 entra só no envio ao WhatsApp.
 function so11(x) {
@@ -387,6 +388,7 @@ export default function App() {
     ['config', '⚙️ Config'],
     ['backup', '💾 Backup', 'diretor'],
     ['leadsportal', '📥 Leads Portal', 'diretor'],
+    ['disponibilidade', '📡 Disponibilidade', 'diretor'],
     ['perfil', '👤 Perfil'],
   ];
 
@@ -467,6 +469,7 @@ export default function App() {
             {tab === 'config' && <ConfigTab perfil={perfil} />}
             {tab === 'backup' && isGerente && <BackupTab />}
             {tab === 'leadsportal' && isDiretor && <LeadsPortalTab />}
+            {tab === 'disponibilidade' && isDiretor && <DisponibilidadeTab />}
             {tab === 'perfil' && <PerfilTab perfil={perfil} onUpdate={setPerfil} />}
             {tab === 'transferencias' && <TransferenciasTab perfil={perfil} />}
           </>
