@@ -18,6 +18,7 @@ import ResumoDemandasTab from './components/ResumoDemandasTab';
 import TransferenciasTab from './components/TransferenciasTab';
 import RecebidosTab from './components/RecebidosTab';
 import ClientesTab from './components/ClientesTab';
+import TriagemFacebookTab from './components/TriagemFacebookTab';
 import CaptacaoTab from './components/CaptacaoTab';
 
 // Telefone padrão: 11 dígitos (DDD + número), sem o 55. O 55 entra só no envio ao WhatsApp.
@@ -212,6 +213,10 @@ export default function App() {
   }, [clientes, negociacoes]);
 
   // Permissões baseadas nas funções
+  // libera a Triagem FB pra diretor, gerente e Gabriela (pelo e-mail dela)
+  const EMAIL_GABRIELA = 'gabriela@inerente.com.br';
+  const podeTriagemFB = !!(perfil && (perfil.is_diretor || perfil.is_gerente || (perfil.email || '').toLowerCase() === EMAIL_GABRIELA));
+
   const isDiretor = perfil?.is_diretor;
   const isGerente = perfil?.is_gerente;
   const isCorretor = perfil?.is_corretor;
@@ -368,6 +373,7 @@ export default function App() {
     ['tratativas', 'Tratativas'],
     ['funil', 'Funil'],
     ['vendas', '🏠 Captações'],
+    ['triagemfb', '📞 Triagem FB', 'triagemfb'],
     ['secretaria', '📊 Secretaria', 'gerente'],
     ['dash', 'Dashboard'],
     ['recebidos', '💰 Recebidos'],
@@ -386,6 +392,7 @@ export default function App() {
     if (acesso === 'diretor') return isDiretor;
     if (acesso === 'gerente') return isDiretor || isGerente;
     if (acesso === 'gerente_corretor') return isDiretor || isGerente || isCorretor;
+    if (acesso === 'triagemfb') return podeTriagemFB;
     return true;
   });
 
@@ -447,6 +454,7 @@ export default function App() {
               onLimparFiltro={() => setFiltroClienteId(null)}
             />}
             {tab === 'funil' && <FunilTab data={data.filter(c => c.ativo === 'S' && !c.recebido && !c.captado)} onOpenModal={podeEditar ? setModal : null} onMoverCard={(id, updates) => setNegociacoes(n => n.map(neg => neg.id === id ? { ...neg, ...updates } : neg))} abaFunil={abaFunil} onSetAbaFunil={handleSetAbaFunil} podeContrato={podeContrato} perfil={perfil} onReload={load} />}
+            {tab === 'triagemfb' && podeTriagemFB && <TriagemFacebookTab perfil={perfil} />}
             {tab === 'vendas' && <VendasTab data={data} onOpenModal={podeEditar ? setModal : null} onToggleFunil={handleToggleFunil} onDelete={podeEditar ? handleDelete : null} onDevolverCaptacao={podeEditar ? handleDevolverCaptacao : null} />}
             {tab === 'secretaria' && <SecretariaTab />}
             {tab === 'dash' && <DashboardTab data={data} />}
