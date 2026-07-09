@@ -281,6 +281,12 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const [tituloCarregado, setTituloCarregado] = useState(false);
   const [salvandoTitulo, setSalvandoTitulo] = useState(false);
   const [refreshDireita, setRefreshDireita] = useState(0);
+  // Prévia da variação por IA: mostra 2 amostras de como a mensagem sairia variada
+  // pros grupos, SEM enviar nada. Usa a rota /demandas/amostra-variacao do backend.
+  const [amostras, setAmostras] = useState(null);
+  const [carregandoAmostras, setCarregandoAmostras] = useState(false);
+  const [erroAmostras, setErroAmostras] = useState('');
+  const [iaAtiva, setIaAtiva] = useState(true);
 
   const instancia = perfil?.whatsapp_instancia || '';
 
@@ -382,6 +388,27 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   }, [textoGerado, editando]);
 
   const textoFinal = editando ? textoEditado : textoGerado;
+
+  async function verPreviaVariacao() {
+    if (!textoFinal || !textoFinal.trim()) return;
+    setCarregandoAmostras(true);
+    setErroAmostras('');
+    setAmostras(null);
+    try {
+      const r = await fetch(`${WA_AGENT_URL}/demandas/amostra-variacao`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: textoFinal }),
+      });
+      const d = await r.json();
+      if (!d.ok) { setErroAmostras(d.error || 'Erro ao gerar a prévia.'); return; }
+      setIaAtiva(d.ativo !== false);
+      setAmostras(Array.isArray(d.amostras) ? d.amostras : []);
+    } catch (e) {
+      setErroAmostras('Erro ao gerar a prévia: ' + e.message);
+    } finally {
+      setCarregandoAmostras(false);
+    }
+  }
 
   const card = darkMode ? '#16213e' : '#ffffff';
   const border = darkMode ? '#0f3460' : '#e2e8f0';
@@ -495,6 +522,11 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
                     style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: copiado ? '#059669' : '#2563eb', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                     {copiado ? '✓ Copiado!' : '📋 Copiar'}
                   </button>
+                  <button onClick={verPreviaVariacao} disabled={!textoFinal || carregandoAmostras}
+                    title="Mostra 2 exemplos de como a IA vai variar esta mensagem pros grupos, sem enviar nada"
+                    style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #7c3aed', background: (!textoFinal || carregandoAmostras) ? '#ede9fe' : '#f5f3ff', color: '#7c3aed', fontSize: 11, fontWeight: 600, cursor: (!textoFinal || carregandoAmostras) ? 'default' : 'pointer' }}>
+                    {carregandoAmostras ? '⏳ Gerando…' : '🎲 Prévia da variação (IA)'}
+                  </button>
                 </div>
               </div>
               {textoFinal ? (
@@ -513,6 +545,32 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
               )}
               {instancia && textoFinal && (
                 <div style={{ marginTop: 8, fontSize: 11, color: '#25d366', fontWeight: 600 }}>● {instancia}</div>
+              )}
+              {(erroAmostras || amostras) && (
+                <div style={{ marginTop: 14, borderTop: `1px dashed ${border}`, paddingTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '.5px' }}>🎲 Prévia da variação por IA</span>
+                    <button onClick={() => { setAmostras(null); setErroAmostras(''); }}
+                      style={{ padding: '2px 8px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', color: textMuted, fontSize: 10, cursor: 'pointer' }}>✕ Fechar</button>
+                  </div>
+                  {erroAmostras ? (
+                    <div style={{ fontSize: 11, color: '#dc2626' }}>{erroAmostras}</div>
+                  ) : !iaAtiva ? (
+                    <div style={{ fontSize: 11, color: '#b45309', fontStyle: 'italic' }}>A variação por IA está desligada (CRM_VARIACAO_IA=false). A mensagem sai igual pra todos os grupos.</div>
+                  ) : amostras && amostras.length === 0 ? (
+                    <div style={{ fontSize: 11, color: textMuted, fontStyle: 'italic' }}>Nenhuma amostra retornada. Tente de novo.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(amostras || []).map((am, i) => (
+                        <div key={i}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, marginBottom: 4 }}>Exemplo {i + 1}</div>
+                          <pre style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: textColor, margin: 0, padding: '10px 12px', background: darkMode ? 'rgba(124,58,237,0.08)' : '#faf5ff', borderRadius: 8, border: '1px solid #e9d5ff' }}>{am}</pre>
+                        </div>
+                      ))}
+                      <div style={{ fontSize: 10, color: textMuted, fontStyle: 'italic' }}>Cada grupo recebe uma variação diferente. Os dados (preço, bairro, contato) são mantidos exatamente.</div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </>
