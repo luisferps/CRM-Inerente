@@ -88,9 +88,11 @@ export default function App() {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
       if (t === 'captacao') { localStorage.setItem('cap_modo', '1'); return 'captacao'; } // entra na captação e marca o modo (sobrevive ao F5)
+      if (t === 'triagemfb') { localStorage.setItem('fbtriagem_modo', '1'); return 'triagemfb'; } // triagem Facebook (via Portal), sobrevive ao F5
       if (t) { localStorage.removeItem('cap_modo'); return t; } // qualquer outra aba explícita (ex: card Clientes ?tab=tratativas) SAI do modo captação
       // Sem ?tab na URL: pode ser F5 dentro da captação (a URL foi limpa pelo SSO). O marcador reabre a captação.
       if (localStorage.getItem('cap_modo') === '1') return 'captacao';
+      if (localStorage.getItem('fbtriagem_modo') === '1') return 'triagemfb';
     } catch (e) {}
     // Aba normal do CRM. Ignora crm_tab='captacao' antigo (captação só via ?tab=captacao ou marcador).
     const saved = localStorage.getItem('crm_tab');
@@ -373,7 +375,6 @@ export default function App() {
     ['tratativas', 'Tratativas'],
     ['funil', 'Funil'],
     ['vendas', '🏠 Captações'],
-    ['triagemfb', '📞 Triagem FB', 'triagemfb'],
     ['secretaria', '📊 Secretaria', 'gerente'],
     ['dash', 'Dashboard'],
     ['recebidos', '💰 Recebidos'],
@@ -392,7 +393,6 @@ export default function App() {
     if (acesso === 'diretor') return isDiretor;
     if (acesso === 'gerente') return isDiretor || isGerente;
     if (acesso === 'gerente_corretor') return isDiretor || isGerente || isCorretor;
-    if (acesso === 'triagemfb') return podeTriagemFB;
     return true;
   });
 
@@ -401,7 +401,7 @@ export default function App() {
 
   // Modo captação: tela cheia, sem a moldura do CRM (header/abas/stats).
   // Vira módulo próprio quando aberto pelo card 'Captação OLX' (?tab=captacao).
-  const modoCaptacao = tab === 'captacao' && isDiretor;
+  const modoCaptacao = (tab === 'captacao' && isDiretor) || (tab === 'triagemfb' && podeTriagemFB);
 
   return (
     <div className="app-shell">
@@ -410,7 +410,7 @@ export default function App() {
         <div className="header-logo">CRM <span>Imobiliário</span></div>
         <nav className="tab-nav">
           {tabs.map(([t, l]) => (
-            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); localStorage.setItem('crm_tab', t); localStorage.removeItem('cap_modo'); setFiltroClienteId(null); }}>{l}</button>
+            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); localStorage.setItem('crm_tab', t); localStorage.removeItem('cap_modo'); localStorage.removeItem('fbtriagem_modo'); setFiltroClienteId(null); }}>{l}</button>
           ))}
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
