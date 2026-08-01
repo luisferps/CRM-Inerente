@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient';
+import { obterOuCriarCliente } from '../lib/clientes';
 
 const FIELD_MAP = {
   nome: 'nome', name: 'nome', cliente: 'nome',
@@ -156,18 +157,54 @@ export default function ImportacaoTab({ perfil, darkMode, onImportSuccess }) {
     if (!preview?.mapped?.length) return;
     setImporting(true);
     const errors = [];
-    const successes = [];
-    const chunks = [];
-    for (let i = 0; i < preview.mapped.length; i += 50) chunks.push(preview.mapped.slice(i, i + 50));
-    for (const chunk of chunks) {
-      const { data, error } = await supabase.from('clientes').insert(chunk).select('id');
-      if (error) errors.push(error.message);
-      else successes.push(...(data || []));
+    let ok = 0;
+    for (let i = 0; i < preview.mapped.length; i++) {
+      const row = preview.mapped[i];
+      const rotulo = row.nome || row.telefone || ('linha ' + (i + 1));
+      try {
+        if (!row.nome && !row.telefone) continue;
+        const { cliente } = await obterOuCriarCliente({
+          nome: row.nome,
+          telefone: row.telefone,
+          email: row.email || null,
+          entrada: row.entrada || undefined,
+          origem: row.origem || null,
+        });
+        const temFunil = ETAPAS_FUNIL.some(e => row[e]);
+        const neg = {
+          cliente_id: cliente.id,
+          modalidade: row.modalidade || null,
+          imovel: row.imovel || null,
+          valor: (row.valor !== undefined && row.valor !== '' && row.valor !== null) ? Number(row.valor) : null,
+          localizacao: row.localizacao || null,
+          detalhes: row.detalhes || null,
+          proxima_acao: row.proxima_acao || null,
+          ultimo_contato: row.ultimo_contato || null,
+          prox_contato: row.prox_contato || null,
+          ativo: 'S',
+          corretor_id: perfil?.id || null,
+          corretor: perfil?.nome || null,
+          tratativa: temFunil ? !!row.tratativa : true,
+          pesquisa: !!row.pesquisa,
+          agendamento: !!row.agendamento,
+          visita: !!row.visita,
+          proposta: !!row.proposta,
+          contrato: !!row.contrato,
+          financiamento: !!row.financiamento,
+          recebimento: !!row.recebimento,
+          recebido: !!row.recebido,
+        };
+        const { error: negErr } = await supabase.from('negociacoes').insert(neg);
+        if (negErr) { errors.push(rotulo + ': ' + negErr.message); continue; }
+        ok++;
+      } catch (e) {
+        errors.push(rotulo + ': ' + (e.message || e));
+      }
     }
-    setResult({ success: successes.length, errors });
+    setResult({ success: ok, errors });
     setStep('result');
     setImporting(false);
-    if (successes.length > 0 && onImportSuccess) onImportSuccess();
+    if (ok > 0 && onImportSuccess) onImportSuccess();
   };
 
   const reset = () => {
