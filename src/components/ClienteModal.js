@@ -943,6 +943,17 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
     }
   }
 
+  // Descarta a captacao mas MANTEM o cliente cadastrado: inativa a tratativa com a tag e
+  // ela fica nos Inativos (da pra reativar/voltar pro CRM depois). Nao apaga nada.
+  async function descartarMantendoCliente() {
+    const ehCap = String(form.origem_tratativa || '').toUpperCase() === 'OLX' || isCaptacao;
+    const tag = ehCap ? 'Não quis a captação' : 'Descartado';
+    if (!window.confirm('Descartar esta tratativa e MANTER o cliente cadastrado?\n\nEla vai pros Inativos com a tag "' + tag + '". O cliente continua no sistema e você pode trazer de volta pro CRM depois.')) return;
+    setSaving(true);
+    localStorage.removeItem('crm_rascunho');
+    await onSave({ ...form, ativo: 'N', captado: false, motivo_desistencia: tag });
+  }
+
   async function solicitarTransferencia() {
     setTransfMsg('');
     if (!transfDestino) { setTransfMsg('Escolha o corretor de destino.'); return; }
@@ -1850,6 +1861,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
                 await onDelete(modal.id);
                 onClose();
               }}>🗑️ Excluir</button>
+              <button className="btn btn-ghost" style={{ color: '#2563eb' }} onClick={descartarMantendoCliente} disabled={saving}>📥 Descartar (manter cliente)</button>
               {String(form.origem_tratativa || '').toUpperCase() === 'OLX' && (
                 <button className="btn btn-ghost" style={{ color: '#b45309' }} onClick={devolverParaCaptacao} disabled={saving}>↩ Devolver pra Captação</button>
               )}
