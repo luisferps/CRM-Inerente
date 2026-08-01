@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
+import { obterOuCriarCliente } from '../lib/clientes';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Aba "Captação OLX" — leads do OLX + campanha de abordagem (SDR outbound).
@@ -662,18 +663,13 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     try {
       const hoje = new Date().toISOString().slice(0, 10);
       const tel = so11(lead.telefone);
-      const tail8 = tel.slice(-8);
-      const { data: existentes, error: eb } = await supabase.from('clientes').select('id').ilike('telefone', '%' + tail8 + '%').limit(1);
-      if (eb) throw eb;
-      let clienteId;
-      if (existentes && existentes.length) clienteId = existentes[0].id;
-      else {
-        const { data: cli, error: e1 } = await supabase.from('clientes')
-          .insert([{ nome: lead.nome || ('Proprietário ' + tel), telefone: tel, entrada: hoje, origem: 'OLX', is_corretor: false }])
-          .select().single();
-        if (e1) throw e1;
-        clienteId = cli.id;
-      }
+      const { cliente } = await obterOuCriarCliente({
+        nome: lead.nome || ('Proprietário ' + tel),
+        telefone: tel,
+        entrada: hoje,
+        origem: 'OLX',
+      });
+      const clienteId = cliente.id;
       const negociacao = {
         cliente_id: clienteId, modalidade: 'Venda', origem_tratativa: 'OLX',
         imovel: [lead.subtipo || lead.tipo, lead.transacao].filter(Boolean).join(' - ') || 'Imóvel OLX',
