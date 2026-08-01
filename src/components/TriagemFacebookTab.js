@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { obterOuCriarCliente } from '../lib/clientes';
 
 const TIPOS = ['Casa', 'Apartamento', 'Lote', 'Área', 'Comercial'];
 
@@ -61,24 +62,16 @@ export default function TriagemFacebookTab({ perfil }) {
     setEnviando(l.id);
     try {
       const tel = String(l.telefone || '').replace(/\D/g, '');
-      const tail8 = tel.slice(-8);
       const modalidade = (l.transacao === 'Aluguel') ? 'Locação' : 'Venda';
       const imovelChave = [l.tipo || 'Imóvel', l.transacao || ''].filter(Boolean).join(' - ') || 'Imóvel Facebook';
 
-      let clienteId = null;
-      const { data: achados } = await supabase.from('clientes').select('id').like('telefone', '%' + tail8).limit(1);
-      if (achados && achados[0]) {
-        clienteId = achados[0].id;
-      } else {
-        const novoCliente = {
-          nome: (l.anunciante && l.anunciante.trim()) || ('Proprietário ' + tel),
-          telefone: tel, origem: 'Facebook', entrada: new Date().toISOString().slice(0, 10),
-          corretor_id: perfil?.id || null
-        };
-        const { data: cr, error: ec } = await supabase.from('clientes').insert(novoCliente).select('id').single();
-        if (ec) throw new Error('criar cliente: ' + ec.message);
-        clienteId = cr.id;
-      }
+      const { cliente } = await obterOuCriarCliente({
+        nome: (l.anunciante && l.anunciante.trim()) || ('Proprietário ' + tel),
+        telefone: tel,
+        origem: 'Facebook',
+        corretor_id: perfil?.id || null,
+      });
+      const clienteId = cliente.id;
 
       const { data: dups } = await supabase.from('negociacoes')
         .select('id,imovel').eq('cliente_id', clienteId).eq('origem_tratativa', 'Facebook').eq('ativo', 'S').limit(50);
