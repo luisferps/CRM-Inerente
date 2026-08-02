@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { supabase } from '../supabaseClient';
 import { normModalidade } from '../constants';
 
 export default function RecebidosTab({ data, onOpenModal, onDevolver }) {
