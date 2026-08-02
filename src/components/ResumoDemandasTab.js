@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { normModalidade } from '../constants';
 
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
@@ -373,8 +374,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
-      const mod = c.modalidade || 'Outros';
-      if (mod === 'Venda') return;
+      const mod = normModalidade(c.modalidade) || 'A classificar';
       if (!grupos[mod]) grupos[mod] = [];
       grupos[mod].push(c);
     });
