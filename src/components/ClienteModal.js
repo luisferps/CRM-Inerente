@@ -1785,7 +1785,7 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
           <div className="tsec">
           <div className="tsec-head">📋 Acompanhamento da tratativa</div>
           <div className="tgrid">
-          <SelectComAdd label="De onde veio essa tratativa?" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)} bloqueado={origemTratLockRef.current}
+          <SelectComAdd label="De onde veio essa tratativa?" value={form.origem_tratativa || ''} onChange={v => set('origem_tratativa', v)} bloqueado={origemTratLockRef.current && !isGerente && !(perfil && perfil.is_diretor)}
             options={origens} setOptions={setOrigens} chave="origens"
             isGerente={isGerente} perfil={perfil} />
           <div>
