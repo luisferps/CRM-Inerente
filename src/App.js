@@ -98,7 +98,7 @@ export default function App() {
     } catch (e) {}
     // Aba normal do CRM. Ignora crm_tab='captacao' antigo (captação só via ?tab=captacao ou marcador).
     const saved = localStorage.getItem('crm_tab');
-    return (saved && saved !== 'captacao') ? saved : 'tratativas';
+    return (saved && saved !== 'captacao' && saved !== 'clientes') ? saved : 'tratativas';
   });
   const [clientes, setClientes] = useState([]);
   const [negociacoes, setNegociacoes] = useState([]);
@@ -383,7 +383,6 @@ export default function App() {
     ['inativos', 'Finalizadas'],
     ['resumo', '📋 Demandas'],
     ['transferencias', '🔄 Transferências'],
-    ['clientes', '👤 Clientes'],
     ['importacao', '📥 Importar', 'diretor'],
     ['config', '⚙️ Config'],
     ['backup', '💾 Backup', 'diretor'],
