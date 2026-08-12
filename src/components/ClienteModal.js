@@ -6,7 +6,7 @@ import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, normModalidade, ehCaptacao, ehLoca
 const hoje = new Date().toISOString().slice(0, 10);
 const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
-const emptyForm = {
+const emptyForm = {h
   nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
@@ -383,8 +383,8 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
       const emailC = (c.email) ? String(c.email).toLowerCase() : null;
       const det = recalcCap([...base, { tipo: 'interno', id: idReal, nome: c.nome, email: emailC, pct: 0 }]);
       const internos = det.filter(d => d.tipo === 'interno');
-      const donoOk = internos.some(d => d.id === f.captacao_dono_edicao);
-      return { ...f, captacao_divisao: det, captacao_dono_edicao: donoOk ? f.captacao_dono_edicao : (internos[0]?.id || null) };
+            const novoDono = internos.some(d => d.id === idReal) ? idReal : (internos[0]?.id || null);
+      return { ...f, captacao_divisao: det, captacao_dono_edicao: novoDono };
     });
   };
   const addCaptadorExterno = (extId) => {
