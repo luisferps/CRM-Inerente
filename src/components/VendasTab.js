@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, ehCaptacao } from '../constants';
+import { supabase } from '../supabaseClient';
 
 const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
@@ -31,7 +32,9 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
   // Sincronização CRM → Estoque (reconciliação): fecha o furo de captados que não
   // aparecem no Estoque. Sempre roda em preview primeiro; depois aplica.
   const [sync, setSync] = useState({ estado: 'idle', preview: null, resultado: null, erro: '' });
-
+  const [atendidoLocal, setAtendidoLocal] = useState({});
+  const estaAtendido = (c) => (atendidoLocal[c.id] !== undefined ? atendidoLocal[c.id] : !!c.captacao_atendido);
+  async function alternarAtendido(c) { const novo = !estaAtendido(c); setAtendidoLocal(m => ({ ...m, [c.id]: novo })); const { error } = await supabase.from('negociacoes').update({ captacao_atendido: novo }).eq('id', c.id); if (error) { setAtendidoLocal(m => ({ ...m, [c.id]: !novo })); alert('Nao deu pra salvar a situacao: ' + error.message); } }
   async function rodarSync(dry) {
     setSync(s => ({ ...s, estado: dry ? 'previewing' : 'aplicando', erro: '' }));
     try {
@@ -142,8 +145,7 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
         </select>
         <select value={filterCorretor} onChange={e => setFilterCorretor(e.target.value)}
           style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13 }}>
-          <option value="">Todos corretores</option>
-          {corretoresUnicos.map(c => <option key={c}>{c}</option>)}
+                      <option value="">Todos corretores</option>          {corretoresUnicos.map(c => <option key={c}>{c}</option>)}
         </select>
       </div>
 
@@ -151,18 +153,14 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-              {['Nome','Imóvel','Valor','Localização','Etapa','Corretor','Próxima Ação',''].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                {['Nome','Imóvel','Valor','Localização','Etapa','Situação','Corretor','Próxima Ação',''].map(h => (                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma captação encontrada.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nenhuma captação encontrada.</td></tr>}
             {filtered.map((c) => {
-              const etapa = getEtapaAtual(c);
-              const etapaIdx = etapa ? ETAPAS_FUNIL_COMPLETO.indexOf(etapa) : -1;
-              const cor = etapaIdx >= 0 ? CORES[etapaIdx] : '#e5e7eb';
-              return (
+                            const etapa = getEtapaAtual(c); const etapaIdx = etapa ? ETAPAS_FUNIL_COMPLETO.indexOf(etapa) : -1; const cor = etapaIdx >= 0 ? CORES[etapaIdx] : '#e5e7eb';              return (
                 <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }} onClick={() => onOpenModal && onOpenModal(c)}>
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{c.nome}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{c.imovel || '—'}</td>
@@ -171,9 +169,8 @@ export default function VendasTab({ data, onOpenModal, onDelete, onDevolverCapta
                   <td style={{ padding: '12px 16px' }}>
                     {etapa ? <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: cor + '22', color: cor, border: `1px solid ${cor}44` }}>{ETAPAS_LABEL[etapa]}</span> : '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{corretorDaEstrela(c) || '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: 12 }}>{c.proxima_acao || '—'}</td>
-                  <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
+              <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}><button type="button" onClick={() => alternarAtendido(c)} style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', background: estaAtendido(c) ? '#05966922' : '#9ca3af22', color: estaAtendido(c) ? '#059669' : '#9ca3af', border: '1px solid ' + (estaAtendido(c) ? '#05966944' : '#9ca3af44') }}>{estaAtendido(c) ? '✓ Atendido' : '— Não atendido'}</button></td>                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{corretorDaEstrela(c) || '—'}</td>
+                                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{corretorDaEstrela(c) || '—'}</td><td style={{ padding: '12px 16px', color: '#6b7280', fontSize: 12 }}>{c.proxima_acao || '—'}</td>                  <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                     <Acoes c={c} comDevolver />
                   </td>
                 </tr>
