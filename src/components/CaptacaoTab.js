@@ -271,6 +271,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
   const [soAgio, setSoAgio] = useState(false);
   const [filtroAberto, setFiltroAberto] = useState('');  // qual dropdown de checkbox está aberto
   const [selec, setSelec] = useState(new Set());
+  const [progresso, setProgresso] = useState(null);
   const [tiposCRM, setTiposCRM] = useState([]);
   const [detalheId, setDetalheId] = useState(null);  // drawer aberto
 
@@ -544,14 +545,12 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     let alvo = ids;
     if (novo === 'fila') alvo = ids.filter(id => { const l = leads.find(x => x.id === id); return l && !l.virou_cliente; });
     if (!alvo.length) return;
-    const { error } = await supabase.from('leads_captacao').update({ campanha_status: novo }).in('id', alvo);
-    if (error) { alert('Erro: ' + error.message); return; }
-    setLeads(ls => ls.map(l => alvo.includes(l.id) ? { ...l, campanha_status: novo } : l));
-    setSelec(new Set());
-    carregarCampanha();
-  }
-
-  async function salvarObs(lead, txt) {
+        const LOTE = 200; const emLotes = alvo.length > LOTE;
+    if (emLotes) setProgresso({ feitos: 0, total: alvo.length });
+    for (let i = 0; i < alvo.length; i += LOTE) { const fatia = alvo.slice(i, i + LOTE); const { error } = await supabase.from('leads_captacao').update({ campanha_status: novo }).in('id', fatia); if (error) { setProgresso(null); alert('Erro: ' + error.message); return; } if (emLotes) setProgresso({ feitos: Math.min(i + LOTE, alvo.length), total: alvo.length }); }
+    setProgresso(null); const alvoSet = new Set(alvo);
+    setLeads(ls => ls.map(l => alvoSet.has(l.id) ? { ...l, campanha_status: novo } : l)); setSelec(new Set()); carregarCampanha();
+  }  async function salvarObs(lead, txt) {
     const { error } = await supabase.from('leads_captacao').update({ observacoes: txt }).eq('id', lead.id);
     if (error) { alert('Erro: ' + error.message); return; }
     setLeads(ls => ls.map(l => l.id === lead.id ? { ...l, observacoes: txt } : l));
@@ -876,8 +875,7 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
             {/* barra de seleção */}
             {idsSelec.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.ink, color: '#fff', borderRadius: 14, padding: '11px 16px', marginBottom: 12, fontSize: 13, fontWeight: 600, flexWrap: 'wrap' }}>
-                <span>{idsSelec.length} selecionado{idsSelec.length > 1 ? 's' : ''}</span>
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <span>{progresso ? ('Processando ' + progresso.feitos + ' de ' + progresso.total + '...') : (idsSelec.length + ' selecionado' + (idsSelec.length > 1 ? 's' : ''))}</span>                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button style={S.btnSm('rgba(255,255,255,.16)', '#fff')} onClick={() => mudarCampanha(idsSelec, 'fila')}>⏳ Mandar pra fila</button>
                   <button style={S.btnSm('rgba(255,255,255,.16)', '#fff')} onClick={() => furarFilaMass(idsSelec)}>⭐ Furar fila</button>
                   <button style={S.btnSm('rgba(255,255,255,.16)', '#fff')} onClick={() => mudarCampanha(idsSelec, 'descartado')}>🚫 Fora do perfil</button>
