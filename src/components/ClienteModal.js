@@ -6,7 +6,7 @@ import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, normModalidade, ehCaptacao, ehLoca
 const hoje = new Date().toISOString().slice(0, 10);
 const BACKEND = 'https://agentes-de-whatsapp-production.up.railway.app';
 
-const emptyForm = {h
+const emptyForm = {
   nome: '', telefone: '', telefone2: '', email: '', entrada: hoje,
   origem: '', is_corretor: false,
   ativo: 'S', motivo_desistencia: '',
