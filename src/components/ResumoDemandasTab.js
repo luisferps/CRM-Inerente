@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { normModalidade, MODALIDADES_CAPTACAO } from '../constants';
+import { normModalidade, MODALIDADES_PROCURA } from '../constants';
 
 const WA_AGENT_URL = 'https://agentes-de-whatsapp-production.up.railway.app';
 const TITULO_PADRAO = 'Preciso de: (enviar somente imóveis nos perfis relacionados)';
@@ -40,7 +40,7 @@ function gerarTexto(titulo, selecionados, porModalidade) {
   if (ids.size === 0) return '';
   let out = titulo + '\n\n';
   const ordem = ['Comprador', 'Locatário'];
-  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m) && !MODALIDADES_CAPTACAO.includes(m))])];
+  const mods = ordem.filter(m => porModalidade[m]);
   let temConteudo = false;
   mods.forEach(mod => {
     const filtrados = (porModalidade[mod] || []).filter(c => ids.has(c.id));
@@ -343,9 +343,9 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const elegiveis = useMemo(() => data.filter(c => {
     if (c.ativo !== 'S') return false;
     if (c.is_corretor) return false;
-    // Só entra quem PROCURA imóvel (Comprador/Locatário).
-    // Quem OFERECE (Vendedor/Locador) é captação e não é demanda.
-    if (MODALIDADES_CAPTACAO.includes(normModalidade(c.modalidade))) return false;
+    // Só entra quem PROCURA imóvel: Comprador e Locatário.
+    // Fica de fora quem OFERECE (Vendedor/Locador) e quem está sem modalidade.
+    if (!MODALIDADES_PROCURA.includes(normModalidade(c.modalidade))) return false;
     const etapasAvancadas = ['contrato','financiamento','recebimento','recebido'];
     if (etapasAvancadas.some(e => c[e])) return false;
     return true;
@@ -376,7 +376,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const porModalidade = useMemo(() => {
     const grupos = {};
     elegiveis.forEach(c => {
-      const mod = normModalidade(c.modalidade) || 'A classificar';
+      const mod = normModalidade(c.modalidade);
       if (!grupos[mod]) grupos[mod] = [];
       grupos[mod].push(c);
     });
@@ -419,7 +419,7 @@ export default function ResumoDemandasTab({ data, darkMode, perfil, onToggleParc
   const bg = darkMode ? '#0f1117' : '#f8fafc';
 
   const ordem = ['Comprador', 'Locatário'];
-  const mods = [...new Set([...ordem.filter(m => porModalidade[m]), ...Object.keys(porModalidade).filter(m => !ordem.includes(m))])];
+  const mods = ordem.filter(m => porModalidade[m]);
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', color: textColor }}>
