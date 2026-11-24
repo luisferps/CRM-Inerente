@@ -44,7 +44,7 @@ export default function RegrasIA({ perfil }) {
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 18, flex: '1 1 520px', minWidth: 320 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🤖 Caderno de aprendizado da IA</div>
       <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
-        Regras gerais que a IA do acompanhamento pelo WhatsApp segue sempre, em todos os clientes. Também dá pra mandar no seu WhatsApp: escreva <b>crm regra: …</b> ou grave um <b>áudio</b> no seu próprio chat falando a regra. A IA também aprende sozinha com as conversas: uma lição vira regra quando aparece em 2 clientes diferentes.
+        Regras gerais que a IA do acompanhamento pelo WhatsApp segue sempre, em todos os clientes. Também dá pra mandar no seu WhatsApp: escreva <b>regra: …</b> (ou regra pro CRM: …) ou grave um <b>áudio</b> no seu próprio chat falando a regra. A IA também aprende sozinha com as conversas: uma lição vira regra quando aparece em 2 clientes diferentes.
       </div>
       {regras.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 8 }}>Nenhuma regra ainda.</div>}
       {regras.map(r => (
