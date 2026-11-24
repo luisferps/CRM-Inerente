@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import BotaoFecharContrato from './BotaoFecharContrato';
+import AcompanhamentoWhats from './AcompanhamentoWhats';
 import { ETAPAS_FUNIL_COMPLETO, ETAPAS_LABEL, normModalidade, ehCaptacao, ehLocacao } from '../constants';
 
 const hoje = new Date().toISOString().slice(0, 10);
@@ -1258,6 +1259,10 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>
               👁 <b>Somente visualização.</b> A edição desta tratativa é de quem tem a estrela ⭐{donoEdicaoNome ? ` (${donoEdicaoNome})` : ''} ou do corretor responsável. Para editar, peça a transferência da estrela.
             </div>
+          )}
+
+          {(isEdit || form.cliente_real_id) && (
+            <AcompanhamentoWhats telefone={form.telefone} clienteId={form.cliente_real_id || modal?.cliente?.id} negociacaoId={modal?.negociacao_id} />
           )}
 
           <div className="tsec">

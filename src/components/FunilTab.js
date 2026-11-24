@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import AmpulhetaAprovacao from './AmpulhetaAprovacao';
 import { ETAPAS_FUNIL, ETAPAS_LABEL, normModalidade } from '../constants';
 import { supabase } from '../supabaseClient';
@@ -55,7 +55,7 @@ function whatsappLink(phone) {
   return `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}`;
 }
 
-function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard, podeContrato, perfil, onAplicado }) {
+function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard, podeContrato, perfil, onAplicado, acompanhados }) {
   const ativos = data.filter(c => c.ativo === 'S' && !c.recebido);
   const porEtapa = {};
   ETAPAS_FUNIL.forEach(e => { porEtapa[e] = []; });
@@ -143,6 +143,7 @@ function KanbanFunil({ titulo, data, coresMap, onOpenModal, onMoverCard, podeCon
                           </div>
                           <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.3, flex: 1 }}>
                             {c.nome.split(' ').slice(0, 2).join(' ')}
+                            {acompanhados && acompanhados.has(String(c.cliente_real_id)) && <span title="Acompanhado pela IA no WhatsApp" style={{ marginLeft: 4 }}>🤖</span>}
                             <AmpulhetaAprovacao clienteId={c.id} perfil={perfil} onAplicado={onAplicado} />
                           </div>
                           {wa && (
@@ -198,6 +199,11 @@ export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onS
   const aba = abaFunil || 'compra';
   const compras = data.filter(c => normModalidade(c.modalidade) === 'Comprador');
   const locacoes = data.filter(c => normModalidade(c.modalidade) === 'Locatário');
+  const [acompanhados, setAcompanhados] = useState(null);
+  useEffect(() => {
+    supabase.from('crm_acompanhamento').select('cliente_id').eq('ativo', true)
+      .then(({ data: rows }) => setAcompanhados(new Set((rows || []).map(r => String(r.cliente_id)))));
+  }, [data]);
 
   return (
     <div>
@@ -212,8 +218,8 @@ export default function FunilTab({ data, onOpenModal, onMoverCard, abaFunil, onS
           </button>
         ))}
       </div>
-      {aba === 'compra' && <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} onMoverCard={onMoverCard} podeContrato={podeContrato} perfil={perfil} onAplicado={onReload} />}
-      {aba === 'locacao' && <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} onMoverCard={onMoverCard} podeContrato={podeContrato} perfil={perfil} onAplicado={onReload} />}
+      {aba === 'compra' && <KanbanFunil titulo="Funil de Compra" data={compras} coresMap={CORES_COMPRA} onOpenModal={onOpenModal} onMoverCard={onMoverCard} podeContrato={podeContrato} perfil={perfil} onAplicado={onReload} acompanhados={acompanhados} />}
+      {aba === 'locacao' && <KanbanFunil titulo="Funil de Locação" data={locacoes} coresMap={CORES_LOCACAO} onOpenModal={onOpenModal} onMoverCard={onMoverCard} podeContrato={podeContrato} perfil={perfil} onAplicado={onReload} acompanhados={acompanhados} />}
     </div>
   );
 }
