@@ -433,6 +433,26 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
     return true;
   };
 
+  // Aba + preço + busca: o recorte "em análise" sobre o qual as listas dos filtros são montadas.
+  const passaBase = (l) => {
+    if (!passaView(l)) return false;
+    const min = parseNum(precoMin), max = parseNum(precoMax);
+    if (min != null || max != null) {
+      const p = parseNum(l.preco);
+      if (p == null) return false;
+      if (min != null && p < min) return false;
+      if (max != null && p > max) return false;
+    }
+    const bq = busca.trim().toLowerCase();
+    if (bq) {
+      const bdig = bq.replace(/\D/g, '');
+      const tel = String(l.telefone || '').replace(/\D/g, '');
+      const campos = _norm([l.nome, l.tipo, l.subtipo, l.cidade, l.setor, l.transacao, l.regiao, l.subregiao].filter(Boolean).join(' '));
+      if (!campos.includes(_norm(bq)) && !(bdig && tel.includes(bdig))) return false;
+    }
+    return true;
+  };
+
   // Opções de cada filtro = só o que ainda pode dar resultado (encadeado: cada lista
   // é calculada sobre os leads que passam por TODOS os outros filtros, menos o próprio).
   const opcoes = useMemo(() => {
@@ -445,18 +465,27 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       if (cap(novo) && !cap(atual)) return novo;
       return atual;
     };
-    const agrupar = (valores) => {
+    // Rótulos bonitos a partir de todos os leads (pra opção já marcada que saiu do recorte).
+    const rotulos = new Map();
+    leads.forEach(l => [l.subtipo || l.tipo, l.cidade, l.setor].forEach(v => {
+      const val = String(v == null ? '' : v).trim(); if (val) rotulos.set(_knorm(val), melhorRotulo(rotulos.get(_knorm(val)), val));
+    }));
+    const agrupar = (valores, selecionados) => {
       const m = new Map();
       valores.forEach(v => {
         const val = String(v == null ? '' : v).trim(); if (!val) return;
-        m.set(_knorm(val), melhorRotulo(m.get(_knorm(val)), val));
+        const k = _knorm(val);
+        const at = m.get(k) || { label: '', n: 0 };
+        m.set(k, { label: melhorRotulo(at.label, val), n: at.n + 1 });
       });
-      return [...m.entries()].map(([key, label]) => ({ key, label }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true }));
+      const lista = [...m.entries()].map(([key, o]) => ({ key, label: o.label + ' (' + o.n + ')', nome: o.label }));
+      selecionados.forEach(k => { if (!m.has(k)) lista.push({ key: k, label: (rotulos.get(k) || k) + ' (0)', nome: rotulos.get(k) || k }); });
+      return lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }));
     };
     const tipoV = [], cidadeV = [], setorV = [], quartos = new Set();
     let modalVenda = false, modalLoc = false;
     leads.forEach(l => {
+      if (!passaBase(l)) return;
       if (passaFiltrosSelec(l, 'tipo')) { const t = (l.subtipo || l.tipo || '').trim(); if (t) tipoV.push(t); }
       if (passaFiltrosSelec(l, 'cidade')) { const c = (l.cidade || '').trim(); if (c) cidadeV.push(c); }
       if (passaFiltrosSelec(l, 'setor')) { const se = (l.setor || '').trim(); if (se) setorV.push(se); }
@@ -464,13 +493,13 @@ export default function CaptacaoTab({ perfil, onAtualizar }) {
       if (passaFiltrosSelec(l, 'modal')) { const tr = _norm(l.transacao || ''); if (/loca|alug/.test(tr)) modalLoc = true; else if (/vend/.test(tr)) modalVenda = true; }
     });
     return {
-      tipo: agrupar(tipoV),
-      cidade: agrupar(cidadeV),
-      setor: agrupar(setorV),
+      tipo: agrupar(tipoV, fTipo),
+      cidade: agrupar(cidadeV, fCidade),
+      setor: agrupar(setorV, fSetor),
       quartos: [...quartos].sort((a, b) => a - b),
       modalVenda, modalLoc,
     };
-  }, [leads, fTipo, fModal, fQuartos, fCidade, fSetor, soAgio]);
+  }, [leads, view, busca, precoMin, precoMax, fTipo, fModal, fQuartos, fCidade, fSetor, soAgio]);
 
   const filtrados = useMemo(() => {
     const bq = busca.trim().toLowerCase();
