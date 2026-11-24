@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import RegrasIA from './RegrasIA';
 
 const CHAVES = {
   origens: 'Origens / Aquisição',
@@ -183,6 +184,7 @@ export default function ConfigTab({ perfil }) {
           <ListManager key={chave} chave={chave} title={title} isGerente={isGerente} perfil={perfil} />
         ))}
         {isGerente && <CanalFacebook />}
+        {(isGerente || perfil?.is_diretor) && <RegrasIA perfil={perfil} />}
       </div>
     </div>
   );
