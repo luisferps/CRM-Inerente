@@ -7,12 +7,14 @@ const NOME_CAMPO = { modalidade: 'Modalidade', origem_tratativa: 'Origem da dema
 export default function RegrasIA({ perfil }) {
   const [regras, setRegras] = useState([]);
   const [correcoes, setCorrecoes] = useState([]);
+  const [observacao, setObservacao] = useState([]);
   const [nova, setNova] = useState('');
   const [ocupado, setOcupado] = useState(false);
 
   const carregar = useCallback(async () => {
-    const { data: r } = await supabase.from('crm_ia_regras').select('id,texto,criado_em,origem').eq('ativo', true).order('id', { ascending: true });
-    setRegras(r || []);
+    const { data: r } = await supabase.from('crm_ia_regras').select('id,texto,criado_em,origem,vezes,ativo,descartada').order('id', { ascending: true });
+    setRegras((r || []).filter(x => x.ativo));
+    setObservacao((r || []).filter(x => !x.ativo && !x.descartada && x.origem === 'ia'));
     const { data: c } = await supabase.from('crm_ia_correcoes').select('id,campo,valor_ia,valor_luis,criado_em').order('id', { ascending: false }).limit(30);
     setCorrecoes(c || []);
   }, []);
@@ -32,7 +34,7 @@ export default function RegrasIA({ perfil }) {
 
   async function retirar(id) {
     setOcupado(true);
-    const { error } = await supabase.from('crm_ia_regras').update({ ativo: false }).eq('id', id);
+    const { error } = await supabase.from('crm_ia_regras').update({ ativo: false, descartada: true }).eq('id', id);
     setOcupado(false);
     if (error) { alert('Não consegui retirar a regra:\n' + error.message); return; }
     carregar();
@@ -42,13 +44,13 @@ export default function RegrasIA({ perfil }) {
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 18, flex: '1 1 520px', minWidth: 320 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🤖 Caderno de aprendizado da IA</div>
       <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 12 }}>
-        Regras gerais que a IA do acompanhamento pelo WhatsApp segue sempre, em todos os clientes. Também dá pra mandar no seu WhatsApp: <b>crm regra: …</b>
+        Regras gerais que a IA do acompanhamento pelo WhatsApp segue sempre, em todos os clientes. Também dá pra mandar no seu WhatsApp: escreva <b>crm regra: …</b> ou grave um <b>áudio</b> no seu próprio chat falando a regra. A IA também aprende sozinha com as conversas: uma lição vira regra quando aparece em 2 clientes diferentes.
       </div>
       {regras.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 8 }}>Nenhuma regra ainda.</div>}
       {regras.map(r => (
         <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 0', borderBottom: '1px solid #f3f4f6' }}>
           <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 34 }}>nº {r.id}</span>
-          <span style={{ fontSize: 13.5, flex: 1 }}>{r.texto}</span>
+          <span style={{ fontSize: 13.5, flex: 1 }}>{r.texto}{r.origem === 'ia' && <span style={{ marginLeft: 6, fontSize: 11, background: '#ede9fe', color: '#6d28d9', borderRadius: 10, padding: '1px 7px' }}>aprendida sozinha · {r.vezes || 1} clientes</span>}{r.origem === 'audio' && <span style={{ marginLeft: 6, fontSize: 11, background: '#e0f2fe', color: '#0369a1', borderRadius: 10, padding: '1px 7px' }}>por áudio</span>}</span>
           <button type="button" disabled={ocupado} onClick={() => retirar(r.id)}
             style={{ border: 'none', background: '#fee2e2', color: '#b91c1c', borderRadius: 6, padding: '3px 9px', fontSize: 12, cursor: 'pointer' }}>Retirar</button>
         </div>
@@ -59,6 +61,18 @@ export default function RegrasIA({ perfil }) {
         <button type="button" disabled={ocupado} onClick={adicionar}
           style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Adicionar</button>
       </div>
+      {observacao.length > 0 && (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 18, marginBottom: 6 }}>Em observação (a IA percebeu em 1 cliente; vira regra quando aparecer em outro)</div>
+          {observacao.slice(-20).reverse().map(r => (
+            <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 0', borderBottom: '1px solid #f3f4f6' }}>
+              <span style={{ fontSize: 12.5, flex: 1, color: '#4b5563' }}>{r.texto}</span>
+              <button type="button" disabled={ocupado} onClick={() => retirar(r.id)}
+                style={{ border: 'none', background: '#f3f4f6', color: '#6b7280', borderRadius: 6, padding: '3px 9px', fontSize: 12, cursor: 'pointer' }}>Descartar</button>
+            </div>
+          ))}
+        </>
+      )}
       <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 18, marginBottom: 6 }}>Correções que a IA aprendeu com vocês</div>
       <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Quando alguém corrige no CRM um campo que a IA preencheu, ela anota aqui e passa a seguir o padrão. O campo corrigido nunca mais é mexido por ela.</div>
       {correcoes.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af' }}>Nenhuma correção ainda.</div>}
