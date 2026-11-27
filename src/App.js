@@ -52,6 +52,8 @@ function splitForm(form) {
     detalhes_externos: form.detalhes_externos || null,
     proxima_acao: form.proxima_acao,
     imoveis_visitados: form.imoveis_visitados,
+    permuta: !!form.permuta,
+    permuta_desc: form.permuta ? (form.permuta_desc || null) : null,
     ultimo_contato: form.ultimo_contato || null,
     prox_contato: form.prox_contato || null,
     final_contato: form.final_contato || null,

@@ -20,6 +20,7 @@ const emptyForm = {
   origem_tratativa: '',
   valor: '', detalhes: '', detalhes_externos: '', localizacao: '',
   proxima_acao: '', imoveis_visitados: '',
+  permuta: false, permuta_desc: '',
   ultimo_contato: '', prox_contato: '', final_contato: '', prorrogacao: '',
   solicitar_parceria: false,
   tratativa: false, pesquisa: false, agendamento: false, visita: false,
@@ -1527,6 +1528,15 @@ export default function ClienteModal({ modal, onSave, onClose, perfil, onDelete 
             <div>
               <label className="form-label">Imóveis Visitados</label>
               <input value={form.imoveis_visitados} onChange={e => set('imoveis_visitados', e.target.value)} />
+            </div>
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!form.permuta} onChange={e => set('permuta', e.target.checked)} style={{ width: 'auto' }} />
+                Quer permuta
+              </label>
+              {form.permuta && (
+                <input value={form.permuta_desc || ''} onChange={e => set('permuta_desc', e.target.value)} placeholder="O que ele oferece na permuta (ex.: casa no Jardim América, carro)" />
+              )}
             </div>
           </>)}
           </div>
